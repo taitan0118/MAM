@@ -1,0 +1,14 @@
+[Unit]
+Description=MAM Agent - Missing App Monitor (client)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/opt/mam-agent/mam-agent -config /opt/mam-agent/config.json run
+Restart=always
+RestartSec=5
+# cần quyền root để chặn web (/etc/hosts), tắt/khởi động lại máy, khóa phiên
+User=root
+
+[Install]
+WantedBy=multi-user.target

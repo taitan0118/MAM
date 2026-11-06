@@ -1,0 +1,20 @@
+[Unit]
+Description=MAM Server - Missing App Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/opt/mam/mam-server -addr :7070 -data /var/lib/mam
+Environment=MAM_LANG=vi
+Restart=always
+RestartSec=5
+# chạy bằng tài khoản riêng, không cần root (cổng >1024)
+User=mam
+Group=mam
+StateDirectory=mam
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

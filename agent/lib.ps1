@@ -1,0 +1,98 @@
+# MAM · thư viện PowerShell dùng chung (chạy được từ PowerShell 2.0 trên Windows 7)
+function ConvertTo-MamJson($v) {
+  if ($v -eq $null) { return 'null' }
+  if ($v -is [string]) { $s = (($v -replace '\\','\\' -replace '"','\"') -replace '[\x00-\x1f]',' '); return '"' + [regex]::Replace($s, '[^\x00-\x7e]', { param($m) '\u' + ([int][char]$m.Value).ToString('x4') }) + '"' }  # ASCII + \uXXXX: không phụ thuộc bảng mã đầu ra
+  if ($v -is [bool]) { if ($v) { return 'true' } else { return 'false' } }
+  if ($v -is [int] -or $v -is [long] -or $v -is [double] -or $v -is [decimal] -or $v -is [single] -or $v -is [uint32] -or $v -is [uint64] -or $v -is [int16] -or $v -is [uint16] -or $v -is [byte]) {
+    return [string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0}', $v)
+  }
+  if ($v -is [System.Collections.IDictionary]) {
+    $p = @(); foreach ($k in $v.Keys) { $p += ('"' + $k + '":' + (ConvertTo-MamJson $v[$k])) }
+    return '{' + ($p -join ',') + '}'
+  }
+  if ($v -is [System.Collections.IEnumerable]) {
+    $p = @(); foreach ($i in $v) { $p += (ConvertTo-MamJson $i) }
+    return '[' + ($p -join ',') + ']'
+  }
+  return ConvertTo-MamJson ([string]$v)
+}
+
+function Get-MamTemp {
+  try {
+    $t = @(Get-WmiObject -Namespace 'root\wmi' -Class MSAcpi_ThermalZoneTemperature -ErrorAction Stop)
+    $max = $null
+    foreach ($z in $t) { $c = ($z.CurrentTemperature / 10) - 273.15; if ($max -eq $null -or $c -gt $max) { $max = $c } }
+    if ($max -ne $null -and $max -gt 0 -and $max -lt 130) { return [math]::Round($max, 1) }
+  } catch { }
+  return $null
+}
+
+function Get-MamHw {
+  $os = Get-WmiObject Win32_OperatingSystem
+  $cs = Get-WmiObject Win32_ComputerSystem
+  $cpu = @(Get-WmiObject Win32_Processor)
+  $gpu = @(Get-WmiObject Win32_VideoController)
+  $bd = Get-WmiObject Win32_BaseBoard
+  $bios = Get-WmiObject Win32_BIOS
+  $fail = $false
+  try { foreach ($x in @(Get-WmiObject -Namespace 'root\wmi' -Class MSStorageDriver_FailurePredictStatus -ErrorAction Stop)) { if ($x.PredictFailure) { $fail = $true } } } catch { }
+  $disks = @()
+  foreach ($d in @(Get-WmiObject Win32_DiskDrive)) {
+    $disks += @{ model = [string]$d.Model; sizeGB = [math]::Round($d.Size / 1GB, 0); type = [string]$d.MediaType; health = [string]$d.Status; tempC = $null; wear = $null; hours = $null; serial = ([string]$d.SerialNumber).Trim() }
+  }
+  try {
+    if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
+      $pds = @(Get-PhysicalDisk)
+      for ($i = 0; $i -lt $disks.Count -and $i -lt $pds.Count; $i++) {
+        $pd = $pds[$i]; $disks[$i].health = [string]$pd.HealthStatus; $disks[$i].type = [string]$pd.MediaType
+        try { $rc = $pd | Get-StorageReliabilityCounter -ErrorAction Stop
+          $disks[$i].tempC = $rc.Temperature; $disks[$i].wear = $rc.Wear; $disks[$i].hours = $rc.PowerOnHours } catch { }
+      }
+    }
+  } catch { }
+  $macs = @(); $ips = @()
+  foreach ($n in @(Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled })) {
+    if ($n.MACAddress) { $macs += [string]$n.MACAddress }
+    foreach ($ip in @($n.IPAddress)) { if ($ip -and $ip -notmatch ':') { $ips += [string]$ip } }
+  }
+  $cores = 0; $threads = 0
+  foreach ($c in $cpu) { $cores += [int]$c.NumberOfCores; $threads += [int]$c.NumberOfLogicalProcessors }
+  $av = $null; $avUp = $null
+  try {
+    if (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue) {
+      $mp = Get-MpComputerStatus -ErrorAction Stop
+      if ($mp.AntivirusEnabled) { $av = 'Windows Defender: đang bật' } else { $av = 'Windows Defender: đang TẮT' }
+      if ($mp.AntivirusSignatureLastUpdated) { $avUp = $mp.AntivirusSignatureLastUpdated.ToString('yyyy-MM-ddTHH:mm:ss') }
+    }
+  } catch { }
+  $patch = $null
+  try { $hf = Get-HotFix -ErrorAction Stop | Sort-Object InstalledOn -Descending | Select-Object -First 1; if ($hf -and $hf.InstalledOn) { $patch = $hf.InstalledOn.ToString('yyyy-MM-dd') } } catch { }
+  $apps = @()
+  try {
+    $seen = @{}
+    foreach ($k in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
+      foreach ($a in @(Get-ItemProperty -Path $k -ErrorAction SilentlyContinue)) {
+        if (-not $a.DisplayName -or $a.SystemComponent -eq 1) { continue }
+        $key = ([string]$a.DisplayName) + '|' + ([string]$a.DisplayVersion)
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = 1
+        $apps += @{ n = ([string]$a.DisplayName); v = ([string]$a.DisplayVersion); p = ([string]$a.Publisher) }
+      }
+    }
+    $apps = @($apps | Sort-Object { $_.n } | Select-Object -First 400)
+  } catch { }
+  $reboot = $false
+  try { if ((Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending')) { $reboot = $true } } catch { }
+  return @{
+    cpu = ([string]$cpu[0].Name).Trim(); cores = $cores; threads = $threads
+    ramGB = [math]::Round($cs.TotalPhysicalMemory / 1GB, 1)
+    gpu = ($gpu | ForEach-Object { [string]$_.Name }) -join '; '
+    board = (([string]$bd.Manufacturer) + ' ' + ([string]$bd.Product)).Trim()
+    bios = ([string]$bios.SMBIOSBIOSVersion); serial = ([string]$bios.SerialNumber)
+    model = (([string]$cs.Manufacturer) + ' ' + ([string]$cs.Model)).Trim()
+    os = [string]$os.Caption; osBuild = [string]$os.Version; arch = [string]$os.OSArchitecture
+    domain = [string]$cs.Domain
+    smartFail = $fail; disks = $disks; macs = $macs; ips = $ips
+    av = $av; avUpdated = $avUp; lastPatch = $patch; apps = $apps; rebootPending = $reboot
+  }
+}

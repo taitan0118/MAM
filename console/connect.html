@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MAM Console</title>
+<style>
+:root{--bg:#0B1519;--bg2:#0F2026;--card:#13262D;--line:#2A4048;--ink:#E8ECEB;--mute:#93A8AE;--acc:#5FD0C4;--acc2:#2FA89B;--bad:#F2877F;--ok:#5FD0C4;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(1200px 700px at 78% -10%,#173540 0%,transparent 60%),radial-gradient(900px 600px at -10% 110%,#10303A 0%,transparent 55%),var(--bg);color:var(--ink);font:400 14.5px/1.5 "Be Vietnam Pro","Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans",sans-serif;display:grid;place-items:center;overflow:hidden;position:relative;-webkit-user-select:none;user-select:none}
+input{-webkit-user-select:text;user-select:text}
+/* đường nhịp tim chạy ngang nền, nhắc tới biểu tượng của MAM */
+.pulse{position:absolute;left:0;right:0;width:100%;top:50%;height:160px;margin-top:-80px;opacity:.5;pointer-events:none}
+.pulse path{fill:none;stroke:var(--acc);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:240 2200;stroke-dashoffset:2440;animation:run 7s linear infinite;filter:drop-shadow(0 0 6px rgba(95,208,196,.55))}
+.pulse .base{stroke:#1F3A42;stroke-dasharray:none;animation:none;filter:none;stroke-width:1}
+@keyframes run{to{stroke-dashoffset:0}}
+main{position:relative;width:min(460px,calc(100vw - 32px));display:flex;flex-direction:column;gap:22px}
+.brand{display:flex;align-items:center;gap:16px}
+.mark{width:58px;height:58px;flex:none;border-radius:14px;background:transparent;box-shadow:0 8px 28px rgba(0,0,0,.35);display:grid;place-items:center}
+.mark svg{width:44px;height:44px}
+h1{margin:0;font-size:27px;line-height:1.1;font-weight:800;letter-spacing:-.025em}
+.sub{margin:2px 0 0;color:var(--mute);font-size:13px;letter-spacing:.02em}
+.card{background:linear-gradient(180deg,var(--card),#10222A);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 24px 60px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:14px}
+label.f{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.row{display:flex;gap:10px}
+.inp{flex:1;min-width:0;display:flex;align-items:center;background:#0C1A20;border:1px solid var(--line);border-radius:12px;transition:border-color .15s,box-shadow .15s}
+.inp:focus-within{border-color:var(--acc);box-shadow:0 0 0 3px rgba(95,208,196,.18)}
+.inp span{padding-left:14px;color:var(--mute);font-size:14px}
+.inp input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--ink);font:inherit;padding:13px 14px 13px 4px}
+button{font:inherit;cursor:pointer}
+.go{border:0;border-radius:12px;padding:0 22px;background:var(--acc);color:#06201D;font-weight:700;transition:transform .1s,background .15s}
+.go:hover{background:#7ADFD4}.go:active{transform:translateY(1px)}.go:disabled{opacity:.55;cursor:default}
+.chk{display:flex;align-items:center;gap:9px;color:var(--mute);font-size:13px;cursor:pointer}
+.chk input{accent-color:var(--acc);width:16px;height:16px}
+.msg{min-height:20px;font-size:13px;color:var(--bad)}
+.recent{display:flex;flex-direction:column;gap:2px;margin-top:2px}
+.recent h2{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.item{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+.item:hover,.item:focus-visible{background:#183039;border-color:var(--line);outline:0}
+.dot{width:9px;height:9px;border-radius:50%;background:#46606A;flex:none}
+.dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(95,208,196,.2)}.dot.off{background:var(--bad)}
+.item b{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item small{color:var(--mute);font-size:12px}
+.x{background:none;border:0;color:var(--mute);width:26px;height:26px;border-radius:7px;font-size:15px;line-height:1;opacity:0}
+.item:hover .x,.item:focus-within .x{opacity:1}.x:hover{background:#244049;color:var(--ink)}
+.foot{display:flex;justify-content:space-between;gap:12px;color:#6E858C;font-size:12px}
+.lang{display:flex;gap:2px}
+.lang button{background:none;border:0;color:#6E858C;padding:1px 6px;border-radius:6px;font-size:12px}
+.lang button.on{color:var(--ink);background:#183039}
+/* màn hình đang kết nối */
+body.busy main>.card,body.busy .foot,body.busy .brand{display:none}
+.splash{display:none;flex-direction:column;align-items:center;gap:18px;text-align:center}
+body.busy .splash{display:flex}
+.splash .mark{width:84px;height:84px;border-radius:20px;animation:beat 1.4s ease-in-out infinite}
+.splash .mark svg{width:64px;height:64px}
+@keyframes beat{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+.splash b{font-size:18px}.splash p{margin:0;color:var(--mute)}
+.splash .cancel{background:none;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:8px 18px}
+.splash .cancel:hover{background:#183039}
+@media (prefers-reduced-motion:reduce){.pulse path{animation:none;stroke-dasharray:none}.splash .mark{animation:none}}
+</style></head><body>
+<svg class="pulse" viewBox="0 0 1000 160" preserveAspectRatio="none" aria-hidden="true"><path class="base" d="M0 80H380L405 80L425 40L455 130L480 80H1000"/><path d="M0 80H380L405 80L425 40L455 130L480 80H1000"/></svg>
+<main>
+  <div class="brand">
+    <div class="mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="44" height="44" role="img" aria-label="MAM Server"><defs><linearGradient id="mtg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DBEAFE"/></linearGradient></defs><rect width="200" height="200" rx="44" fill="url(#mtg)"/><rect x="1.5" y="1.5" width="197" height="197" rx="43" fill="none" stroke="#BFDBFE" stroke-width="3"/><g transform="translate(18 14) scale(.7)"><g transform="translate(0 -6)"><path d="M40 57 V166" fill="none" stroke="#2563EB" stroke-width="24" stroke-linecap="round"/><path d="M160 57 V166" fill="none" stroke="#2563EB" stroke-width="24" stroke-linecap="round"/><path d="M28 58 V46 A12 12 0 0 1 40 34 H160 A12 12 0 0 1 172 46 V58 Z" fill="#16A34A"/><path d="M139.9 35.0 L137.6 35.1 L135.2 35.2 L132.9 35.4 L130.6 35.6 L128.3 35.8 L126.0 36.1 L123.8 36.5 L121.6 36.9 L119.4 37.3 L117.3 37.8 L115.2 38.3 L113.1 38.8 L111.0 39.4 L109.0 40.0 L107.1 40.7 L105.1 41.4 L103.3 42.1 L101.4 42.9 L99.6 43.7 L97.9 44.5 L96.1 45.4 L94.5 46.3 L92.8 47.3 L91.3 48.3 L89.8 49.3 L88.3 50.4 L86.9 51.5 L85.5 52.7 L84.2 53.9 L83.0 55.1 L81.8 56.4 L80.7 57.8 L79.6 59.1 L78.6 60.5 L77.8 62.0 L76.9 63.5 L76.2 65.0 L75.6 66.6 L75.0 68.2 L74.6 69.9 L74.3 71.5 L74.0 73.2 L73.9 74.9 L73.9 76.7 L74.0 78.4 L74.2 80.1 L74.5 81.8 L74.9 83.5 L75.5 85.2 L76.1 86.8 L76.8 88.5 L77.7 90.1 L78.6 91.7 L79.6 93.3 L80.7 94.8 L81.9 96.4 L83.2 97.9 L84.6 99.4 L86.0 100.9 L87.9 102.6 L89.8 104.0 L91.3 105.1 L92.7 106.2 L94.1 107.3 L95.4 108.4 L96.7 109.5 L97.9 110.6 L99.1 111.8 L100.2 112.9 L101.3 114.1 L102.4 115.3 L103.4 116.4 L104.3 117.6 L105.2 118.8 L106.1 120.0 L106.9 121.2 L107.6 122.4 L108.3 123.6 L109.0 124.8 L109.6 126.0 L110.1 127.2 L110.7 128.4 L111.1 129.6 L111.5 130.8 L111.9 132.0 L112.2 133.2 L112.5 134.4 L112.7 135.6 L112.9 136.8 L113.0 138.0 L113.0 139.2 L113.1 140.4 L113.0 141.6 L112.9 142.8 L112.8 144.0 L112.6 145.2 L112.3 146.4 L112.0 147.6 L111.7 148.8 L111.3 149.9 L110.8 151.1 L110.2 152.3 L109.7 153.5 L109.0 154.6 L108.3 155.8 L107.5 156.9 L106.7 158.0 L105.8 159.2 L104.8 160.3 L103.7 161.4 L102.6 162.5 L101.5 163.5 L100.2 164.6 L98.9 165.6 L97.6 166.6 L96.1 167.6 L94.6 168.6 L93.0 169.5 L91.4 170.4 L89.7 171.3 L90.3 172.7 L92.1 171.9 L93.9 171.2 L95.6 170.4 L97.3 169.5 L98.9 168.7 L100.4 167.8 L101.9 166.8 L103.3 165.9 L104.7 164.9 L106.0 163.9 L107.3 162.8 L108.5 161.8 L109.6 160.7 L110.7 159.5 L111.7 158.4 L112.7 157.2 L113.6 155.9 L114.5 154.7 L115.3 153.4 L116.0 152.1 L116.7 150.8 L117.3 149.5 L117.9 148.1 L118.4 146.7 L118.8 145.3 L119.2 143.9 L119.5 142.4 L119.7 141.0 L119.9 139.5 L120.0 138.0 L120.1 136.5 L120.1 135.0 L120.0 133.5 L119.9 131.9 L119.7 130.4 L119.4 128.8 L119.1 127.3 L118.8 125.7 L118.3 124.2 L117.8 122.6 L117.3 121.1 L116.6 119.5 L116.0 118.0 L115.2 116.4 L114.4 114.9 L113.6 113.4 L112.7 111.8 L111.7 110.3 L110.7 108.8 L109.6 107.3 L108.4 105.8 L107.3 104.4 L106.0 102.9 L104.7 101.4 L103.3 100.0 L101.9 98.6 L100.5 97.2 L98.9 95.8 L97.4 94.4 L96.1 93.4 L95.3 92.3 L94.2 91.0 L93.3 89.8 L92.5 88.6 L91.7 87.4 L91.1 86.2 L90.6 85.1 L90.1 84.0 L89.7 83.0 L89.5 82.0 L89.2 81.1 L89.1 80.2 L89.0 79.3 L89.0 78.5 L89.0 77.8 L89.1 77.0 L89.2 76.3 L89.4 75.6 L89.6 74.9 L89.9 74.3 L90.1 73.6 L90.5 73.0 L90.9 72.3 L91.3 71.7 L91.8 71.1 L92.3 70.4 L92.9 69.8 L93.6 69.1 L94.3 68.5 L95.0 67.9 L95.9 67.2 L96.7 66.6 L97.7 66.0 L98.6 65.4 L99.7 64.8 L100.8 64.2 L101.9 63.6 L103.1 63.1 L104.4 62.5 L105.7 62.0 L107.1 61.5 L108.5 61.0 L109.9 60.6 L111.4 60.1 L112.9 59.7 L114.5 59.3 L116.1 59.0 L117.8 58.6 L119.5 58.3 L121.2 58.1 L122.9 57.8 L124.7 57.6 L126.5 57.4 L128.4 57.3 L130.3 57.1 L132.2 57.0 L134.1 57.0 L136.0 57.0 L138.0 57.0 L140.1 57.0Z" fill="#16A34A"/></g></g><circle class="mb-ring" cx="160" cy="160" r="34" fill="#22C55E" stroke-width="8" style="stroke:#EFF6FF"/><rect x="143" y="143" width="34" height="8" rx="3" fill="#0F172A"/><circle class="mb-led0" cx="171" cy="147" r="2.2" fill="#F0FDF4"/><rect x="143" y="156" width="34" height="8" rx="3" fill="#0F172A"/><circle class="mb-led1" cx="171" cy="160" r="2.2" fill="#F0FDF4"/><rect x="143" y="169" width="34" height="8" rx="3" fill="#0F172A"/><circle class="mb-led2" cx="171" cy="173" r="2.2" fill="#F0FDF4"/></svg></div>
+    <div><h1>MAM Console</h1><p class="sub">Missing App Monitor</p></div>
+  </div>
+  <section class="card">
+    <label class="f" for="addr" id="tAddr"></label>
+    <div class="row">
+      <div class="inp"><span>http://</span><input id="addr" inputmode="url" autocomplete="off" spellcheck="false" placeholder="192.168.1.10:7070"></div>
+      <button class="go" id="go"></button>
+    </div>
+    <label class="chk"><input type="checkbox" id="auto" checked><span id="tAuto"></span></label>
+    <div class="msg" id="msg" role="alert"></div>
+    <div class="recent" id="recent"></div>
+  </section>
+  <div class="foot"><span>MAM {{VER}} · © 2026 Nguyễn Tấn Tài (Missing)</span><span class="lang" id="lang"></span></div>
+  <div class="splash"><div class="mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="44" height="44" role="img" aria-label="MAM Server"><defs><linearGradient id="mtg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DBEAFE"/></linearGradient></defs><rect width="200" height="200" rx="44" fill="url(#mtg)"/><rect x="1.5" y="1.5" width="197" height="197" rx="43" fill="none" stroke="#BFDBFE" stroke-width="3"/><g transform="translate(18 14) scale(.7)"><g transform="translate(0 -6)"><path d="M40 57 V166" fill="none" stroke="#2563EB" stroke-width="24" stroke-linecap="round"/><path d="M160 57 V166" fill="none" stroke="#2563EB" stroke-width="24" stroke-linecap="round"/><path d="M28 58 V46 A12 12 0 0 1 40 34 H160 A12 12 0 0 1 172 46 V58 Z" fill="#16A34A"/><path d="M139.9 35.0 L137.6 35.1 L135.2 35.2 L132.9 35.4 L130.6 35.6 L128.3 35.8 L126.0 36.1 L123.8 36.5 L121.6 36.9 L119.4 37.3 L117.3 37.8 L115.2 38.3 L113.1 38.8 L111.0 39.4 L109.0 40.0 L107.1 40.7 L105.1 41.4 L103.3 42.1 L101.4 42.9 L99.6 43.7 L97.9 44.5 L96.1 45.4 L94.5 46.3 L92.8 47.3 L91.3 48.3 L89.8 49.3 L88.3 50.4 L86.9 51.5 L85.5 52.7 L84.2 53.9 L83.0 55.1 L81.8 56.4 L80.7 57.8 L79.6 59.1 L78.6 60.5 L77.8 62.0 L76.9 63.5 L76.2 65.0 L75.6 66.6 L75.0 68.2 L74.6 69.9 L74.3 71.5 L74.0 73.2 L73.9 74.9 L73.9 76.7 L74.0 78.4 L74.2 80.1 L74.5 81.8 L74.9 83.5 L75.5 85.2 L76.1 86.8 L76.8 88.5 L77.7 90.1 L78.6 91.7 L79.6 93.3 L80.7 94.8 L81.9 96.4 L83.2 97.9 L84.6 99.4 L86.0 100.9 L87.9 102.6 L89.8 104.0 L91.3 105.1 L92.7 106.2 L94.1 107.3 L95.4 108.4 L96.7 109.5 L97.9 110.6 L99.1 111.8 L100.2 112.9 L101.3 114.1 L102.4 115.3 L103.4 116.4 L104.3 117.6 L105.2 118.8 L106.1 120.0 L106.9 121.2 L107.6 122.4 L108.3 123.6 L109.0 124.8 L109.6 126.0 L110.1 127.2 L110.7 128.4 L111.1 129.6 L111.5 130.8 L111.9 132.0 L112.2 133.2 L112.5 134.4 L112.7 135.6 L112.9 136.8 L113.0 138.0 L113.0 139.2 L113.1 140.4 L113.0 141.6 L112.9 142.8 L112.8 144.0 L112.6 145.2 L112.3 146.4 L112.0 147.6 L111.7 148.8 L111.3 149.9 L110.8 151.1 L110.2 152.3 L109.7 153.5 L109.0 154.6 L108.3 155.8 L107.5 156.9 L106.7 158.0 L105.8 159.2 L104.8 160.3 L103.7 161.4 L102.6 162.5 L101.5 163.5 L100.2 164.6 L98.9 165.6 L97.6 166.6 L96.1 167.6 L94.6 168.6 L93.0 169.5 L91.4 170.4 L89.7 171.3 L90.3 172.7 L92.1 171.9 L93.9 171.2 L95.6 170.4 L97.3 169.5 L98.9 168.7 L100.4 167.8 L101.9 166.8 L103.3 165.9 L104.7 164.9 L106.0 163.9 L107.3 162.8 L108.5 161.8 L109.6 160.7 L110.7 159.5 L111.7 158.4 L112.7 157.2 L113.6 155.9 L114.5 154.7 L115.3 153.4 L116.0 152.1 L116.7 150.8 L117.3 149.5 L117.9 148.1 L118.4 146.7 L118.8 145.3 L119.2 143.9 L119.5 142.4 L119.7 141.0 L119.9 139.5 L120.0 138.0 L120.1 136.5 L120.1 135.0 L120.0 133.5 L119.9 131.9 L119.7 130.4 L119.4 128.8 L119.1 127.3 L118.8 125.7 L118.3 124.2 L117.8 122.6 L117.3 121.1 L116.6 119.5 L116.0 118.0 L115.2 116.4 L114.4 114.9 L113.6 113.4 L112.7 111.8 L111.7 110.3 L110.7 108.8 L109.6 107.3 L108.4 105.8 L107.3 104.4 L106.0 102.9 L104.7 101.4 L103.3 100.0 L101.9 98.6 L100.5 97.2 L98.9 95.8 L97.4 94.4 L96.1 93.4 L95.3 92.3 L94.2 91.0 L93.3 89.8 L92.5 88.6 L91.7 87.4 L91.1 86.2 L90.6 85.1 L90.1 84.0 L89.7 83.0 L89.5 82.0 L89.2 81.1 L89.1 80.2 L89.0 79.3 L89.0 78.5 L89.0 77.8 L89.1 77.0 L89.2 76.3 L89.4 75.6 L89.6 74.9 L89.9 74.3 L90.1 73.6 L90.5 73.0 L90.9 72.3 L91.3 71.7 L91.8 71.1 L92.3 70.4 L92.9 69.8 L93.6 69.1 L94.3 68.5 L95.0 67.9 L95.9 67.2 L96.7 66.6 L97.7 66.0 L98.6 65.4 L99.7 64.8 L100.8 64.2 L101.9 63.6 L103.1 63.1 L104.4 62.5 L105.7 62.0 L107.1 61.5 L108.5 61.0 L109.9 60.6 L111.4 60.1 L112.9 59.7 L114.5 59.3 L116.1 59.0 L117.8 58.6 L119.5 58.3 L121.2 58.1 L122.9 57.8 L124.7 57.6 L126.5 57.4 L128.4 57.3 L130.3 57.1 L132.2 57.0 L134.1 57.0 L136.0 57.0 L138.0 57.0 L140.1 57.0Z" fill="#16A34A"/></g></g><circle class="mb-ring" cx="160" cy="160" r="34" fill="#22C55E" stroke-width="8" style="stroke:#EFF6FF"/><rect x="143" y="143" width="34" height="8" rx="3" fill="#0F172A"/><circle class="mb-led0" cx="171" cy="147" r="2.2" fill="#F0FDF4"/><rect x="143" y="156" width="34" height="8" rx="3" fill="#0F172A"/><circle class="mb-led1" cx="171" cy="160" r="2.2" fill="#F0FDF4"/><rect x="143" y="169" width="34" height="8" rx="3" fill="#0F172A"/><circle class="mb-led2" cx="171" cy="173" r="2.2" fill="#F0FDF4"/></svg></div><b id="sTitle"></b><p id="sHost"></p><button class="cancel" id="cancel"></button></div>
+</main>
+<script>
+(function(){
+var S={vi:{addr:"Địa chỉ server",go:"Kết nối",auto:"Tự kết nối lần sau",recent:"Server gần đây",conn:"Đang kết nối…",cancel:"Hủy",bad:"Địa chỉ không hợp lệ. Ví dụ: 192.168.1.10:7070",fail:"Không kết nối được tới %s. Kiểm tra server đã chạy, đúng địa chỉ và cùng mạng LAN.",rm:"Xóa khỏi danh sách",last:"vừa dùng"},
+en:{addr:"Server address",go:"Connect",auto:"Connect automatically next time",recent:"Recent servers",conn:"Connecting…",cancel:"Cancel",bad:"Invalid address. Example: 192.168.1.10:7070",fail:"Could not reach %s. Check the server is running, the address is right and you are on the same LAN.",rm:"Remove from list",last:"last used"},
+zh:{addr:"服务器地址",go:"连接",auto:"下次自动连接",recent:"最近的服务器",conn:"正在连接…",cancel:"取消",bad:"地址无效，例如：192.168.1.10:7070",fail:"无法连接到 %s。请确认服务器已运行、地址正确且在同一局域网。",rm:"从列表中移除",last:"最近使用"}};
+var $=function(i){return document.getElementById(i)},q=new URLSearchParams(location.search);
+function get(k,d){try{var v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}}
+function put(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+var lang=get("lang",(navigator.language||"vi").slice(0,2)); if(!S[lang])lang="vi";
+var servers=get("servers",[]),last=get("last",""),auto=get("auto",true),timer=null,gone=false;
+function T(){return S[lang]}
+function setLang(l){lang=l;put("lang",l);document.documentElement.lang=l;draw()}
+function norm(v){v=(v||"").trim().replace(/\/+$/,"");if(!v)return"";if(!/^https?:\/\//i.test(v))v="http://"+v;
+ try{var u=new URL(v);if(!u.hostname||!/^[A-Za-z0-9.\-\[\]:]+$/.test(u.hostname))return"";if(!u.port&&u.protocol==="http:")u.port="7070";return u.protocol+"//"+u.host}catch(e){return""}}
+function host(u){return u.replace(/^https?:\/\//,"")}
+function probe(u,ms){return new Promise(function(ok){var c=new AbortController(),t=setTimeout(function(){c.abort()},ms||3500);
+ fetch(u+"/api/status",{mode:"no-cors",cache:"no-store",signal:c.signal}).then(function(){clearTimeout(t);ok(true)},function(){clearTimeout(t);ok(false)})})}
+function remember(u){servers=servers.filter(function(s){return s.url!==u});servers.unshift({url:u,at:Date.now()});servers=servers.slice(0,6);put("servers",servers);put("last",u);put("auto",$("auto").checked)}
+function connect(u,silent){busy(true,u);var mine=timer={};
+ probe(u,4000).then(function(ok){if(timer!==mine||gone)return;
+  if(ok){remember(u);gone=true;location.assign(u+"/")}
+  else{busy(false);$("msg").textContent=T().fail.replace("%s",host(u));$("addr").value=host(u)}})}
+function busy(on,u){document.body.classList.toggle("busy",on);if(on){$("sHost").textContent=host(u)}else timer=null}
+function draw(){var t=T();$("tAddr").textContent=t.addr;$("go").textContent=t.go;$("tAuto").textContent=t.auto;$("sTitle").textContent=t.conn;$("cancel").textContent=t.cancel;
+ var l=$("lang");l.innerHTML="";[["vi","VI"],["en","EN"],["zh","中文"]].forEach(function(x){var b=document.createElement("button");b.textContent=x[1];b.className=lang===x[0]?"on":"";b.onclick=function(){setLang(x[0])};l.appendChild(b)});
+ var r=$("recent");r.innerHTML="";if(!servers.length)return;var h=document.createElement("h2");h.textContent=t.recent;r.appendChild(h);
+ servers.forEach(function(s){var d=document.createElement("div");d.className="item";d.tabIndex=0;
+  var dot=document.createElement("i");dot.className="dot";var b=document.createElement("b");b.textContent=host(s.url);
+  var sm=document.createElement("small");sm.textContent=s.url===last?t.last:"";var x=document.createElement("button");x.className="x";x.title=t.rm;x.textContent="✕";
+  x.onclick=function(e){e.stopPropagation();servers=servers.filter(function(y){return y.url!==s.url});put("servers",servers);if(last===s.url)put("last","");draw()};
+  d.onclick=function(){connect(s.url)};d.onkeydown=function(e){if(e.key==="Enter")connect(s.url)};
+  d.appendChild(dot);d.appendChild(b);d.appendChild(sm);d.appendChild(x);r.appendChild(d);
+  probe(s.url,2500).then(function(ok){dot.className="dot "+(ok?"on":"off")})})}
+$("go").onclick=function(){var u=norm($("addr").value);if(!u){$("msg").textContent=T().bad;return}$("msg").textContent="";connect(u)};
+$("addr").onkeydown=function(e){if(e.key==="Enter")$("go").click()};
+$("addr").oninput=function(){$("msg").textContent=""};
+$("cancel").onclick=function(){timer=null;busy(false)};
+$("auto").checked=auto;$("auto").onchange=function(){put("auto",$("auto").checked)};
+window.addEventListener("pageshow",function(e){if(e.persisted){gone=false;busy(false);draw()}});
+document.documentElement.lang=lang;draw();
+var back=false;try{back=(performance.getEntriesByType("navigation")[0]||{}).type==="back_forward"}catch(e){}
+var want=norm(q.get("server"));
+if(want){connect(want)}
+else if(last&&auto&&!q.get("choose")&&!back){connect(last)}
+else{$("addr").value=last?host(last):"";$("addr").focus()}
+})();
+</script></body></html>

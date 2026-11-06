@@ -1,0 +1,120 @@
+# Phần bổ sung (chạy trong không gian tên của content.py): bộ cài đồ họa, cửa sổ trên máy client, cột Điều khiển, tải agent, đổi nơi lưu dữ liệu.
+_tail = [G.pop(), G.pop()][::-1]   # [xử lý sự cố, giới hạn]
+
+# ---- sửa lệnh "Gửi tin nhắn": không còn dùng msg.exe ----
+for _t, _bl in G:
+    for _b in _bl:
+        if _b[0] == 'rows':
+            for _r in _b[1][1:]:
+                if isinstance(_r[0], tuple) and _r[0][1] == 'Send message':
+                    _r[1] = ('Hiện ở cửa sổ MAM trên máy client (kèm tên người gửi, giờ gửi) và máy có thể trả lời lại; không còn dùng msg.exe nên chạy trên mọi bản Windows. Tối đa 300 ký tự. Người ngồi máy cũng có thể mở cửa sổ này bất cứ lúc nào bằng biểu tượng MAM ngoài màn hình.',
+                             'Shown in the MAM window on the client (with the sender and the time) and the user can reply; msg.exe is no longer used, so it works on every Windows edition. At most 300 characters. The person at the machine can also open the window at any time from the MAM icon on the desktop.',
+                             '显示在客户端的 MAM 窗口中（含发送者和时间），使用者可以回复；不再使用 msg.exe，因此所有 Windows 版本都可用。最多 300 个字符。坐在设备前的人也可随时通过桌面上的 MAM 图标打开该窗口。')
+
+S(("Cột Điều khiển trong danh sách máy","The Control column in the machine list","设备列表中的“控制”列"),
+ ("p",("Ngay trong trang Máy, cuối mỗi dòng có cột Điều khiển để ra lệnh nhanh mà không cần mở từng máy. Máy đang online hiện bốn nút: Khóa, Nhắn, Khởi động lại, Tắt (hai lệnh sau luôn hỏi lại trước khi gửi). Máy offline chỉ có nút Bật máy (Wake-on-LAN). Máy ngoài nhóm được giao cho tài khoản Kỹ thuật viên hiện chữ \"ngoài nhóm\". Tài khoản Chỉ xem không thấy cột này.",
+       "Right on the Machines page, each row ends with a Control column for quick commands without opening the machine. An online machine shows four buttons: Lock, Message, Restart, Off (the last two always ask for confirmation). An offline machine only has Wake (Wake-on-LAN). Machines outside a Technician's assigned groups show \"outside your groups\". View-only accounts do not see the column.",
+       "在“设备”页面，每一行末尾都有“控制”列，无需打开设备即可快速下发命令。在线设备显示四个按钮：锁定、消息、重启、关机（后两者发送前会再次确认）。离线设备只有“唤醒”(Wake-on-LAN)。超出技术员所分配分组的设备显示“不在您的分组内”。仅查看账号看不到此列。")),
+ ("img","control",("Danh sách máy với cột Điều khiển","The machine list with the Control column","带“控制”列的设备列表")),
+ ("ul",[("Muốn ra lệnh cho nhiều máy cùng lúc: tick ô vuông đầu mỗi dòng, thanh thao tác hàng loạt hiện ra phía trên.","To command many machines at once: tick the checkbox at the start of each row and the bulk bar appears above.","要同时控制多台设备：勾选每行开头的复选框，上方会出现批量操作栏。"),
+        ("Muốn xem đầy đủ một máy: bấm vào tên máy để mở trang chi tiết, có cùng các nút điều khiển.","To see one machine in full: click its name to open the detail page, which has the same control buttons.","要查看某台设备的完整信息：点击设备名称打开详情页，那里有同样的控制按钮。"),
+        ("Không thấy nút điều khiển: kiểm tra vai trò tài khoản (Chỉ xem thì không có) và máy đã có agent, đang online chưa.","No control buttons: check the account role (View only has none) and that the machine has an agent and is online.","看不到控制按钮：请检查账号角色（仅查看没有）以及设备是否已安装代理并在线。")]))
+
+S(("Cửa sổ MAM trên máy client: nhận tin và trả lời","The MAM window on the client: receive and reply","客户端上的 MAM 窗口：接收与回复消息"),
+ ("p",("Khi quản trị viên bấm Nhắn, cửa sổ MAM tự bật lên trên màn hình máy client, hiện tên người gửi, nội dung và giờ gửi. Người ngồi máy gõ vào ô ở dưới rồi bấm Gửi để trả lời; câu trả lời xuất hiện trong Nhật ký thao tác trên Console (loại Tin nhắn). Cửa sổ có ba ngôn ngữ theo ngôn ngữ chọn lúc cài agent, tự đổi giao diện sáng hoặc tối theo Windows, và cho biết máy đang kết nối với server hay mất kết nối.",
+       "When an administrator presses Message, the MAM window pops up on the client screen showing the sender, the text and the time. The person at the machine types in the box at the bottom and presses Send to reply; the reply appears in the Audit log on the Console (type Message). The window follows the language chosen when the agent was installed, switches between light and dark with Windows, and shows whether the machine is connected to the server.",
+       "管理员点击“消息”后，MAM 窗口会自动弹出到客户端屏幕上，显示发送者、内容和时间。使用者在底部输入框输入并点击“发送”即可回复；回复会出现在控制台的操作日志中（类型为“消息”）。窗口语言与安装代理时选择的语言一致，随 Windows 自动切换浅色或深色，并显示设备是否已连接服务器。")),
+ ("p",("Người ngồi máy có thể đổi tên máy của mình: bấm biểu tượng bút chì ✎ cạnh tên ở đầu cửa sổ, nhập tên mới (tối đa 40 ký tự) rồi Lưu. Tên mới được gửi lên server ngay và hiện trên Console; việc đổi tên được ghi vào Nhật ký thao tác.",
+       "The person at the machine can rename their computer: click the pencil icon ✎ next to the name at the top of the window, type a new name (up to 40 characters) and Save. The new name is sent to the server at once and shows on the Console; the change is recorded in the Audit log.",
+       "使用者可以给自己的电脑改名：点击窗口顶部名称旁的铅笔图标 ✎，输入新名称（最多 40 个字符）后保存。新名称会立即发送到服务器并显示在控制台，更改会记入操作日志。")),
+ ("p",("Biểu tượng MAM nằm ở khay hệ thống (góc phải thanh tác vụ, có thể phải bấm mũi tên ^ để thấy): bấm trái hoặc bấm đúp để mở cửa sổ MAM, bấm phải để hiện menu Mở MAM. Biểu tượng có sau khi agent chạy trong phiên người dùng, tức là từ lần đăng nhập Windows kế tiếp hoặc sau khi agent tự cập nhật.",
+       "The MAM icon sits in the system tray (bottom right of the taskbar; you may need to click the ^ arrow): left-click or double-click it to open the MAM window, right-click for the Open MAM menu. It appears once the agent runs in the user session, i.e. from the next Windows sign-in or after the agent updates itself.",
+       "MAM 图标位于系统托盘（任务栏右下角，可能需要点击 ^ 箭头才能看到）：左键单击或双击打开 MAM 窗口，右键显示“打开 MAM”菜单。代理在用户会话中运行后即会出现，即下次登录 Windows 时或代理自动更新后。")),
+ ("p",("Cảnh báo (nhiệt độ, CPU, ổ đĩa, RAM, mất kết nối) chỉ gửi về server và hiện trên Console; máy client không bị bật thông báo cảnh báo. Cửa sổ MAM trên client chỉ hiện tin nhắn của quản trị viên, phản hồi yêu cầu hỗ trợ và hộp xin phép xem màn hình.",
+       "Alerts (temperature, CPU, disk, RAM, lost connection) are sent to the server only and shown on the Console; client machines get no alert pop-ups. The MAM window on a client only shows administrator messages, support request updates and the screen-viewing permission box.",
+       "告警（温度、CPU、磁盘、内存、断线）只发送到服务器并显示在控制台；客户端不会弹出告警通知。客户端的 MAM 窗口只显示管理员消息、支持请求的进展以及查看屏幕的授权提示。")),
+ ("img","client",("Cửa sổ MAM trên máy client","The MAM window on a client","客户端上的 MAM 窗口")),
+ ("rows",[[("Việc cần làm","What you want","需求"),("Cách làm","How","方法")],
+   [("Mở cửa sổ lúc không có tin mới","Open the window with no new message","没有新消息时打开窗口"),("Bấm đúp biểu tượng MAM ngoài màn hình (Desktop). Cửa sổ lưu 100 tin gần nhất của lần agent đang chạy.","Double-click the MAM icon on the desktop. The window keeps the latest 100 messages since the agent started.","双击桌面上的 MAM 图标。窗口保留代理启动以来最近的 100 条消息。")],
+   [("Tin tự hiện lên khi đang làm việc","Messages pop up on their own","消息自动弹出"),("Một tiến trình nhỏ chạy trong phiên người dùng (tác vụ MAM Client, chạy mỗi lần đăng nhập Windows) theo dõi tin mới và mở cửa sổ khi có tin chưa đọc.","A small process in the user session (the MAM Client task, started at every Windows sign-in) watches for new messages and opens the window when one is unread.","用户会话中的一个小进程（“MAM Client”任务，每次登录 Windows 时启动）监视新消息，并在有未读消息时打开窗口。")],
+   [("Cần trình duyệt không?","Does it need a browser?","是否需要浏览器？"),("Cửa sổ mở bằng Microsoft Edge hoặc Google Chrome ở chế độ ứng dụng (có sẵn trên Windows 10/11), không cần mở trình duyệt thật. Không có cả hai thì mở bằng trình duyệt mặc định.","The window opens in Microsoft Edge or Google Chrome in app mode (built into Windows 10/11), no browser tab is needed. If neither exists, the default browser is used.","窗口使用 Microsoft Edge 或 Google Chrome 的应用模式打开（Windows 10/11 自带），无需打开浏览器标签页。两者都没有时使用默认浏览器。")]]),
+ ("note",("Cửa sổ chỉ nhận lệnh từ chính máy đó (địa chỉ 127.0.0.1, cổng 47631), không mở ra mạng LAN. Tin nhắn tới máy chưa có người đăng nhập sẽ hiện khi có người đăng nhập tiếp theo. Máy dùng MAM-Agent.ps1 (Windows 7/8) vẫn nhận tin bằng cách cũ qua hộp thoại của Windows.",
+          "The window only accepts requests from the machine itself (127.0.0.1, port 47631); it is not exposed to the LAN. A message sent to a machine with nobody signed in is shown at the next sign-in. Machines running MAM-Agent.ps1 (Windows 7/8) still get messages the old way, through the Windows dialog box.",
+          "该窗口只接受本机自身的请求（127.0.0.1，端口 47631），不会暴露到局域网。发往无人登录的设备的消息会在下一次登录时显示。使用 MAM-Agent.ps1 的设备（Windows 7/8）仍按原方式通过 Windows 对话框接收消息。")))
+
+S(("Cách dễ nhất để cài agent: tải file đã gắn sẵn server","The easiest agent install: download the pre-configured file","最简单的代理安装方式：下载预配置文件"),
+ ("p",("Trong Console, vào Cài đặt, mục Cách dễ nhất: tải agent đã cài sẵn, bấm Tải MAM-Agent.exe. File này đã gắn sẵn địa chỉ server, mã đăng ký (nếu có) và ngôn ngữ của Console, nên trên máy client chỉ cần chép sang, bấm đúp, chọn Yes ở hộp thoại quyền Administrator. Vài giây sau máy tự hiện trong Console.",
+       "In the Console go to Settings, the section The easiest way: download the ready-made agent, and press Download MAM-Agent.exe. The file already carries the server address, the enrollment key (if any) and the Console language, so on a client you just copy it over, double-click and answer Yes to the Administrator prompt. A few seconds later the machine appears in the Console.",
+       "在控制台进入“设置”，找到“最简单的方式：下载已配置好的代理”，点击“下载 MAM-Agent.exe”。该文件已内置服务器地址、注册码（如有）和控制台语言，因此在客户端上只需复制过去、双击并在管理员权限提示中选择“是”。几秒钟后设备就会出现在控制台中。")),
+ ("ul",[("Cài không hỏi (ví dụ để chạy hàng loạt bằng GPO hoặc script): mam-agent.exe /S","Silent install (for GPO or scripts): mam-agent.exe /S","静默安装（用于组策略或脚本）：mam-agent.exe /S"),
+        ("Cài lại trên máy đã có: máy giữ nguyên tên và nhóm, chỉ cấp token mới.","Reinstalling on a machine that already exists keeps its name and group and only issues a new token.","在已有设备上重装：设备保留原名称和分组，仅重新签发令牌。"),
+        ("Mỗi lần đổi mã đăng ký trong Cài đặt, hãy tải lại file để file luôn khớp.","Whenever you change the enrollment key in Settings, download the file again so it stays in sync.","每次在设置中更改注册码后，请重新下载该文件以保持一致。"),
+        ("Máy Windows 7/8 không chạy được file .exe này, dùng MAM-Agent.ps1 theo hướng dẫn trong Cài đặt.","Windows 7/8 cannot run this .exe; use MAM-Agent.ps1 as described in Settings.","Windows 7/8 无法运行此 .exe，请按设置页中的说明使用 MAM-Agent.ps1。")]))
+
+S(("Bộ cài đồ họa MAM-Server-Setup và MAM-Agent-Setup","The graphical installers MAM-Server-Setup and MAM-Agent-Setup","图形化安装程序 MAM-Server-Setup 与 MAM-Agent-Setup"),
+ ("p",("Nếu không thích dòng lệnh, dùng hai bộ cài có giao diện: MAM-Server-Setup.exe cho máy server và MAM-Agent-Setup.exe cho máy client. Bấm đúp, chọn Yes ở hộp thoại quyền Administrator, một cửa sổ đẹp mở ra với ba ngôn ngữ (Tiếng Việt, English, 简体中文) ở góc trên. Mỗi bộ cài có hai thẻ: Cài đặt (hoặc Cập nhật) và Gỡ.",
+       "If you dislike the command line, use the two installers with a window: MAM-Server-Setup.exe for the server and MAM-Agent-Setup.exe for the clients. Double-click, answer Yes to the Administrator prompt and a clean window opens with three languages (Tiếng Việt, English, 简体中文) at the top. Each installer has two tabs: Install (or Update) and Uninstall.",
+       "如果不喜欢命令行，可使用两个带界面的安装程序：服务器用 MAM-Server-Setup.exe，客户端用 MAM-Agent-Setup.exe。双击后在管理员权限提示中选择“是”，会打开一个简洁的窗口，顶部可切换三种语言（Tiếng Việt、English、简体中文）。每个安装程序有两个标签页：安装（或更新）和卸载。")),
+ ("rows",[[("Bộ cài","Installer","安装程序"),("Bạn nhập gì, nó làm gì","What you enter and what it does","需要输入什么，做了什么")],
+   [("MAM-Server-Setup","MAM-Server-Setup","MAM-Server-Setup"),("Nhập cổng (mặc định 7070) và thư mục lưu dữ liệu (mặc định C:\\ProgramData\\MAM). Bộ cài dừng bản cũ, chép chương trình, mở cổng tường lửa chỉ cho mạng LAN, đăng ký chạy cùng Windows, khởi động rồi kiểm tra server trả lời. Xong, nó hiện nút mở Console và địa chỉ cho các máy khác trong LAN.","Enter the port (default 7070) and the data folder (default C:\\ProgramData\\MAM). It stops the old version, copies the program, opens the firewall port for the LAN only, registers the start-with-Windows task, starts the server and checks that it answers. When done it shows a button to open the Console and the address for the other computers on the LAN.","输入端口（默认 7070）和数据文件夹（默认 C:\\ProgramData\\MAM）。安装程序会停止旧版本、复制程序、仅对局域网开放防火墙端口、注册随 Windows 启动的任务、启动服务器并检查其是否响应。完成后显示“打开控制台”按钮以及供局域网其他电脑使用的地址。")],
+   [("MAM-Agent-Setup","MAM-Agent-Setup","MAM-Agent-Setup"),("Nhập địa chỉ server, mã đăng ký (nếu server có đặt) và tên máy (để trống thì lấy tên Windows). Bộ cài chép agent, đăng ký chạy ngầm cùng Windows, tạo cửa sổ nhận tin và biểu tượng MAM ngoài màn hình, rồi báo máy đã lên Console.","Enter the server address, the enrollment key (if the server has one) and the machine name (blank = the Windows name). It copies the agent, registers it to run in the background with Windows, creates the message window and the MAM desktop icon, then reports that the machine is on the Console.","输入服务器地址、注册码（如服务器已设置）和设备名称（留空则使用 Windows 计算机名）。安装程序会复制代理、注册为随 Windows 后台运行、创建消息窗口和桌面 MAM 图标，然后提示设备已出现在控制台。")]]),
+ ("h",("Cập nhật lên bản mới","Updating to a newer version","更新到新版本")),
+ ("p",("Cập nhật rất đơn giản: chạy bộ cài của bản mới ngay trên máy đã cài. Thẻ đầu tiên tự đổi thành Cập nhật và giữ nguyên cổng, thư mục dữ liệu, tài khoản, nhóm máy, cảnh báo và nhật ký. Với agent: chạy bộ cài mới (hoặc tải lại MAM-Agent.exe từ Console rồi bấm đúp), máy giữ tên, nhóm và lịch sử. Nên cập nhật server trước, agent sau.",
+       "Updating is simple: run the newer installer on the machine that already has MAM. The first tab turns into Update and keeps the port, the data folder, accounts, groups, alerts and the audit log. For an agent, run the new installer (or download MAM-Agent.exe again from the Console and double-click it); the machine keeps its name, group and history. Update the server first, the agents afterwards.",
+       "更新很简单：在已安装 MAM 的机器上运行新版本的安装程序。第一个标签页会自动变为“更新”，并保留端口、数据文件夹、账号、分组、告警和操作日志。对于代理：运行新安装程序（或从控制台重新下载 MAM-Agent.exe 并双击），设备会保留名称、分组和历史。请先更新服务器，再更新代理。")),
+ ("h",("Gỡ cài đặt","Uninstalling","卸载")),
+ ("ul",[("Gỡ server: thẻ Gỡ dừng server, xóa tác vụ tự chạy, xóa luật tường lửa và chương trình. Dữ liệu được giữ lại, chỉ xóa khi bạn tick \"Xóa luôn dữ liệu\" (không khôi phục được).","Uninstall the server: the Uninstall tab stops the server and removes the start-up task, the firewall rule and the program. The data is kept unless you tick \"Also delete ALL data\" (this cannot be undone).","卸载服务器：“卸载”标签页会停止服务器并删除启动任务、防火墙规则和程序。数据默认保留，仅在勾选“同时删除所有数据”时才删除（无法恢复）。"),
+        ("Gỡ agent: nhập mật khẩu gỡ do Super admin đặt ở Cài đặt > Mật khẩu gỡ agent, không dùng tài khoản quản trị nên tài khoản không bị lộ. Chưa đặt mật khẩu gỡ thì không ai gỡ được trên máy. Sai 5 lần bị khóa 1 phút, mọi lần thử đều ghi vào nhật ký loại Nhạy cảm. Đổi mật khẩu gỡ là mật khẩu cũ hết hiệu lực ngay trên mọi máy.","Uninstall an agent: enter the uninstall password a Super admin sets under Settings > Agent uninstall password; no admin account is used, so it is never exposed. Until one is set nobody can uninstall on the computer. 5 wrong tries lock it for 1 minute and every attempt is logged as Sensitive. Changing it stops the old one on every computer at once.","卸载代理：输入超级管理员在“设置 > 代理卸载密码”中设置的卸载密码，不使用管理员账号，因此账号不会泄露。未设置时任何人都无法在电脑上卸载。输错 5 次锁定 1 分钟，每次尝试都记为“敏感”日志。修改后旧密码立即在所有电脑上失效。")]),
+ ("warn",("Hai file Setup chưa được ký số, nên lần đầu Windows SmartScreen có thể báo \"Windows protected your PC\": bấm Thông tin thêm, rồi Vẫn chạy. Đây là bình thường với phần mềm tự phát hành.",
+          "The two Setup files are not code-signed, so the first time Windows SmartScreen may say \"Windows protected your PC\": click More info, then Run anyway. This is normal for self-published software.",
+          "这两个 Setup 文件没有数字签名，因此首次运行时 Windows SmartScreen 可能提示“Windows 已保护你的电脑”：请点击“更多信息”，再点击“仍要运行”。这对自行发布的软件是正常现象。")))
+
+S(("Đổi nơi lưu dữ liệu ngay trong Console","Moving the data location from the Console","在控制台内更换数据存放位置"),
+ ("p",("Cần chuyển dữ liệu sang ổ khác (ổ D, USB, ổ mạng) mà không muốn cài lại? Vào Cài đặt, mục Nơi lưu dữ liệu (chỉ Super admin thấy), nhập thư mục mới còn trống rồi bấm Chuyển dữ liệu.",
+       "Need to move the data to another drive (D:, a USB stick, a network drive) without reinstalling? Open Settings, the section Data location (only Super admins see it), enter an empty new folder and press Move data.",
+       "需要把数据迁移到其他磁盘（D 盘、U 盘、网络盘）又不想重装？进入“设置”中的“数据存放位置”（仅超级管理员可见），输入一个空的新文件夹，然后点击“移动数据”。")),
+ ("ol",[("Nhập đường dẫn đầy đủ của thư mục mới, ví dụ D:\\MAMdata. Thư mục phải trống hoặc chưa có.","Type the full path of the new folder, for example D:\\MAMdata. It must be empty or not exist yet.","输入新文件夹的完整路径，例如 D:\\MAMdata。该文件夹必须为空或尚不存在。"),
+        ("Bấm Chuyển dữ liệu. Server chép toàn bộ dữ liệu (tài khoản, máy, cảnh báo, nhật ký, sao lưu) sang chỗ mới.","Press Move data. The server copies all data (accounts, machines, alerts, audit log, backups) to the new place.","点击“移动数据”。服务器会把全部数据（账号、设备、告警、操作日志、备份）复制到新位置。"),
+        ("Server dùng ngay chỗ mới, không cần khởi động lại, và nhớ lựa chọn này cả sau khi khởi động lại (ghi trong file redirect.txt ở thư mục dữ liệu gốc).","The server switches to the new place at once without a restart and remembers it after a restart (stored in redirect.txt in the original data folder).","服务器会立即改用新位置，无需重启，重启后也会记住（记录在原数据文件夹中的 redirect.txt 里）。"),
+        ("Dữ liệu cũ được giữ nguyên. Kiểm tra mọi thứ chạy tốt rồi hãy tự xóa thư mục cũ.","The old data stays in place. Check that everything works, then delete the old folder yourself.","旧数据保持不变。确认一切正常后，请自行删除旧文件夹。")]),
+ ("warn",("Ổ mới (USB, ổ mạng) phải luôn gắn khi server chạy. Nếu lúc khởi động mà không thấy thư mục mới, server báo lỗi và dừng, không tự tạo dữ liệu trống. Muốn quay lại chỗ cũ, xóa file redirect.txt rồi chạy lại server.",
+          "The new drive (USB, network) must always be attached while the server runs. If the new folder is missing at start-up the server reports an error and stops instead of creating empty data. To go back to the old place, delete redirect.txt and restart the server.",
+          "服务器运行期间新磁盘（U 盘、网络盘）必须始终连接。启动时如果找不到新文件夹，服务器会报错并停止，而不会自行创建空数据。要回到旧位置，请删除 redirect.txt 并重启服务器。")))
+
+# thêm hàng xử lý sự cố
+for _b in _tail[0][1]:
+    if _b[0] == 'rows':
+        _b[1].extend([
+          [("Tin nhắn không hiện trên máy client","The message does not show on the client","客户端上没有显示消息"),
+           ("Kiểm tra máy đang online và agent là bản mới (cài lại bằng MAM-Agent-Setup hoặc file tải từ Console). Mở thử cửa sổ bằng biểu tượng MAM ngoài màn hình. Máy Windows 7/8 dùng MAM-Agent.ps1 nhận tin bằng hộp thoại Windows (cần Windows Pro).","Check the machine is online and runs the new agent (reinstall with MAM-Agent-Setup or the file downloaded from the Console). Try opening the window from the MAM icon on the desktop. Windows 7/8 machines with MAM-Agent.ps1 get messages through the Windows dialog (needs Windows Pro).","请确认设备在线且代理为新版本（用 MAM-Agent-Setup 或从控制台下载的文件重新安装）。尝试用桌面上的 MAM 图标打开窗口。使用 MAM-Agent.ps1 的 Windows 7/8 设备通过 Windows 对话框接收消息（需要专业版）。")],
+          [("Không thấy nút điều khiển máy","I cannot see the machine control buttons","看不到设备控制按钮"),
+           ("Vào trang Máy: nút nằm ở cột Điều khiển cuối mỗi dòng. Tài khoản Chỉ xem không có cột này. Máy offline chỉ có nút Bật máy. Tài khoản Kỹ thuật viên chỉ điều khiển máy trong nhóm được giao.","Open the Machines page: the buttons are in the Control column at the end of each row. View-only accounts have no such column. Offline machines only have Wake. A Technician can only control machines in the assigned groups.","打开“设备”页面：按钮位于每行末尾的“控制”列。仅查看账号没有此列。离线设备只有“唤醒”按钮。技术员只能控制所分配分组内的设备。")],
+          [("Thông tin máy bị lỗi font (ký tự lạ)","Machine information shows garbled characters","设备信息显示乱码"),
+           ("Do tên hệ điều hành hoặc kiến trúc có dấu của Windows bị đọc sai bảng mã. Agent mới đã sửa bằng cách mã hóa ký tự an toàn; cập nhật agent rồi đợi vài giây (hoặc khởi động lại agent) để thông tin được gửi lại.","Caused by accented Windows OS or architecture names being read with the wrong code page. The new agent fixes it by encoding characters safely; update the agent and wait a few seconds (or restart it) so the information is sent again.","原因是带重音/本地化的 Windows 系统名称或架构被按错误的字符编码读取。新版代理已通过安全编码字符修复此问题；请更新代理并等待几秒（或重启代理），信息会重新发送。")]])
+G.extend(_tail)
+
+# xếp lại cho hợp lý rồi đánh số lại tiêu đề
+G[:] = [G[k] for k in (0,1,2,3,4,13,14,5,6,7,11,12,8,9,10,15,16,17)]
+import re as _re
+G[:] = [((_re.sub(r'^\d+\.\s*', '', t[0]) and tuple(f'{n}. ' + _re.sub(r'^\d+\.\s*', '', x) for x in t)), bl) for n, (t, bl) in enumerate(G, 1)]
+
+# ---- phần giới thiệu ----
+INTRO[4] = (('Cài trong vài phút', 'Installed in minutes', '几分钟完成安装'),
+            ('Bấm đúp một file là xong: tải MAM-Agent.exe đã gắn sẵn server từ Console, hoặc dùng bộ cài đồ họa. Cập nhật bằng cách chạy bản mới đè lên, dữ liệu được giữ.', 'Double-click one file and you are done: download the pre-configured MAM-Agent.exe from the Console, or use the graphical installers. Update by running the newer version over the old one; data is kept.', '双击一个文件即可完成：从控制台下载已内置服务器的 MAM-Agent.exe，或使用图形化安装程序。运行新版本覆盖安装即可更新，数据会保留。'))
+INTRO.insert(3, (('Trò chuyện với người dùng', 'Talk to the user', '与使用者交流'),
+            ('Nhắn tới máy, cửa sổ MAM tự bật lên trên màn hình client; người ngồi máy trả lời ngay trong đó và câu trả lời hiện ở nhật ký.', 'Send a message and the MAM window pops up on the client screen; the person at the machine replies right there and the reply shows in the audit log.', '发送消息后，MAM 窗口会自动弹出到客户端屏幕；使用者可直接在其中回复，回复会显示在操作日志中。')))
+INTRO.append((('Điều khiển ngay trong danh sách', 'Control right in the list', '直接在列表中控制'),
+            ('Mỗi dòng máy có nút Khóa, Nhắn, Khởi động lại, Tắt hoặc Bật máy; chọn nhiều máy để ra lệnh cả loạt.', 'Every machine row has Lock, Message, Restart, Off or Wake buttons; select many machines to command them together.', '每台设备所在行都有锁定、消息、重启、关机或唤醒按钮；选择多台设备可批量下发命令。')))
+INTRO.append((('Dữ liệu di chuyển được', 'Movable data', '数据可迁移'),
+            ('Đổi nơi lưu dữ liệu sang ổ khác ngay trong Console, không cần cài lại.', 'Move the data to another drive from the Console, no reinstall.', '无需重装，直接在控制台中把数据迁移到其他磁盘。')))
+INTRO_NOT = (('Chưa có trong bản 1.0', 'Not in version 1.0', '1.0 版尚未包含'), ('Điều khiển màn hình từ xa, kiểm kê phần mềm, báo cáo gửi tự động. Khóa màn hình cần Windows Pro trở lên.', 'Remote screen control, software inventory, scheduled reports. Lock screen needs Windows Pro or later.', '远程屏幕控制、软件清点、自动报表。锁屏需要 Windows 专业版及以上。'))
+
+S(("Remote desktop: mở nhanh TeamViewer/AnyDesk/RDP","Remote desktop: open TeamViewer/AnyDesk/RDP quickly","远程桌面：快速打开 TeamViewer/AnyDesk/RDP"),
+ ("p",("MAM không tự xem hay điều khiển màn hình máy client. Thay vào đó, trang chi tiết mỗi máy có thẻ Remote desktop để ghi lại ID TeamViewer/AnyDesk hoặc địa chỉ RDP của máy đó (tự cài phần mềm remote desktop trước). Lần sau cần sửa máy, mở trang chi tiết, bấm Sao chép rồi dán vào phần mềm remote desktop để kết nối.",
+       "MAM never watches or controls a client's screen itself. Instead, each machine's detail page has a Remote desktop card to save its TeamViewer/AnyDesk ID or RDP address (install the remote-desktop app yourself first). Next time you need to fix that machine, open its detail page, press Copy, and paste it into your remote-desktop app to connect.",
+       "MAM 本身不会查看或控制客户端的屏幕。相反，每台设备的详情页都有一个“远程桌面”卡片，用来保存该设备的 TeamViewer/AnyDesk ID 或 RDP 地址（需自行先安装远程桌面软件）。下次需要处理该设备时，打开详情页，点击“复制”，粘贴到您的远程桌面软件中即可连接。")),
+ ("note",("MAM chỉ ghi nhớ chuỗi ký tự này, không tự kết nối hay điều khiển máy — tránh được rủi ro của một công cụ điều khiển từ xa chạy ẩn trên hàng loạt máy.",
+          "MAM only remembers this text; it never connects to or controls the machine on its own — avoiding the risk of a hidden remote-control tool running across many machines.",
+          "MAM 仅保存这段文字，不会自行连接或控制设备——从而避免了在大量设备上运行隐藏远程控制工具的风险。")))
+
+exec(open(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),"content_new.py"),encoding="utf8").read())
