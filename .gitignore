@@ -4,3 +4,7 @@ data/
 node_modules/
 server/server
 agent/agent
+agent-ps/MAM-Agent.ps1
+docs-out/
+__pycache__/
+installer/*/payload/
