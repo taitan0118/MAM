@@ -9,5 +9,12 @@ const web = path.join(__dirname, '../../server/web/');
 fs.writeFileSync(web + 'favicon.svg', L.svg({ size: 64, tile: true, badge: 'server' }));
 fs.writeFileSync(web + 'logo-light.svg', L.svg({ size: 200, theme: 'light', badge: 'server' }));
 fs.writeFileSync(web + 'logo-dark.svg', L.svg({ size: 200, theme: 'dark', badge: 'server' }));
-fs.writeFileSync(path.join(__dirname, '../setup-server/logo.svg'), L.svg({ size: 56, theme: 'dark', badge: 'server' }));
-fs.writeFileSync(path.join(__dirname, '../setup-agent/logo.svg'), L.svg({ size: 56, theme: 'dark', badge: 'agent' }));
+fs.writeFileSync(path.join(__dirname, '../setup-server/logo.svg'), L.svg({ size: 56, tile: true, badge: 'server' }));
+fs.writeFileSync(path.join(__dirname, '../setup-agent/logo.svg'), L.svg({ size: 56, tile: true, badge: 'agent' }));
+fs.writeFileSync(path.join(__dirname, '../uikit/logo.svg'), L.svg({ size: 56, tile: true, badge: 'server' }));
+// logo nhúng thẳng trong HTML (cửa sổ agent, màn chọn server của Console): thay đúng thẻ svg cũ, giữ cỡ
+for (const f of ['../../agent/ui.html', '../../console/connect.html']) {
+  const fp = path.join(__dirname, f);
+  fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace(/<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 200 200" width="(\d+)" height="\d+" role="img" aria-label="MAM (Server|Agent)">.*?<\/svg>/g,
+    (m, size, kind) => L.svg({ size: +size, tile: true, badge: kind.toLowerCase() })));
+}

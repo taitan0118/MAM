@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  var COLORS = { leaf: '#22C55E', legsOnLight: '#2563EB', legsOnDark: '#38BDF8', navy: '#0F172A' };
+  var COLORS = { leaf: '#22C55E', legsOnLight: '#2563EB', legsOnDark: '#38BDF8', navy: '#0F172A', paper: '#F8FAFC' };
   var BAR = 'M28 58 V46 A12 12 0 0 1 40 34 H160 A12 12 0 0 1 172 46 V58 Z';
 
   function bez(p, t) {
@@ -54,18 +54,18 @@
   }
 
   // Static logo. theme: 'light' (blue legs) or 'dark' (light-blue legs).
-  // opts.badge 'server' | 'agent': logo MAM (chữ thu vào góc, huy hiệu ở góc phải dưới). opts.tile: nền trắng ngả xanh nhạt bo góc (icon app).
+  // opts.badge 'server' | 'agent': logo MAM (chữ thu vào góc, huy hiệu ở góc phải dưới). opts.tile: nền trắng ngà phẳng bo góc (icon app).
   function svg(opts) {
     opts = opts || {};
     var dark = opts.theme === 'dark';
     var legs = dark ? COLORS.legsOnDark : COLORS.legsOnLight; // icon app (tile) nền sáng: chân xanh đậm như logo trên nền sáng
-    var leaf = opts.tile ? '#16A34A' : COLORS.leaf;
+    var leaf = COLORS.leaf;
     var size = opts.size || 40, label = opts.label || (opts.badge ? 'MAM ' + (opts.badge === 'agent' ? 'Agent' : 'Server') : 'Missing');
     var mark = '<g transform="translate(0 -6)">' + legPath(40, legs) + legPath(160, legs) +
       '<path d="' + BAR + '" fill="' + leaf + '"/><path d="' + S_D + '" fill="' + leaf + '"/></g>';
-    if (opts.badge) mark = '<g transform="translate(18 14) scale(.7)">' + mark + '</g>' + badgeSvg(opts.badge, opts.ring || (opts.tile ? '#EFF6FF' : dark ? COLORS.navy : '#FFFFFF'));
+    if (opts.badge) mark = '<g transform="translate(18 14) scale(.7)">' + mark + '</g>' + badgeSvg(opts.badge, opts.ring || (opts.tile ? COLORS.paper : dark ? COLORS.navy : '#FFFFFF'));
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="' + size + '" height="' + size +
-      '" role="img" aria-label="' + label + '">' + (opts.tile ? '<defs><linearGradient id="mtg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DBEAFE"/></linearGradient></defs><rect width="200" height="200" rx="44" fill="url(#mtg)"/><rect x="1.5" y="1.5" width="197" height="197" rx="43" fill="none" stroke="#BFDBFE" stroke-width="3"/>' : '') + mark + '</svg>';
+      '" role="img" aria-label="' + label + '">' + (opts.tile ? '<rect x="1.5" y="1.5" width="197" height="197" rx="43" fill="' + COLORS.paper + '" stroke="#E2E8F0" stroke-width="3"/>' : '') + mark + '</svg>';
   }
 
   /* ---------- Sound logo (Web Audio, synthesised, no files) ----------
@@ -195,7 +195,7 @@
   var FLY = 700;     // ms: flight into the target slot
 
   /* opts.target     element (svg/img/div, square) where the logo lives after the intro; required
-   * opts.background overlay colour, default navy
+   * opts.background overlay colour, default light paper
    * opts.word       element holding the wordmark text (e.g. "missing") in the header; optional.
    *                 When given, the word runs out beside the logo, then flies into this element.
    * opts.theme      legs colour of the TARGET logo: 'light' | 'dark' (default 'light')
@@ -223,7 +223,7 @@
     var sp = opts.speed || 1, kind = opts.badge;
     var ringEnd = opts.ring || (opts.theme === 'dark' ? COLORS.navy : '#FFFFFF');
 
-    var legsIntro = COLORS.legsOnDark;
+    var legsIntro = COLORS.legsOnLight; // màn mở màn nền sáng
     var legsEnd = opts.theme === 'dark' ? COLORS.legsOnDark : COLORS.legsOnLight;
     target.style.visibility = 'hidden';
     if (word) word.style.visibility = 'hidden';
@@ -231,7 +231,7 @@
     var overlay = document.createElement('div');
     overlay.setAttribute('aria-hidden', 'true');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;' +
-      'background:' + (opts.background || COLORS.navy) + ';cursor:pointer;';
+      'background:' + (opts.background || COLORS.paper) + ';cursor:pointer;';
     var size = Math.min(240, Math.round(Math.min(innerWidth, innerHeight) * 0.42));
     overlay.innerHTML =
       '<svg viewBox="0 0 200 200" width="' + size + '" height="' + size + '" style="overflow:visible;transform-origin:0 0">' +
@@ -241,7 +241,7 @@
       '<g class="mi-legR"><path class="mi-trailR" d="M236 111.5 H336" fill="none" stroke="' + legsIntro + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="30 12"/>' +
       '<g class="mi-spinR">' + legPath(160, legsIntro) + '</g></g>' +
       '<path class="mi-stem" fill="' + COLORS.leaf + '"/><path class="mi-bar" d="' + BAR + '" fill="' + COLORS.leaf + '"/>' +
-      '</g></g></g>' + (kind ? '<g class="mi-badge" style="opacity:0">' + badgeSvg(kind, COLORS.navy) + '</g>' : '') + '</svg>';
+      '</g></g></g>' + (kind ? '<g class="mi-badge" style="opacity:0">' + badgeSvg(kind, opts.background || COLORS.paper) + '</g>' : '') + '</svg>';
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;';
     row.appendChild(overlay.firstChild);
@@ -253,7 +253,7 @@
       wordBox.style.cssText = 'overflow:hidden;width:0;flex:none;';
       wordText = document.createElement('span');
       wordText.textContent = word.textContent.trim();
-      wordText.style.cssText = 'display:inline-block;white-space:nowrap;line-height:1.3;color:#F8FAFC;transform-origin:0 0;' +
+      wordText.style.cssText = 'display:inline-block;white-space:nowrap;line-height:1.3;color:#0F172A;transform-origin:0 0;' +
         'padding-left:' + Math.round(size * 0.04) + 'px;font-family:' + ws.fontFamily + ';font-weight:' + ws.fontWeight +
         ';letter-spacing:' + (ws.letterSpacing === 'normal' ? '0' : (parseFloat(ws.letterSpacing) / parseFloat(ws.fontSize)) + 'em') +
         ';font-size:' + Math.round(size * 0.42) + 'px;';
@@ -367,7 +367,7 @@
         var s2 = parseFloat(ws2.fontSize) / parseFloat(wordText.style.fontSize);
         var tx = b2.left - (a2.left + pad * s2), ty = (b2.top + b2.height / 2) - (a2.top + a2.height * s2 / 2);
         wordBox.style.overflow = 'visible';
-        wordText.animate([{ transform: 'none', color: '#F8FAFC' },
+        wordText.animate([{ transform: 'none', color: '#0F172A' },
                           { transform: 'translate(' + tx + 'px,' + ty + 'px) scale(' + s2 + ')', color: ws2.color }],
           { duration: FLY, easing: 'cubic-bezier(.65,0,.35,1)', fill: 'forwards' });
       }
