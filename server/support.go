@@ -366,7 +366,7 @@ func csvSafe(s string) string { // chống chèn công thức khi mở bằng Ex
 	return s
 }
 
-var exportNames = map[string]string{"requests": "Yêu cầu hỗ trợ", "alerts": "Cảnh báo", "machines": "Máy", "inventory": "Kiểm kê"}
+var exportNames = map[string]string{"requests": "Yêu cầu hỗ trợ", "alerts": "Cảnh báo", "machines": "Máy", "inventory": "Kiểm kê", "uptime": "Thời gian hoạt động"}
 var reqStatusVN = map[string]string{"new": "Mới", "working": "Đang xử lý", "done": "Đã xong"}
 
 // exportRows: gọi khi đang giữ s.mu.
@@ -465,7 +465,19 @@ func (s *Server) hExport(w http.ResponseWriter, r *http.Request, me *Account) {
 		kinds = []string{"requests", "alerts", "machines"}
 	}
 	for _, k := range kinds {
-		rows, ok := s.exportRows(k, group, me)
+		rows, ok := [][]string(nil), true
+		if k == "uptime" { // ?from=&to= YYYY-MM-DD (giờ máy chủ, gồm cả ngày cuối)
+			f, e1 := time.ParseInLocation("2006-01-02", r.URL.Query().Get("from"), time.Local)
+			t, e2 := time.ParseInLocation("2006-01-02", r.URL.Query().Get("to"), time.Local)
+			if e1 != nil || e2 != nil || t.Before(f) || t.Sub(f) > 400*24*time.Hour {
+				s.mu.RUnlock()
+				jerr(w, 400, "Khoảng ngày không hợp lệ")
+				return
+			}
+			rows = s.uptimeRows(me, group, f, t.AddDate(0, 0, 1))
+		} else {
+			rows, ok = s.exportRows(k, group, me)
+		}
 		if !ok {
 			s.mu.RUnlock()
 			jerr(w, 404, "Không có báo cáo này")

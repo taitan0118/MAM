@@ -290,6 +290,7 @@ func (s *Server) hMachine(w http.ResponseWriter, r *http.Request, me *Account) {
 		}
 		m.Revoked = true
 		removeAvatar("m", id)
+		delete(s.st.Uptime, id)
 		delete(s.live, id)
 		name := m.Name
 		s.save()

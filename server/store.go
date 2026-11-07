@@ -160,6 +160,8 @@ type State struct {
 	UninstAt   time.Time   `json:"uninstAt"`
 	UninstBy   string      `json:"uninstBy"`
 	Chat       []*ChatLine `json:"chat"`
+	// Các lần bật máy [bắt đầu, kết thúc] (giây unix) theo ID máy, xem uptime.go.
+	Uptime map[string][][2]int64 `json:"uptime,omitempty"`
 }
 
 var defaultDeviceTypes = []string{"Máy tính", "Máy in", "Máy photo", "Máy scan", "Server", "Khác"}

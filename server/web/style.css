@@ -585,3 +585,31 @@ img.av{display:block}
 .brow.out .bcol{align-items:flex-end}
 .brow .bub{max-width:100%;align-self:auto}
 .brow .bub-t{padding:0 4px}
+
+  /* ---- Thời gian hoạt động ---- */
+  .up-nav{display:flex;align-items:center;gap:8px}
+  .up-nav b{min-width:150px;text-align:center;font-variant-numeric:tabular-nums}
+  .up-nav .btn{padding:5px 11px;font-size:15px;line-height:1}
+  .up-nav .btn:disabled{opacity:.35;cursor:default}
+  .up-chart{overflow-x:auto}
+  .up-chart svg{display:block;width:100%;min-width:520px;height:auto}
+  .up-chart text,.up-strip text{fill:var(--muted);font:11px var(--ff-ui)}
+  .up-chart .up-lb{fill:var(--fg)}
+  .up-chart .up-val{fill:var(--fg);font-weight:600}
+  .up-chart .up-in{fill:#fff;font-weight:600}
+  .up-grid{stroke:var(--border)}
+  .up-ses{fill:var(--accent)}
+  .up-ses.live{fill:var(--good)}
+  .up-b{fill:var(--accent)}
+  .up-b.dim{fill:var(--surface-3)}
+  .up-strip svg{display:block;width:100%;height:16px}
+  .up-list>div{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+  .up-list>div:last-child{border:0}
+  .up-list .gap{font-size:12px;color:var(--faint);padding:3px 0 3px 14px;border-bottom-style:dashed}
+  .up-cal{max-width:560px;display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .up-cal>span{font-size:11px;color:var(--faint);text-align:center}
+  .up-cal>div{aspect-ratio:1.3;border-radius:6px;background:var(--surface-2);display:flex;flex-direction:column;justify-content:space-between;padding:4px 5px;font-size:10.5px;color:var(--muted)}
+  .up-cal>div b{font-size:11.5px;color:var(--fg);font-weight:600;align-self:flex-end}
+  .up-cal>div.dk span,.up-cal>div.dk b{color:#fff}
+  .up-cal>div.x{background:transparent}
+  .up-kpis .val{font-size:22px;white-space:nowrap}

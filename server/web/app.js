@@ -32,6 +32,7 @@ const ICONS = {
   discover: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   net: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/>',
   report: '<path d="M4 20V10M11 20V4M18 20v-7"/>',
+  uptime: '<path d="M12 3v8"/><path d="M7 6.3a8 8 0 1010 0"/>',
   accounts: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
   audit: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.5-2.3 1a7 7 0 00-2-1.2L14 3h-4l-.6 2.6a7 7 0 00-2 1.2l-2.3-1-2 3.5 2 1.5a7 7 0 000 2.4l-2 1.5 2 3.5 2.3-1a7 7 0 002 1.2L10 21h4l.6-2.6a7 7 0 002-1.2l2.3 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/>'
@@ -42,7 +43,7 @@ const fmtDT = x => { const d = new Date(x); return isNaN(d) || d.getFullYear() <
 function ago(x) {
   const d = new Date(x), s = (Date.now() - d) / 1000;
   if (isNaN(d) || d.getFullYear() < 2000) return '—';
-  if (s < 60) return 'vừa xong';
+  if (s < 60) return t('vừa xong');
   if (s < 3600) return t('{0} phút trước', Math.floor(s / 60));
   if (s < 86400) return t('{0} giờ trước', Math.floor(s / 3600));
   return t('{0} ngày trước', Math.floor(s / 86400));
@@ -186,14 +187,14 @@ function forceChange() {
 }
 
 /* ---------- khung ứng dụng ---------- */
-const NAV = [['overview', 'Tổng quan'], ['alerts', 'Cảnh báo'], ['requests', 'Yêu cầu hỗ trợ'], ['chat', 'Chat với máy'], ['machines', 'Máy'], ['groups', 'Nhóm máy'], ['policy', 'Chính sách'], ['security', 'Bảo mật & bản vá'], ['discover', 'Phát hiện máy'], ['net', 'Qua Internet'], ['inventory', 'Kiểm kê'], ['report', 'Báo cáo'], ['accounts', 'Tài khoản'], ['audit', 'Nhật ký thao tác'], ['settings', 'Cài đặt']];
+const NAV = [['overview', 'Tổng quan'], ['alerts', 'Cảnh báo'], ['requests', 'Yêu cầu hỗ trợ'], ['chat', 'Chat với máy'], ['machines', 'Máy'], ['groups', 'Nhóm máy'], ['policy', 'Chính sách'], ['security', 'Bảo mật & bản vá'], ['discover', 'Phát hiện máy'], ['net', 'Qua Internet'], ['inventory', 'Kiểm kê'], ['report', 'Báo cáo'], ['uptime', 'Thời gian hoạt động'], ['accounts', 'Tài khoản'], ['audit', 'Nhật ký thao tác'], ['settings', 'Cài đặt']];
 const TITLES = {
   overview: ['Tổng quan', 'Toàn hệ thống · cập nhật trực tiếp'], machines: ['Máy', 'Danh sách, lọc, ra lệnh'], detail: ['Chi tiết máy', ''],
   groups: ['Nhóm máy', 'Sắp xếp máy theo khu vực hoặc phòng ban'], alerts: ['Cảnh báo', 'Nhiệt độ, CPU, ổ cứng, mất kết nối'],
   chat: ['Chat với máy', 'Nhắn hai chiều với người ngồi máy, hiện ngay trong cửa sổ MAM'], requests: ['Yêu cầu hỗ trợ', 'Người ngồi máy gửi lên từ cửa sổ MAM'], policy: ['Chính sách', 'USB, chặn web/ứng dụng, giờ dùng máy theo nhóm'],
   inventory: ['Kiểm kê', 'Phần cứng và bản quyền phần mềm từng máy'], security: ['Bảo mật & bản vá', 'Diệt virus và Windows Update — chỉ xem'],
   discover: ['Phát hiện máy', 'Quét mạng LAN tìm máy chưa cài agent'], net: ['Qua Internet', 'Dùng Console khi không ở trong mạng công ty'],
-  report: ['Báo cáo', 'Tổng hợp theo khoảng thời gian, xuất CSV'],
+  report: ['Báo cáo', 'Tổng hợp theo khoảng thời gian, xuất CSV'], uptime: ['Thời gian hoạt động', 'Máy bật lúc nào, tắt lúc nào, tổng bao nhiêu giờ'],
   accounts: ['Tài khoản', 'Ai được vào Console'], audit: ['Nhật ký thao tác', 'Ai làm gì, lúc nào, từ máy nào'], settings: ['Cài đặt', 'Ngưỡng cảnh báo, thông báo, sao lưu, cách cài agent']
 };
 const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -234,7 +235,7 @@ function tick() {
   // tab Tiến trình/Ổ cứng nạp dữ liệu theo yêu cầu: làm mới tự động sẽ xóa kết quả vừa lấy
   if (route.view === 'chat' && (document.activeElement || {}).tagName === 'TEXTAREA' && document.activeElement.value) return;
   if (route.view === 'chat') { render(true); return; }
-  if (route.view === 'detail' && (route.tab === 'procs' || route.tab === 'disk')) return;
+  if (route.view === 'detail' && (route.tab === 'procs' || route.tab === 'disk' || route.tab === 'up')) return;
   if (route.view === 'overview' || route.view === 'machines' || route.view === 'detail' || route.view === 'alerts') render(true);
 }
 let rendering = 0;
@@ -421,7 +422,7 @@ VIEWS.detail = async (v, quiet) => {
     el('div', { class: 'card-b', style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
       el('span', { style: 'color:var(--faint);font-size:12.5px' }, 'Máy sẽ hiện hộp thoại xin phép, hoặc vào thẳng nếu bạn nhập đúng mật khẩu điều khiển từ xa. Người ngồi máy luôn bấm Dừng ngay được bất cứ lúc nào.'),
       ctl && !off ? btn('Xin xem màn hình', () => openRemote(m)) : el('span', { style: 'color:var(--faint)' }, off ? 'Máy offline' : 'Ngoài phạm vi của bạn'))));
-  const tabs = el('div', { class: 'tabs', style: 'margin-top:14px' }, [['live', 'Giám sát'], ['hw', 'Phần cứng'], ['disk', 'Ổ cứng'], ['apps', 'Phần mềm'], ['procs', 'Tiến trình'], ['cmd', 'Lệnh gần đây']].map(([k, l]) => el('button', { class: 'tab' + (route.tab === k ? ' on' : ''), onclick: () => { route.tab = k; render(); } }, l)));
+  const tabs = el('div', { class: 'tabs', style: 'margin-top:14px' }, [['live', 'Giám sát'], ['hw', 'Phần cứng'], ['disk', 'Ổ cứng'], ['apps', 'Phần mềm'], ['procs', 'Tiến trình'], ['cmd', 'Lệnh gần đây'], ['up', 'Thời gian hoạt động']].map(([k, l]) => el('button', { class: 'tab' + (route.tab === k ? ' on' : ''), onclick: () => { route.tab = k; render(); } }, l)));
   v.append(tabs);
   const body = el('div', { style: 'margin-top:14px' }); v.append(body);
   const H = m.hist || [];
@@ -434,6 +435,8 @@ VIEWS.detail = async (v, quiet) => {
       el('div', { class: 'livecard' }, el('div', { class: 'top' }, el('span', { class: 'nm' }, 'Ổ đĩa')), (m.disks || []).map(d => { const used = d.totalGB ? 100 - d.freeGB / d.totalGB * 100 : 0; return el('div', { style: 'margin-top:9px' }, el('div', { style: 'display:flex;justify-content:space-between;font-size:12.5px' }, el('b', {}, d.name), el('span', { class: 'mono' }, t('{0} / {1} GB trống', num(d.freeGB, 0), num(d.totalGB, 0)))), el('div', { class: 'bar', style: 'max-width:none;margin-top:4px' }, el('i', { style: 'width:' + used + '%;background:' + col(used, 80, 100 - (settings ? settings.disk : 10)) }))); }))));
     if (m.temp == null) body.append(el('div', { style: 'margin-top:12px' }, infoNote('Không đọc được nhiệt độ CPU qua Windows (nhiều máy không công khai cảm biến này). Các mục khác vẫn hoạt động bình thường.')));
     body.append(el('div', { style: 'margin-top:12px;font-size:12px;color:var(--faint)' }, 'Biểu đồ lấy mẫu mỗi 30 giây, giữ tối đa 4 giờ gần nhất kể từ lúc server chạy.'));
+  } else if (route.tab === 'up') {
+    body.append(await upDetail(m.id));
   } else if (route.tab === 'hw') {
     const rows = [['Tên máy', m.name], ['Hệ điều hành', hw.os || m.os], ['Phiên bản', hw.osBuild], ['Kiến trúc', hw.arch], ['Hãng và model', hw.model], ['CPU', hw.cpu], ['Nhân / luồng', hw.cores ? hw.cores + ' / ' + (hw.threads || '—') : null], ['RAM', hw.ramGB ? hw.ramGB + ' GB' : null], ['Card đồ họa', hw.gpu], ['Bo mạch chủ', hw.board], ['BIOS', hw.bios], ['Số serial', hw.serial], ['Địa chỉ IP', (hw.ips || [m.ip]).join(', ')], ['Địa chỉ MAC', (hw.macs || [m.mac]).join(', ')], ['Miền / nhóm làm việc', hw.domain], ['Đăng ký lúc', fmtDT(m.registered)]];
     body.append(card('Thông tin máy', 'agent tự đọc, cập nhật mỗi giờ', el('div', { class: 'cols' }, [rows.slice(0, 8), rows.slice(8)].map(r => el('div', {}, r.map(x => srow(x[0], x[1])))))));
@@ -1045,6 +1048,158 @@ function rangePicker(from, to, apply, opts) {
   }
   return wrap;
 }
+/* ---------- Thời gian hoạt động (máy bật lúc nào, bao lâu) ---------- */
+// Server trả các lần bật [bắt đầu, kết thúc] (giây unix); chia theo ngày bằng giờ của trình duyệt.
+const UP = { per: 'day', ref: null };
+const DOWS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const upAdd = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const upMon = d => upAdd(d, -((d.getDay() + 6) % 7));
+const upDD = d => pad(d.getDate()) + '/' + pad(d.getMonth() + 1);
+const upISO = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const upClock = m => m >= 1440 ? '24:00' : pad(Math.floor(m / 60)) + ':' + pad(Math.floor(m % 60));
+const upH = m => t('{0}g', (m / 60).toFixed(1));
+function upDur(min) { const m = Math.round(min), h = Math.floor(m / 60); return h ? (m % 60 ? t('{0} giờ {1} phút', h, m % 60) : t('{0} giờ', h)) : t('{0} phút', m); }
+function upToday() { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
+function upDays() {
+  const r = UP.ref || (UP.ref = upToday());
+  if (UP.per === 'day') return [r];
+  if (UP.per === 'week') { const m = upMon(r); return [0, 1, 2, 3, 4, 5, 6].map(i => upAdd(m, i)); }
+  const out = [], y = r.getFullYear();
+  for (let d = UP.per === 'month' ? new Date(y, r.getMonth(), 1) : new Date(y, 0, 1); UP.per === 'month' ? d.getMonth() === r.getMonth() : d.getFullYear() === y; d = upAdd(d, 1)) out.push(d);
+  return out;
+}
+function upLabel() {
+  const r = UP.ref || upToday();
+  if (UP.per === 'day') return (+r === +upToday() ? t('Hôm nay') : t(DOWS[r.getDay()])) + ', ' + upDD(r) + '/' + r.getFullYear();
+  if (UP.per === 'week') { const m = upMon(r), e = upAdd(m, 6); return upDD(m) + ' – ' + upDD(e) + '/' + e.getFullYear(); }
+  if (UP.per === 'month') return t('Tháng {0}, {1}', r.getMonth() + 1, r.getFullYear());
+  return t('Năm {0}', r.getFullYear());
+}
+function upShift(n) {
+  const r = UP.ref || upToday();
+  UP.ref = UP.per === 'day' ? upAdd(r, n) : UP.per === 'week' ? upAdd(r, 7 * n) : UP.per === 'month' ? new Date(r.getFullYear(), r.getMonth() + n, 1) : new Date(r.getFullYear() + n, 0, 1);
+  if (UP.ref > upToday()) UP.ref = upToday();
+  render();
+}
+// Thanh chọn kỳ: Ngày / Tuần / Tháng / Năm và nút lùi/tới
+function upBar(...extra) {
+  const ds = upDays(), atEnd = ds.some(d => +d === +upToday());
+  return el('div', { class: 'filters' },
+    el('div', { class: 'seg' }, [['day', 'Ngày'], ['week', 'Tuần'], ['month', 'Tháng'], ['year', 'Năm']].map(([k, l]) => el('button', { class: UP.per === k ? 'on' : '', onclick: () => { UP.per = k; render(); } }, l))),
+    el('div', { class: 'up-nav' }, el('button', { class: 'btn', 'aria-label': 'Kỳ trước', onclick: () => upShift(-1) }, '‹'), el('b', {}, upLabel()), el('button', { class: 'btn', 'aria-label': 'Kỳ sau', disabled: atEnd, onclick: () => upShift(1) }, '›')),
+    el('div', { style: 'flex:1' }), ...extra);
+}
+async function upFetch(q) {
+  const ds = upDays(), from = ds[0].getTime() / 1000, to = upAdd(ds[ds.length - 1], 1).getTime() / 1000;
+  const r = await api('GET', '/api/uptime?from=' + from + '&to=' + to + q);
+  // lần bật còn mới (agent vẫn đang báo) thì kéo tới hiện tại và đánh dấu đang bật
+  r.machines.forEach(m => { m.s = m.s.map(x => r.now - x[1] <= r.gap ? [x[0], r.now, 1] : [x[0], x[1], 0]); });
+  r.nowMs = r.now * 1000;
+  return r;
+}
+// các lần bật trong ngày d, tính bằng phút từ 0h: [bắt đầu, kết thúc, đang bật]
+function upDaySes(S, d) {
+  const a = d.getTime() / 1000, b = upAdd(d, 1).getTime() / 1000, out = [];
+  for (const x of S) { const s = Math.max(x[0], a), e = Math.min(x[1], b); if (e > s) out.push([(s - a) / 60, (e - a) / 60, x[2] && e === x[1]]); }
+  return out;
+}
+const upSum = ss => ss.reduce((a, s) => a + s[1] - s[0], 0);
+function upStats(S, nowMs) {
+  const ds = upDays().map(d => ({ d, fut: d.getTime() > nowMs, ss: upDaySes(S, d) }));
+  const used = ds.filter(x => x.ss.length), tot = ds.reduce((a, x) => a + upSum(x.ss), 0);
+  return { ds, used, tot, firsts: used.map(x => x.ss[0][0]), lasts: used.map(x => x.ss[x.ss.length - 1][1]), live: S.some(x => x[2]) };
+}
+const upAvg = a => a.length ? upClock(Math.round(a.reduce((x, y) => x + y, 0) / a.length)) : '—';
+// thanh 24 giờ nhỏ (dùng trong bảng)
+function upStrip(ss) {
+  let o = '<rect x="0" y="7" width="1440" height="2" fill="var(--border)"/>' + [360, 720, 1080].map(x => `<rect x="${x}" y="0" width="3" height="16" fill="var(--border)"/>`).join('');
+  ss.forEach(s => o += `<rect class="up-ses${s[2] ? ' live' : ''}" x="${s[0]}" y="2" width="${Math.max(6, s[1] - s[0])}" height="12" rx="4"><title>${upClock(s[0])} – ${s[2] ? t('đang bật') : upClock(s[1])}</title></rect>`);
+  return el('div', { class: 'up-strip', html: `<svg viewBox="0 0 1440 16" preserveAspectRatio="none">${o}</svg>` });
+}
+// trục 24 giờ lớn của một ngày
+function upTimeline(ss) {
+  const W = 960, L = 10, x = m => L + m / 1440 * (W - 2 * L);
+  let o = `<rect x="${L}" y="22" width="${W - 2 * L}" height="22" rx="6" fill="var(--surface-2)"/>`;
+  for (let h = 0; h <= 24; h += 2) o += `<line class="up-grid" x1="${x(h * 60)}" x2="${x(h * 60)}" y1="14" y2="52"/><text x="${x(h * 60)}" y="68" text-anchor="middle">${h}h</text>`;
+  ss.forEach(s => {
+    o += `<rect class="up-ses${s[2] ? ' live' : ''}" x="${x(s[0])}" y="22" width="${Math.max(3, x(s[1]) - x(s[0]))}" height="22" rx="6"><title>${upClock(s[0])} – ${s[2] ? t('đang bật') : upClock(s[1])} (${upDur(s[1] - s[0])})</title></rect>`;
+    if (x(s[1]) - x(s[0]) > 80) o += `<text class="up-in" x="${(x(s[0]) + x(s[1])) / 2}" y="37" text-anchor="middle">${upDur(s[1] - s[0])}</text>`;
+  });
+  return el('div', { class: 'up-chart', html: `<svg viewBox="0 0 ${W} 74">${o}</svg>` });
+}
+// biểu đồ cột tổng giờ: items [{lb, sub, v (phút), dim}]
+function upBars(items) {
+  const W = 960, H = 230, L = 34, B = 40, T = 22, max = Math.max(60, ...items.map(i => i.v));
+  const step = max > 6000 ? 3000 : max > 2400 ? 1200 : max > 900 ? 240 : 120, top = Math.ceil(max / step) * step;
+  const y = v => H - B - v / top * (H - B - T), bw = (W - L) / items.length;
+  let o = '';
+  for (let v = 0; v <= top; v += step) o += `<line class="up-grid" x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${t('{0}g', v / 60)}</text>`;
+  items.forEach((it, i) => {
+    const cx = L + bw * i + bw / 2, w = Math.min(46, bw * .62), hg = Math.max(it.v ? 2 : 0, H - B - y(it.v));
+    o += `<rect class="up-b${it.dim ? ' dim' : ''}" x="${cx - w / 2}" y="${H - B - hg}" width="${w}" height="${hg}" rx="4"><title>${it.lb} ${it.sub || ''}: ${upDur(it.v)}</title></rect>`;
+    if (it.v && bw > 26) o += `<text class="up-val" x="${cx}" y="${H - B - hg - 6}" text-anchor="middle">${upH(it.v)}</text>`;
+    o += `<text class="up-lb" x="${cx}" y="${H - B + 16}" text-anchor="middle">${it.lb}</text>`;
+    if (it.sub) o += `<text x="${cx}" y="${H - B + 31}" text-anchor="middle">${it.sub}</text>`;
+  });
+  return el('div', { class: 'up-chart', html: `<svg viewBox="0 0 ${W} ${H}">${o}</svg>` });
+}
+// Tab "Thời gian hoạt động" trong chi tiết máy
+async function upDetail(id) {
+  const r = await upFetch('&id=' + encodeURIComponent(id)), S = r.machines[0].s, st = upStats(S, r.nowMs), one = UP.per === 'day';
+  const wrap = el('div', { style: 'display:flex;flex-direction:column;gap:12px' }, upBar());
+  const ss = one ? st.ds[0].ss : [], last = ss[ss.length - 1];
+  const offs = ss.slice(1).reduce((a, s, i) => a + s[0] - ss[i][1], 0);
+  wrap.append(el('div', { class: 'kpis up-kpis' }, one ? [
+    kpi('Tổng thời gian bật', 'var(--accent)', upDur(st.tot), last && last[2] ? t('đang bật') : ''),
+    kpi('Bật lúc', 'var(--good)', ss.length ? upClock(ss[0][0]) : '—', 'Lần bật đầu tiên trong ngày'),
+    kpi('Tắt lúc', 'var(--muted)', !last ? '—' : last[2] ? t('Chưa tắt') : upClock(last[1]), 'Lần tắt cuối cùng'),
+    kpi('Số lần bật', 'var(--warn)', ss.length, ss.length > 1 ? t('Tắt giữa chừng {0} lần, tổng {1}', ss.length - 1, upDur(offs)) : ss.length ? 'Bật liên tục' : '')] : [
+    kpi('Tổng thời gian bật', 'var(--accent)', upDur(st.tot), t('{0} ngày có bật máy', st.used.length)),
+    kpi('Trung bình mỗi ngày', 'var(--good)', st.used.length ? upDur(st.tot / st.used.length) : '—', 'Tính trên ngày có bật máy'),
+    kpi('Bật trung bình lúc', 'var(--muted)', upAvg(st.firsts), t('Sớm nhất {0}', st.firsts.length ? upClock(Math.min(...st.firsts)) : '—')),
+    kpi('Tắt trung bình lúc', 'var(--warn)', upAvg(st.lasts), t('Muộn nhất {0}', st.lasts.length ? upClock(Math.max(...st.lasts)) : '—'))]));
+  if (one) {
+    wrap.append(card('Các khoảng giờ hoạt động', 'rê chuột lên từng khúc để xem giờ', upTimeline(ss)),
+      card('Chi tiết từng lần bật', '', ss.length ? el('div', { class: 'up-list' }, ss.flatMap((s, i) => [
+        i ? el('div', { class: 'gap' }, el('span', {}, s[0] - ss[i - 1][1] <= 30 ? 'Khởi động lại' : 'Tắt máy'), el('span', { class: 'mono' }, t('nghỉ {0}', upDur(s[0] - ss[i - 1][1])))) : null,
+        el('div', {}, el('span', {}, t('Lần {0}', i + 1) + ': ', el('b', { class: 'mono' }, upClock(s[0]) + ' – ' + (s[2] ? t('nay') : upClock(s[1])))), el('span', { class: 'mono' }, upDur(s[1] - s[0])))])) : el('div', { class: 'empty' }, 'Máy không bật trong ngày này')));
+  } else if (UP.per === 'week') {
+    wrap.append(card('Tổng giờ từng ngày trong tuần', '', upBars(st.ds.map(x => ({ lb: t(DOWS[x.d.getDay()]), sub: upDD(x.d), v: upSum(x.ss), dim: x.fut })))),
+      card('Khoảng giờ bật máy từng ngày', 'mỗi hàng là 24 giờ, vạch mờ là 6h, 12h, 18h', table(['Ngày', 'Các khoảng giờ bật (0h – 24h)', { t: 'Tổng giờ', cls: 'r' }], st.ds.map(x => el('tr', { class: 'nohover' }, el('td', { style: 'white-space:nowrap' }, t(DOWS[x.d.getDay()]) + ' ' + upDD(x.d)), el('td', { style: 'width:100%' }, x.fut ? el('span', { style: 'color:var(--faint)' }, 'Chưa tới') : upStrip(x.ss)), el('td', { class: 'r mono' }, x.fut ? '' : upDur(upSum(x.ss))))))));
+  } else if (UP.per === 'month') {
+    const wk = []; st.ds.forEach(x => { const k = +upMon(x.d); let w = wk.find(w => w.k === k); if (!w) wk.push(w = { k, ds: [] }); w.ds.push(x); });
+    wrap.append(card('Tổng giờ từng tuần trong tháng', '', upBars(wk.map((w, i) => ({ lb: t('Tuần {0}', i + 1), sub: upDD(w.ds[0].d) + '–' + upDD(w.ds[w.ds.length - 1].d), v: w.ds.reduce((a, x) => a + upSum(x.ss), 0), dim: w.ds[0].fut })))),
+      card('Lịch tháng', 'màu đậm là bật lâu', el('div', { class: 'up-cal' }, ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(x => el('span', {}, x)),
+        Array.from({ length: (st.ds[0].d.getDay() + 6) % 7 }, () => el('div', { class: 'x' })),
+        st.ds.map(x => { const v = upSum(x.ss), dark = v > 360; return el('div', { title: upDD(x.d) + ': ' + (x.fut ? t('Chưa tới') : upDur(v)), class: dark ? 'dk' : '', style: v ? `background:color-mix(in srgb,var(--accent) ${15 + Math.min(85, v / 720 * 85) | 0}%,var(--surface-2))` : '' }, el('span', {}, String(x.d.getDate())), el('b', {}, v ? upH(v) : '')); }))));
+  } else {
+    wrap.append(card('Tổng giờ từng tháng trong năm', '', upBars(Array.from({ length: 12 }, (_, i) => { const ds = st.ds.filter(x => x.d.getMonth() === i); return { lb: t('T{0}', i + 1), v: ds.reduce((a, x) => a + upSum(x.ss), 0), dim: ds[0].fut }; }))));
+  }
+  wrap.append(el('div', { style: 'font-size:12px;color:var(--faint)' }, 'Máy tính là đang bật khi agent còn báo về server. Mất liên lạc quá 2 phút là tắt; khởi động lại được tách thành lần bật mới. Dữ liệu có từ khi cài bản 1.1.47 và giữ 1 năm.'));
+  return wrap;
+}
+// Trang "Thời gian hoạt động": mọi máy trong phạm vi
+VIEWS.uptime = async v => {
+  if (!UP.group) UP.group = 'all';
+  const ds = upDays(), last = ds[ds.length - 1] > upToday() ? upToday() : ds[ds.length - 1];
+  const [r, gl] = await Promise.all([upFetch(UP.group !== 'all' ? '&group=' + encodeURIComponent(UP.group) : ''), api('GET', '/api/groups')]);
+  groups = gl.groups.map(x => x.name);
+  const xq = '?from=' + upISO(ds[0]) + '&to=' + upISO(last) + (UP.group !== 'all' ? '&group=' + encodeURIComponent(UP.group) : '');
+  v.append(upBar(select([['all', 'Tất cả nhóm'], ['__none', 'Chưa phân nhóm'], ...groups.map(x => [x, x])], UP.group, x => { UP.group = x; render(); }),
+    el('a', { class: 'btn', href: '/api/export/uptime.xlsx' + xq }, 'Xuất Excel'), el('a', { class: 'btn', href: '/api/export/uptime.csv' + xq }, 'Xuất CSV')));
+  const one = UP.per === 'day';
+  const rows = r.machines.map(m => ({ m, st: upStats(m.s, r.nowMs) })).sort((a, b) => b.st.tot - a.st.tot).map(({ m, st }) => {
+    const ss = one ? st.ds[0].ss : [], lt = ss[ss.length - 1];
+    return el('tr', { onclick: () => { route.tab = 'up'; route.view = 'detail'; route.id = m.id; renderNav(); render(); scrollTo(0, 0); } },
+      el('td', {}, el('div', { style: 'font-weight:600' }, m.name), el('div', { style: 'font-size:11.5px;color:var(--faint)' }, m.group || t('Chưa phân nhóm'))),
+      one ? [el('td', { style: 'width:42%;min-width:220px' }, upStrip(ss)), el('td', { class: 'mono' }, ss.length ? upClock(ss[0][0]) : '—'), el('td', {}, !lt ? '—' : lt[2] ? pill('ok', 'Đang bật') : el('span', { class: 'mono' }, upClock(lt[1]))), el('td', { class: 'r mono' }, ss.length)]
+        : [el('td', { class: 'r mono' }, st.used.length), el('td', { class: 'r mono' }, st.used.length ? upDur(st.tot / st.used.length) : '—'), el('td', { class: 'mono' }, upAvg(st.firsts)), el('td', { class: 'mono' }, upAvg(st.lasts))],
+      el('td', { class: 'r mono', style: 'font-weight:600' }, upDur(st.tot)));
+  });
+  const heads = one ? ['Máy', 'Các khoảng giờ bật (0h – 24h)', 'Bật lúc', 'Tắt lúc', { t: 'Số lần bật', cls: 'r' }, { t: 'Tổng giờ bật', cls: 'r' }]
+    : ['Máy', { t: 'Số ngày bật', cls: 'r' }, { t: 'Trung bình mỗi ngày', cls: 'r' }, 'Bật trung bình lúc', 'Tắt trung bình lúc', { t: 'Tổng giờ bật', cls: 'r' }];
+  v.append(el('div', { style: 'margin-top:12px' }, card('Thời gian hoạt động của các máy', 'bấm một máy để xem chi tiết', table(heads, rows, 'Không có máy nào'))));
+};
 VIEWS.report = async v => {
   const R = VIEWS.report, iso = d => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 6e4); return z.toISOString().slice(0, 10); };
   if (!R.to) { R.to = iso(new Date()); R.from = iso(new Date(Date.now() - 6 * 864e5)); }

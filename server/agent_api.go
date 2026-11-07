@@ -119,6 +119,7 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 		m.Hw = in.Hw
 	}
 	m.LastSeen = now
+	newUp := s.upMark(m.ID, now.Unix(), in.Uptime)
 	s.threatsIn(m, in.Threats)
 	s.patchCheck(m)
 	if now.Sub(l.lastHist) >= 30*time.Second {
@@ -142,7 +143,7 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 			out = append(out, map[string]interface{}{"id": c.ID, "type": c.Type, "args": c.Args})
 		}
 	}
-	if persist {
+	if persist || newUp {
 		s.save()
 	}
 	interval := 5

@@ -1046,3 +1046,53 @@ func TestTechScopeVisibility(t *testing.T) {
 	code, _, _ = f.tech.do("POST", "/api/schedules", map[string]interface{}{"type": "lock", "time": "22:00", "group": "Tầng 2"}, nil)
 	expect(t, code, 200, "tech hẹn giờ cho nhóm mình")
 }
+
+func TestUptimeSessions(t *testing.T) {
+	f := setup(t)
+	t0 := int64(1_000_000)
+	f.s.mu.Lock()
+	marks := [][2]int64{{t0, 30}, {t0 + 5, 35}, {t0 + 600, 630}, {t0 + 605, 635}, {t0 + 660, 20}}
+	for _, x := range marks {
+		f.s.upMark("x", x[0], x[1])
+	}
+	got := f.s.st.Uptime["x"]
+	f.s.mu.Unlock()
+	want := [][2]int64{{t0 - 30, t0 + 5}, {t0 + 600, t0 + 605}, {t0 + 640, t0 + 660}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("lần bật: %v, muốn %v", got, want)
+	}
+
+	report(t, f.url, f.tok1, 10, 50)
+	report(t, f.url, f.tok2, 10, 50)
+	ids := func(c *cl, q string) string {
+		code, m, _ := c.do("GET", "/api/uptime"+q, nil, nil)
+		expect(t, code, 200, "uptime"+q)
+		out := ""
+		for _, x := range m["machines"].([]interface{}) {
+			mm := x.(map[string]interface{})
+			out += mm["name"].(string) + fmt.Sprint(len(mm["s"].([]interface{}))) + " "
+		}
+		return out
+	}
+	if g := ids(f.super, ""); g != "PC-KT-011 POS-KHO-011 " {
+		t.Fatalf("super thấy %q", g)
+	}
+	if g := ids(f.super, "?group=Kho"); g != "POS-KHO-011 " {
+		t.Fatalf("lọc nhóm Kho: %q", g)
+	}
+	if g := ids(f.tech, ""); g != "PC-KT-011 " {
+		t.Fatalf("tech chỉ thấy Tầng 2, lại thấy %q", g)
+	}
+	if code, _, _ := f.tech.do("GET", "/api/uptime?id="+f.m2, nil, nil); code != 404 {
+		t.Fatalf("tech xem máy ngoài phạm vi: %d", code)
+	}
+	day := time.Now().Format("2006-01-02")
+	code, _, raw := f.super.do("GET", "/api/export/uptime.csv?from="+day+"&to="+day, nil, nil)
+	expect(t, code, 200, "xuất uptime")
+	if s := string(raw); !strings.Contains(s, "PC-KT-01") || !strings.Contains(s, "Đang bật") {
+		t.Fatalf("file xuất thiếu dữ liệu: %s", s)
+	}
+	if code, _, _ := f.super.do("GET", "/api/export/uptime.csv", nil, nil); code != 400 {
+		t.Fatalf("thiếu ngày phải báo lỗi: %d", code)
+	}
+}
