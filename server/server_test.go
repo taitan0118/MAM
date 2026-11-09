@@ -502,24 +502,18 @@ func TestMoveData(t *testing.T) {
 	expect(t, code, 403, "tech đổi thư mục dữ liệu")
 	code, _, _ = f.super.do("POST", "/api/data-dir", map[string]string{"path": nd}, nil)
 	expect(t, code, 200, "super đổi thư mục dữ liệu")
-	for _, n := range []string{"state.json", "audit.jsonl"} {
-		if _, err := os.Stat(filepath.Join(nd, n)); err != nil {
-			t.Fatal("thiếu " + n + " ở thư mục mới")
-		}
+	if _, err := os.Stat(filepath.Join(nd, dbFile)); err != nil {
+		t.Fatal("thiếu mam.db ở thư mục mới")
 	}
 	if g, _ := filepath.Glob(filepath.Join(nd, "backup", "state-*.json")); len(g) != 1 {
 		t.Fatal("thiếu bản sao lưu")
 	}
-	if _, err := os.Stat(filepath.Join(old, "state.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(old, dbFile)); err != nil {
 		t.Fatal("dữ liệu cũ phải được giữ nguyên")
 	}
 	// ghi tiếp sau khi chuyển: vào thư mục mới
 	code, _, _ = f.super.do("POST", "/api/groups", map[string]string{"name": "Sau chuyen"}, nil)
 	expect(t, code, 200, "tạo nhóm sau chuyển")
-	b, _ := os.ReadFile(filepath.Join(nd, "state.json"))
-	if !strings.Contains(string(b), "Sau chuyen") {
-		t.Fatal("dữ liệu mới không ghi vào thư mục mới")
-	}
 	// khởi động lại từ thư mục -data cũ phải đi theo redirect.txt và thấy đủ dữ liệu
 	d, err := resolveDir(old)
 	if err != nil || d != nd {
@@ -528,6 +522,12 @@ func TestMoveData(t *testing.T) {
 	s2, err := NewServer(d)
 	if err != nil || len(s2.st.Accounts) != 3 || len(s2.st.Machines) != 2 {
 		t.Fatalf("mất dữ liệu sau khi chuyển: %v", err)
+	}
+	if !strings.Contains(strings.Join(s2.st.Groups, ","), "Sau chuyen") {
+		t.Fatal("dữ liệu mới không ghi vào thư mục mới")
+	}
+	if len(s2.readAudit(0)) == 0 {
+		t.Fatal("mất nhật ký sau khi chuyển")
 	}
 	// thư mục đích biến mất (ổ chưa gắn): báo lỗi, không tạo dữ liệu trống
 	os.RemoveAll(nd)

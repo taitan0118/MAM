@@ -127,6 +127,15 @@ func (s *Server) hRestore(w http.ResponseWriter, r *http.Request, me *Account) {
 		os.Remove(p)
 	}
 	for n, b := range files {
+		if n == "audit.jsonl" { // nhật ký nằm trong mam.db
+			s.auditMu.Lock()
+			err = s.importAudit(b)
+			s.auditMu.Unlock()
+			if err != nil {
+				break
+			}
+			continue
+		}
 		p := filepath.Join(dir, filepath.FromSlash(n))
 		if strings.HasPrefix(n, "avatars/") {
 			p = filepath.Join(avatarDir, filepath.Base(n))

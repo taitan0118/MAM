@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,7 +20,7 @@ import (
 )
 
 // Sao lưu sang thư mục thứ hai (ổ khác, USB, NAS) mỗi giờ để ổ máy chủ chết vẫn còn dữ liệu.
-// Mỗi bản là một file zip: state.json, audit.jsonl, events/, avatars/. Ghi ra file tạm, mở lại đọc
+// Mỗi bản là một file zip: state.json, audit.jsonl (xuất từ mam.db, nên bản sao lưu đọc được và khôi phục được cả trên bản cũ), events/, avatars/. Ghi ra file tạm, mở lại đọc
 // state.json để kiểm tra, rồi mới đổi tên thành bản chính thức.
 // Giữ: 24 bản theo giờ, 7 theo ngày, 4 theo tuần, 12 theo tháng.
 // Kèm kiểm tra ổ cứng của chính máy chủ mỗi 6 giờ (dung lượng trống, tình trạng ổ theo Windows).
@@ -88,7 +89,7 @@ func (s *Server) mirrorBackup() (string, int64, error) {
 	}
 	err = put("state.json", strings.NewReader(string(b)))
 	if err == nil {
-		err = putFile("audit.jsonl", filepath.Join(dir, "audit.jsonl"))
+		err = put("audit.jsonl", bytes.NewReader(s.exportAudit()))
 	}
 	if err == nil {
 		evMu.Lock()

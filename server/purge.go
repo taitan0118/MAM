@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -131,30 +128,34 @@ func (s *Server) hPurge(w http.ResponseWriter, r *http.Request, me *Account) {
 func (s *Server) purgeAudit(has func(time.Time) bool, dry bool) int {
 	s.auditMu.Lock()
 	defer s.auditMu.Unlock()
-	p := filepath.Join(s.dir, "audit.jsonl")
-	b, err := os.ReadFile(p)
+	rs, err := s.db.Query(`SELECT n, data FROM audit`)
 	if err != nil {
 		return 0
 	}
-	var keep bytes.Buffer
-	n := 0
-	for _, ln := range bytes.Split(b, []byte("\n")) {
-		if len(bytes.TrimSpace(ln)) == 0 {
-			continue
-		}
+	var del []int64
+	for rs.Next() {
+		var n int64
+		var d string
 		var e AuditEntry
-		if json.Unmarshal(ln, &e) == nil && has(e.T) {
-			n++
-			continue
-		}
-		keep.Write(ln)
-		keep.WriteByte('\n')
-	}
-	if !dry && n > 0 {
-		tmp := p + ".tmp"
-		if os.WriteFile(tmp, keep.Bytes(), 0o600) == nil {
-			os.Rename(tmp, p)
+		if rs.Scan(&n, &d) == nil && json.Unmarshal([]byte(d), &e) == nil && has(e.T) {
+			del = append(del, n)
 		}
 	}
-	return n
+	rs.Close()
+	if !dry && len(del) > 0 {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return 0
+		}
+		defer tx.Rollback()
+		for _, n := range del {
+			if _, err := tx.Exec(`DELETE FROM audit WHERE n=?`, n); err != nil {
+				return 0
+			}
+		}
+		if tx.Commit() != nil {
+			return 0
+		}
+	}
+	return len(del)
 }

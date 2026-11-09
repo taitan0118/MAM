@@ -62,7 +62,7 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-// moveData chép state.json, audit.jsonl và backup/ sang thư mục mới rồi chuyển server sang đó ngay, không cần chạy lại.
+// moveData chép mam.db (bản chụp nhất quán), backup/ sang thư mục mới rồi chuyển server sang đó ngay, không cần chạy lại.
 // Dữ liệu cũ được giữ nguyên (không xóa) để người quản trị tự xóa sau khi đã kiểm tra.
 func (s *Server) moveData(newDir string) (string, error) {
 	newDir = filepath.Clean(strings.TrimSpace(newDir))
@@ -102,14 +102,15 @@ func (s *Server) moveData(newDir string) (string, error) {
 	}
 	secureDir(newDir)
 	s.save() // ghi những gì đang nằm trong bộ nhớ trước khi chép
-	for _, f := range []string{"state.json", "audit.jsonl"} {
-		if _, err := os.Stat(filepath.Join(old, f)); err != nil {
-			continue
-		}
-		if err := copyFile(filepath.Join(old, f), filepath.Join(newDir, f)); err != nil {
-			return fail(err)
-		}
+	if err := s.snapshotDB(filepath.Join(newDir, dbFile)); err != nil {
+		return fail(errors.New("Không chép được cơ sở dữ liệu: " + err.Error()))
 	}
+	ndb, err := openDB(newDir)
+	if err != nil {
+		return fail(errors.New("Không mở được cơ sở dữ liệu ở thư mục mới: " + err.Error()))
+	}
+	fail0 := fail
+	fail = func(err error) (string, error) { ndb.Close(); return fail0(err) }
 	if files, _ := filepath.Glob(filepath.Join(old, "backup", "state-*.json")); len(files) > 0 {
 		os.MkdirAll(filepath.Join(newDir, "backup"), 0o700)
 		for _, f := range files {
@@ -143,6 +144,8 @@ func (s *Server) moveData(newDir string) (string, error) {
 	if err := os.Rename(rp+".tmp", rp); err != nil {
 		return fail(err)
 	}
+	s.db.Close()
+	s.db = ndb
 	s.dir = newDir
 	avatarDir = filepath.Join(newDir, "avatars")
 	return old, nil

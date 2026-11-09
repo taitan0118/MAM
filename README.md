@@ -9,7 +9,7 @@ Phần mềm quản lý, giám sát và điều khiển máy tính trong mạng 
 - Ba vai trò: Super admin, Kỹ thuật viên (theo nhóm máy), Chỉ xem
 - Tiếng Việt, English, 中文
 
-**Phiên bản hiện tại: 1.1.48**
+**Phiên bản hiện tại: 1.1.49**
 
 Tải bộ cài: https://github.com/taitan0118/MAM-tai-ve
 
@@ -25,6 +25,8 @@ Tải bộ cài: https://github.com/taitan0118/MAM-tai-ve
 | `docs/` | Hướng dẫn sử dụng (PDF vi/en/zh) |
 
 Build: `./build.sh` (cần Go và Node). Kiểm tra: `cd server && go test ./...`
+
+Dữ liệu server nằm trong `mam.db` (SQLite, từ 1.1.49; bản cũ tự chuyển `state.json` sang lần chạy đầu). Thư viện SQLite đã để sẵn trong `server/vendor/`, build không cần tải gì.
 
 ## Giấy phép
 

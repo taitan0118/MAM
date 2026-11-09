@@ -3,10 +3,12 @@ package main
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -225,6 +227,8 @@ type Server struct {
 	fails   map[string]*failRec
 	tok     map[string]*Machine // băm token → máy
 	dirty   bool
+	db      *sql.DB
+	rows    map[string]rowVal // nội dung từng dòng trong mam.db ở lần ghi gần nhất, để save() chỉ ghi phần đổi
 	auditMu sync.Mutex
 	blobs   map[string]*Blob          // dữ liệu lớn của lệnh (tiến trình, S.M.A.R.T) giữ trong RAM ít phút
 	screens map[string]*ScreenSession // phiên xem/điều khiển màn hình đang diễn ra (không lưu xuống đĩa)
@@ -246,14 +250,25 @@ func NewServer(dir string) (*Server, error) {
 	s := &Server{dir: dir, boot: dir, live: map[string]*Live{}, sess: map[string]*Session{}, fails: map[string]*failRec{}, tok: map[string]*Machine{}, blobs: map[string]*Blob{}, screens: map[string]*ScreenSession{}}
 	s.st.Settings = defaultSettings()
 	avatarDir = filepath.Join(dir, "avatars")
-	b, err := os.ReadFile(filepath.Join(dir, "state.json"))
-	if err == nil {
-		if err := json.Unmarshal(b, &s.st); err != nil {
+	db, err := openDB(dir)
+	if err != nil {
+		return nil, err
+	}
+	s.db = db
+	rows, ok, err := loadState(db, &s.st)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	s.rows = rows
+	if !ok {
+		if err := s.migrateJSON(); err != nil {
+			db.Close()
 			return nil, err
 		}
-		if s.st.Settings.TempC == 0 {
-			s.st.Settings = defaultSettings()
-		}
+	}
+	if s.st.Settings.TempC == 0 {
+		s.st.Settings = defaultSettings()
 	}
 	for _, m := range s.st.Machines {
 		s.tok[m.TokenHash] = m
@@ -261,17 +276,16 @@ func NewServer(dir string) (*Server, error) {
 	return s, nil
 }
 
-// save ghi nguyên tử: file tạm rồi đổi tên. Gọi khi đang giữ s.mu.
+// save ghi những bản ghi đã đổi vào mam.db trong một giao dịch. Gọi khi đang giữ s.mu.
 func (s *Server) save() {
-	b, err := json.Marshal(&s.st) // không thụt lề: nhỏ hơn và nhanh hơn ~40% khi nhiều máy
+	cur, err := splitState(&s.st)
 	if err != nil {
 		return
 	}
-	p := filepath.Join(s.dir, "state.json")
-	tmp := p + ".tmp"
-	if os.WriteFile(tmp, b, 0o600) == nil {
-		os.Rename(tmp, p)
+	if err := writeRows(s.db, s.rows, cur); err != nil {
+		return // giữ s.rows cũ: lần save sau ghi lại phần chưa lưu được
 	}
+	s.rows = cur
 	s.dirty = false
 }
 
@@ -318,35 +332,28 @@ func (s *Server) audit(e AuditEntry) {
 	e.T = time.Now()
 	s.auditMu.Lock()
 	defer s.auditMu.Unlock()
-	f, err := os.OpenFile(filepath.Join(s.dir, "audit.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	b, _ := json.Marshal(e)
-	f.Write(append(b, '\n'))
+	s.insertAudit(e)
 }
 
 func (s *Server) readAudit(max int) []AuditEntry {
 	s.auditMu.Lock()
 	defer s.auditMu.Unlock()
-	b, err := os.ReadFile(filepath.Join(s.dir, "audit.jsonl"))
+	q := `SELECT data FROM audit ORDER BY n`
+	if max > 0 {
+		q = `SELECT data FROM (SELECT n, data FROM audit ORDER BY n DESC LIMIT ` + strconv.Itoa(max) + `) ORDER BY n`
+	}
+	rs, err := s.db.Query(q)
 	if err != nil {
 		return nil
 	}
+	defer rs.Close()
 	var out []AuditEntry
-	start := 0
-	for i := 0; i < len(b); i++ {
-		if b[i] == '\n' {
-			var e AuditEntry
-			if json.Unmarshal(b[start:i], &e) == nil {
-				out = append(out, e)
-			}
-			start = i + 1
+	for rs.Next() {
+		var d string
+		var e AuditEntry
+		if rs.Scan(&d) == nil && json.Unmarshal([]byte(d), &e) == nil {
+			out = append(out, e)
 		}
-	}
-	if max > 0 && len(out) > max {
-		out = out[len(out)-max:]
 	}
 	return out
 }
