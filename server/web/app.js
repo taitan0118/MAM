@@ -827,7 +827,24 @@ function chatRows(d) {
   });
   return out;
 }
+// Trang Chat: giữ một yêu cầu chờ tin mới, có tin là vẽ lại ngay (không đợi lượt làm mới 4 giây)
+let chatWaiting = false;
+async function chatWaitLoop() {
+  if (chatWaiting) return;
+  chatWaiting = true;
+  let v = '';
+  while (me && route.view === 'chat') {
+    try {
+      const r = await api('GET', '/api/chat-wait?v=' + v);
+      const typing = (document.activeElement || {}).tagName === 'TEXTAREA' && document.activeElement.value;
+      if (v !== '' && String(r.v) !== v && route.view === 'chat' && !typing && !document.hidden) render(true);
+      v = String(r.v);
+    } catch (e) { await new Promise(ok => setTimeout(ok, 3000)); }
+  }
+  chatWaiting = false;
+}
 VIEWS.chat = async (v, quiet) => {
+  chatWaitLoop();
   if (me.role === 'view') { v.append(infoNote('Tài khoản Chỉ xem không nhắn tin được.')); return; }
   const [cv, ml] = await Promise.all([api('GET', '/api/chat'), api('GET', '/api/machines')]);
   cv.convs = cv.convs.filter(c => hit(CQ.q, c.name, c.last)).sort((p, q) => String(q.lastAt).localeCompare(String(p.lastAt))); // như Messenger: chỉ tin mới (gửi hoặc nhận) mới đẩy cuộc trò chuyện lên đầu, đọc thì không đổi chỗ

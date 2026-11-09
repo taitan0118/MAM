@@ -376,6 +376,7 @@ func (s *Server) issue(me *Account, r *http.Request, ids []string, typ string, a
 			for _, r := range s.st.Machines {
 				if n < 2 && r.ID != m.ID && s.isOnline(r) && sameNet24(r.IP, m.IP) {
 					s.st.Commands = append(s.st.Commands, &Command{ID: rid(6), Machine: r.ID, Type: "wolsend", Args: map[string]string{"mac": strings.Join(wolTargetsOf(m), ","), "ip": m.IP}, By: me.User, Created: time.Now(), Status: "pending"})
+					wake(r.ID)
 					n++
 				}
 			}
@@ -387,6 +388,7 @@ func (s *Server) issue(me *Account, r *http.Request, ids []string, typ string, a
 		}
 		c := &Command{ID: rid(6), Machine: m.ID, Type: typ, Args: args, By: me.User, Created: time.Now(), Status: "pending"}
 		s.st.Commands = append(s.st.Commands, c)
+		wake(m.ID) // agent đang đợi sẽ báo cáo và nhận lệnh ngay, không đợi lượt 5 giây
 		cmdIDs[m.ID] = c.ID
 		done = append(done, m.Name)
 		if typ == "message" {

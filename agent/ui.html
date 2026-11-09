@@ -141,7 +141,7 @@ im.onerror=function(){URL.revokeObjectURL(u);notify("MAM",T2.bad)};im.src=u};f.c
 showSelf();
 // Hiệu ứng logo MAM Agent: mỗi ngày một lần (cửa sổ tự bật khi có tin, không chạy lại mỗi lần), bản nhanh, không đọc giọng
 (function(){try{var d=new Date().toDateString();if(window.MissingLogo&&!window.__dup&&localStorage.getItem("mam-intro-day")!==d){localStorage.setItem("mam-intro-day",d);MissingLogo.intro({target:document.querySelector(".logo"),theme:"dark",badge:"agent",speed:1.6,voice:false,once:false})}}catch(e){}})();
-var pollMs=2000,maxSeen=-1,flashT=null;
+var pollMs=700,maxSeen=-1,flashT=null;
 function beep(){try{var c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.setValueAtTime(.18,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.5);o.start();o.stop(c.currentTime+.5)}catch(e){}}
 function notify(title,text){beep();var t=$("toast");t.innerHTML="";var b=document.createElement("b");b.textContent=title;t.appendChild(b);t.appendChild(document.createTextNode(text));t.style.display="block";
 clearTimeout(t._h);t._h=setTimeout(function(){t.style.display="none"},9000);
@@ -155,7 +155,7 @@ try{var w=window.outerWidth,x=screen.availLeft+screen.availWidth-w-12;if(v){wind
 $("miniBtn").onclick=function(){setMini(!mini)};
 var lastScreenId="",CL="";
 function setTypes(a){a=a||[];var k=a.join("|");if(k===setTypes.k||!a.length)return;setTypes.k=k;var sel=$("rtype"),cur=sel.value;sel.innerHTML="";a.forEach(function(x){var o=document.createElement("option");o.value=x;o.textContent=(T.types&&T.types[x])||x;sel.appendChild(o)});if(a.indexOf(cur)>=0)sel.value=cur}
-function poll(){fetch("/api/state?ui=1").then(function(r){return r.json()}).then(function(s){CL=s.contact||"";draw(s);setTypes(s.types);if(s.unread&&!document.hidden)fetch("/api/read");pollMs=s.screen?700:2000}).catch(function(){})}
+function poll(){fetch("/api/state?ui=1").then(function(r){return r.json()}).then(function(s){CL=s.contact||"";draw(s);setTypes(s.types);if(s.unread&&!document.hidden)fetch("/api/read");pollMs=700}).catch(function(){})}
 $("deny").onclick=function(){fetch("/api/screen/consent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({allow:false})}).then(poll)};
 $("allow").onclick=function(){fetch("/api/screen/consent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({allow:true,trust:$("trust").checked})}).then(poll)};
 $("banStop").onclick=function(){fetch("/api/screen/stop",{method:"POST"}).then(poll)};

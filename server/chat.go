@@ -26,6 +26,7 @@ func (s *Server) addChat(machine, by, text string, client bool, byID ...string) 
 		l.ByID = byID[0]
 	}
 	s.st.Chat = append(s.st.Chat, l)
+	chatBump()
 	if len(s.st.Chat) > 3000 {
 		s.st.Chat = s.st.Chat[len(s.st.Chat)-2000:]
 	}

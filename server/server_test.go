@@ -1243,3 +1243,53 @@ func TestNameSync(t *testing.T) {
 		t.Fatalf("agent chưa nhận tên mới: %q", n)
 	}
 }
+
+func TestWakeAndChatWait(t *testing.T) {
+	f := setup(t)
+	report(t, f.url, f.tok1, 10, 50)
+	h := map[string]string{"Authorization": "Bearer " + f.tok1}
+	// agent đang đợi: gửi tin từ Console thì được đánh thức ngay
+	got := make(chan bool, 1)
+	go func() {
+		_, m, _ := client(t, f.url).do("GET", "/api/agent/wait", nil, h)
+		got <- m["wake"] == true
+	}()
+	time.Sleep(200 * time.Millisecond)
+	start := time.Now()
+	code, _, _ := f.super.do("POST", "/api/chat/"+f.m1, map[string]string{"text": "Xin chào"}, nil)
+	expect(t, code, 200, "gửi chat")
+	select {
+	case ok := <-got:
+		if !ok || time.Since(start) > 2*time.Second {
+			t.Fatalf("agent không được đánh thức kịp: %v %v", ok, time.Since(start))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("agent đợi quá 5 giây")
+	}
+	// đã có lệnh chờ sẵn thì trả lời ngay, không đợi
+	_, m, _ := client(t, f.url).do("GET", "/api/agent/wait", nil, h)
+	if m["wake"] != true {
+		t.Fatal("có lệnh chờ sẵn phải trả lời ngay")
+	}
+	if code, _, _ := client(t, f.url).do("GET", "/api/agent/wait", nil, map[string]string{"Authorization": "Bearer sai"}); code != 401 {
+		t.Fatalf("token sai: %d", code)
+	}
+	// Console đợi tin: máy trả lời thì Console được báo ngay
+	_, m, _ = f.super.do("GET", "/api/chat-wait", nil, nil)
+	v := fmt.Sprint(int64(m["v"].(float64)))
+	done := make(chan bool, 1)
+	go func() {
+		_, m2, _ := f.super.do("GET", "/api/chat-wait?v="+v, nil, nil)
+		done <- fmt.Sprint(int64(m2["v"].(float64))) != v
+	}()
+	time.Sleep(200 * time.Millisecond)
+	client(t, f.url).do("POST", "/api/agent/reply", map[string]string{"text": "Dạ em nghe"}, h)
+	select {
+	case ok := <-done:
+		if !ok {
+			t.Fatal("phiên bản chat không đổi")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Console đợi tin quá 5 giây")
+	}
+}

@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.50"
+const Version = "1.1.51"
 
 //go:embed lib.ps1
 var libPS string
@@ -80,6 +80,40 @@ var lastInfo struct {
 }
 
 var httpc = &http.Client{Timeout: 20 * time.Second}
+
+// wakeNow: server báo có lệnh/tin nhắn mới, vòng báo cáo chạy ngay thay vì ngủ hết lượt.
+var wakeNow = make(chan struct{}, 1)
+
+// waitLoop giữ sẵn một yêu cầu /api/agent/wait; server trả lời ngay khi có việc cho máy này.
+func waitLoop() {
+	c := &http.Client{Timeout: 40 * time.Second}
+	for {
+		if cfg.Token == "" {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		req, _ := http.NewRequest("GET", strings.TrimRight(cfg.Server, "/")+"/api/agent/wait", nil)
+		req.Header.Set("Authorization", "Bearer "+cfg.Token)
+		resp, err := c.Do(req)
+		if err != nil {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		var out struct{ Wake bool }
+		json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&out)
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			time.Sleep(60 * time.Second) // server cũ chưa có /api/agent/wait: vẫn chạy bằng lượt 5 giây
+			continue
+		}
+		if out.Wake {
+			select {
+			case wakeNow <- struct{}{}:
+			default:
+			}
+		}
+	}
+}
 
 type apiResp struct {
 	code int
@@ -273,6 +307,7 @@ func runLoop() {
 	}()
 	go threatLoop()
 	go eventLoop()
+	go waitLoop()
 	go enableWOL()
 	go uiWatchdog()
 	startLocal()
@@ -389,7 +424,10 @@ func runLoop() {
 				go func() { postResult(c.ID, handleCommand(c.Type, c.Args)) }()
 			}
 		}
-		time.Sleep(interval)
+		select {
+		case <-time.After(interval):
+		case <-wakeNow:
+		}
 	}
 }
 

@@ -195,6 +195,7 @@ func (s *Server) hScreenStart(w http.ResponseWriter, r *http.Request, me *Accoun
 	}
 	now := time.Now()
 	sc := &ScreenSession{ID: rid(6), Machine: id, ByUser: me.User, ByName: me.Name, Status: "pending", Created: now, LastAdmin: now, LastInput: now, PreAuth: pre}
+	wake(id)
 	s.screens[sc.ID] = sc
 	msg := "Gửi yêu cầu xem màn hình " + m.Name + ", đang chờ máy đó đồng ý"
 	if pre {
