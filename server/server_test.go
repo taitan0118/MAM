@@ -1175,3 +1175,50 @@ func TestMirrorBackup(t *testing.T) {
 	}
 	f.s.checkServerDisk() // không được treo/lỗi trên Linux
 }
+
+func TestRestore(t *testing.T) {
+	f := setup(t)
+	evAppend(f.s.dir, f.m1, []SysEvent{{ID: "Sys1", At: time.Now().Unix() - 60, Src: "disk", EID: 7, Lvl: 2}})
+	dest := filepath.Join(t.TempDir(), "o-khac")
+	code, m, _ := f.super.do("POST", "/api/backups/mirror", map[string]string{"dir": dest}, nil)
+	expect(t, code, 200, "sao lưu")
+	name := m["file"].(string)
+	// sau khi sao lưu: thu hồi một máy, xóa lỗi
+	expect(t, func() int { c, _, _ := f.super.do("DELETE", "/api/machines/"+f.m2, nil, nil); return c }(), 200, "thu hồi")
+	os.Remove(evFile(f.s.dir, f.m1))
+	if code, _, _ := f.tech.do("POST", "/api/restore?mirror="+name, nil, nil); code != 403 {
+		t.Fatalf("tech không được khôi phục: %d", code)
+	}
+	code, _, _ = f.super.do("POST", "/api/restore?mirror="+name, nil, nil)
+	expect(t, code, 200, "khôi phục")
+	f.s.mu.RLock()
+	rev := f.s.machineByID(f.m2).Revoked
+	f.s.mu.RUnlock()
+	if rev || len(evRead(f.s.dir, f.m1)) != 1 {
+		t.Fatalf("khôi phục chưa đủ: máy 2 thu hồi=%v, lỗi=%v", rev, evRead(f.s.dir, f.m1))
+	}
+	if code, _, _ := f.super.do("GET", "/api/me", nil, nil); code != 401 {
+		t.Fatalf("sau khôi phục phải đăng nhập lại: %d", code)
+	}
+	// máy chủ mới cài: nạp file zip không cần đăng nhập, rồi đăng nhập bằng tài khoản cũ
+	zb, _ := os.ReadFile(filepath.Join(dest, name))
+	_, url2 := newSrv(t)
+	c2 := client(t, url2)
+	req, _ := http.NewRequest("POST", url2+"/api/restore", bytes.NewReader(zb))
+	req.Header.Set("X-MAM", "1")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil || res.StatusCode != 200 {
+		t.Fatalf("khôi phục trên máy mới: %v %v", err, res)
+	}
+	code, _, _ = c2.do("POST", "/api/login", map[string]string{"user": "admin", "password": "Matkhau2026"}, nil)
+	expect(t, code, 200, "đăng nhập sau khôi phục")
+	// đã có tài khoản thì không còn khôi phục tự do
+	req, _ = http.NewRequest("POST", url2+"/api/restore", bytes.NewReader(zb))
+	req.Header.Set("X-MAM", "1")
+	if res, _ := http.DefaultClient.Do(req); res.StatusCode != 401 {
+		t.Fatalf("khôi phục không đăng nhập phải bị chặn: %d", res.StatusCode)
+	}
+	if _, _, err := parseBackup([]byte("rác")); err == nil {
+		t.Fatal("file rác phải bị từ chối")
+	}
+}

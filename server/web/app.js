@@ -117,6 +117,18 @@ function table(heads, rows, empty) {
   return el('div', { class: 'tblwrap' }, tb); // bảng dài thì cuộn trong khung, tiêu đề dính trên
 }
 
+/* ---------- khôi phục từ bản sao lưu ---------- */
+async function doRestore(q, file) {
+  const r = await fetch('/api/restore' + q, { method: 'POST', headers: { 'X-MAM': '1' }, body: file || null, credentials: 'same-origin' });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(trErr(j.error || 'Lỗi'));
+  toast(t('Đã khôi phục: {0} máy, {1} tài khoản. Hãy đăng nhập lại.', j.machines, j.accounts));
+  setTimeout(() => location.reload(), 1800);
+}
+const restoreAsk = (label, q, file) => confirmBox('Khôi phục dữ liệu?', t('Toàn bộ dữ liệu hiện tại sẽ được thay bằng bản sao lưu {0}. Hệ thống tự lưu một bản hiện trạng ngay trước khi khôi phục nên vẫn quay lại được. Mọi người sẽ phải đăng nhập lại.', label), 'Khôi phục', true, () => doRestore(q, file).catch(fail));
+// chọn file .zip/.json trên máy tính; fn nhận file đã chọn
+function pickFile(fn) { const i = el('input', { type: 'file', accept: '.zip,.json', style: 'display:none', onchange: () => { if (i.files[0]) fn(i.files[0]); i.remove(); } }); document.body.append(i); i.click(); }
+
 /* ---------- đăng nhập, cài đặt lần đầu, đổi mật khẩu ---------- */
 async function showAuth() {
   clearInterval(timer); me = null; $('#app').hidden = true;
@@ -140,7 +152,8 @@ async function showAuth() {
       if (!ok) return;
       try { const r = await api('POST', '/api/setup', { name: nm.value.trim(), user: un.value.trim(), password: p1.value }); me = r.me; wrap.remove(); enter(); toast('Đã tạo Super admin đầu tiên. Nên tạo thêm một Super admin dự phòng.'); } catch (e) { setErr(f2, e.message); }
     };
-    box.append(el('div', { style: 'font-size:12.5px;color:var(--muted);line-height:1.55' }, 'Lần đầu cài phần mềm trên máy server: tạo tài khoản Super admin đầu tiên. Không có mật khẩu mặc định.'), fn, fu, f1, f2, el('button', { class: 'btn primary', style: 'width:100%;justify-content:center', onclick: go }, 'Tạo tài khoản và vào Console'));
+    box.append(el('div', { style: 'font-size:12.5px;color:var(--muted);line-height:1.55' }, 'Lần đầu cài phần mềm trên máy server: tạo tài khoản Super admin đầu tiên. Không có mật khẩu mặc định.'), fn, fu, f1, f2, el('button', { class: 'btn primary', style: 'width:100%;justify-content:center', onclick: go }, 'Tạo tài khoản và vào Console'),
+      el('div', { style: 'font-size:12.5px;color:var(--muted);text-align:center' }, 'Cài lại máy chủ sau sự cố? ', el('a', { href: '#', onclick: e => { e.preventDefault(); pickFile(f => doRestore('', f).catch(fail)); } }, 'Khôi phục từ bản sao lưu')));
     wrap.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
     return;
   }
@@ -1064,7 +1077,9 @@ async function mirrorCard() {
   return card('Sao lưu sang ổ khác', 'mỗi giờ, giữ 24 bản theo giờ, 7 theo ngày, 4 theo tuần, 12 theo tháng', el('div', { style: 'display:flex;flex-direction:column;gap:12px' },
     el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, inp, el('button', { class: 'btn primary', onclick: () => go2({ dir: inp.value }) }, 'Lưu và sao lưu ngay'), st.dir ? el('button', { class: 'btn', onclick: () => go2({ run: true }) }, 'Sao lưu ngay') : null, st.dir ? el('button', { class: 'btn', onclick: () => go2({ dir: '' }) }, 'Tắt') : null),
     stat,
-    el('div', { style: 'font-size:12px;color:var(--faint)' }, 'Mỗi bản là một file zip gồm toàn bộ dữ liệu (máy, tài khoản, cài đặt, lịch sử bật máy, lỗi của máy, nhật ký thao tác, ảnh đại diện) và được mở lại kiểm tra ngay sau khi ghi. Sao lưu lỗi thì có cảnh báo đỏ. Thư mục mạng (NAS) phải cho tài khoản chạy dịch vụ MAM ghi vào. Khôi phục: dừng dịch vụ MAM, giải nén file zip vào thư mục dữ liệu, chạy lại.'),
+    (st.files || []).length ? el('div', { class: 'scrollbox short' }, table(['Bản sao lưu', 'Dung lượng', ''], st.files.map(f => el('tr', { class: 'nohover' }, el('td', { class: 'mono' }, fmtDT(f.time)), el('td', { class: 'mono' }, f.size < 1e6 ? Math.ceil(f.size / 1024) + ' KB' : (f.size / 1e6).toFixed(1) + ' MB'), el('td', { style: 'text-align:right' }, el('button', { class: 'btn', style: 'padding:3px 9px;font-size:12px', onclick: () => restoreAsk(fmtDT(f.time), '?mirror=' + encodeURIComponent(f.name)) }, 'Khôi phục')))))) : null,
+    el('div', {}, el('button', { class: 'btn', onclick: () => pickFile(f => restoreAsk(f.name, '', f)) }, 'Khôi phục từ file trên máy tính…')),
+    el('div', { style: 'font-size:12px;color:var(--faint)' }, 'Mỗi bản là một file zip gồm toàn bộ dữ liệu (máy, tài khoản, cài đặt, lịch sử bật máy, lỗi của máy, nhật ký thao tác, ảnh đại diện) và được mở lại kiểm tra ngay sau khi ghi. Sao lưu lỗi thì có cảnh báo đỏ. Thư mục mạng (NAS) phải cho tài khoản chạy dịch vụ MAM ghi vào. Máy chủ chết hẳn: cài MAM trên máy mới, ở màn hình tạo tài khoản đầu tiên bấm Khôi phục từ bản sao lưu và chọn file zip.'),
     el('div', {}, el('div', { style: 'font-weight:600;margin-bottom:4px' }, 'Ổ cứng máy chủ'), disks.length ? disks : el('div', { style: 'color:var(--faint)' }, 'Đang kiểm tra…'),
       el('div', { style: 'font-size:12px;color:var(--faint);margin-top:6px' }, st.diskAt && new Date(st.diskAt).getFullYear() > 2000 ? t('Kiểm tra mỗi 6 giờ, lần cuối {0}. Ổ có dấu hiệu hỏng hoặc sắp đầy thì có cảnh báo.', fmtDT(st.diskAt)) : 'Kiểm tra mỗi 6 giờ. Ổ có dấu hiệu hỏng hoặc sắp đầy thì có cảnh báo.'))));
 }
@@ -1568,7 +1583,7 @@ VIEWS.settings = async v => {
   {
     const backups = await api('GET', '/api/backups');
     const list2 = el('div', {});
-    const renderBk = () => { list2.innerHTML = ''; list2.append(table(['Thời điểm', 'Dung lượng', ''], backups.map(b => el('tr', { class: 'nohover' }, el('td', { class: 'mono' }, fmtDT(b.time)), el('td', { class: 'mono' }, Math.round(b.size / 1024) + ' KB'), el('td', { style: 'text-align:right' }, isSuper() ? el('a', { class: 'btn', style: 'padding:3px 9px;font-size:12px', href: '/api/backups/' + b.name }, 'Tải') : null))), 'Chưa có bản sao lưu nào')); };
+    const renderBk = () => { list2.innerHTML = ''; list2.append(table(['Thời điểm', 'Dung lượng', ''], backups.map(b => el('tr', { class: 'nohover' }, el('td', { class: 'mono' }, fmtDT(b.time)), el('td', { class: 'mono' }, Math.round(b.size / 1024) + ' KB'), el('td', { style: 'text-align:right' }, isSuper() ? [el('a', { class: 'btn', style: 'padding:3px 9px;font-size:12px', href: '/api/backups/' + b.name }, 'Tải'), ' ', el('button', { class: 'btn', style: 'padding:3px 9px;font-size:12px', onclick: () => restoreAsk(fmtDT(b.time), '?name=' + encodeURIComponent(b.name)) }, 'Khôi phục')] : null))), 'Chưa có bản sao lưu nào')); };
     renderBk();
     v.append(el('div', { style: 'margin-top:14px' }, card('Sao lưu dữ liệu', 'tự động mỗi ngày, giữ 30 bản gần nhất, cùng ổ với dữ liệu', el('div', {}, isSuper() ? el('div', { style: 'margin-bottom:10px' }, el('button', { class: 'btn', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => { try { await api('POST', '/api/backups', {}); toast('Đã sao lưu'); render(); } catch (e) { fail(e); } } }, 'Sao lưu ngay')) : null, list2))));
     if (isSuper()) v.append(el('div', { style: 'margin-top:14px' }, await mirrorCard()));

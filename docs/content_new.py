@@ -193,6 +193,39 @@ for _b in _tro[1]:
           [("Có chữ chưa dịch khi đổi ngôn ngữ","Some text is not translated after changing language","切换语言后仍有未翻译的文字"),
            ("Giao diện và thông báo của hệ thống đã có ba ngôn ngữ. Nội dung do người dùng tự gõ (tên máy, tên người, nội dung yêu cầu, tin chat, ghi chú, tên nhóm) được giữ nguyên, không tự dịch.","The interface and system messages come in three languages. Text typed by people (machine names, names, request text, chat, notes, group names) is kept as written and is not translated.","界面和系统消息均有三种语言。人工输入的内容（设备名、姓名、请求内容、聊天、备注、分组名）保持原样，不会自动翻译。")]])
 
+
+S(("Thời gian hoạt động của máy","Machine uptime","设备运行时间"),
+ ("p",("Mục Thời gian hoạt động trên menu cho biết mỗi máy bật lúc nào, tắt lúc nào và tổng bao nhiêu giờ. Trong chi tiết một máy cũng có tab Thời gian hoạt động. Chọn Ngày, Tuần, Tháng hoặc Năm, bấm ‹ › để lùi hoặc tới. Bấm một máy trong bảng để mở chi tiết.",
+       "The Uptime menu item shows when each machine was turned on and off and how many hours it ran. A machine's detail page has an Uptime tab as well. Choose Day, Week, Month or Year and press ‹ › to go back or forward. Click a machine in the table to open its details.",
+       "菜单中的“运行时间”显示每台设备何时开机、何时关机以及共运行多少小时。设备详情页中也有“运行时间”标签。选择日、周、月或年，点击 ‹ › 前后切换。点击表格中的设备可打开详情。")),
+ ("img","uptime",("Tab Thời gian hoạt động theo ngày: các khoảng giờ bật và từng lần bật","The Uptime tab by day: the hours on and each power-on","按日查看的运行时间标签：开机时段及每次开机")),
+ ("ul",[("Theo ngày: bật lúc, tắt lúc, số lần bật, tổng giờ, thanh 24 giờ và danh sách từng lần bật. Giữa hai lần bật ghi Khởi động lại (nghỉ dưới 30 phút) hoặc Tắt máy.","By day: on time, off time, number of power-ons, total hours, a 24-hour bar and a list of each power-on. Between two power-ons it says Restart (off for under 30 minutes) or Shut down.","按日：开机时间、关机时间、开机次数、总时长、24 小时条形图和每次开机列表。两次开机之间会标注“重启”（关机不足 30 分钟）或“关机”。"),
+        ("Theo tuần, tháng, năm: biểu đồ tổng giờ từng ngày, từng tuần, từng tháng; giờ bật và giờ tắt trung bình; lịch tháng tô đậm nhạt theo số giờ.","By week, month, year: charts of hours per day, week or month; average on and off times; a month calendar shaded by hours.","按周、月、年：每天、每周、每月时长图表；平均开机和关机时间；按时长深浅着色的月历。"),
+        ("Xuất Excel hoặc CSV: mỗi máy mỗi ngày một dòng.","Export to Excel or CSV: one row per machine per day.","导出 Excel 或 CSV：每台设备每天一行。")]),
+ ("note",("Máy được tính là đang bật khi agent còn báo về server; mất liên lạc quá 2 phút là tắt. Máy mất mạng mà vẫn bật cũng bị tính là tắt trong khoảng đó. Dữ liệu có từ bản 1.1.47 và giữ 1 năm.","A machine counts as on while its agent keeps reporting; more than 2 minutes without contact counts as off. A machine that loses the network but stays on is also counted as off during that time. Data starts from version 1.1.47 and is kept for 1 year.","代理持续上报时视为开机；失联超过 2 分钟视为关机。设备断网但仍开着的时段也会计为关机。数据从 1.1.47 版本开始记录，保留 1 年。")))
+
+S(("Lỗi của máy (180 ngày)","Machine errors (180 days)","设备错误（180 天）"),
+ ("p",("Tab Lỗi của máy trong chi tiết máy liệt kê các lỗi Windows ghi lại trong 180 ngày qua: màn hình xanh, tắt đột ngột, lỗi ổ cứng, lỗi phần cứng, ứng dụng bị đóng hoặc treo, driver, cập nhật Windows thất bại, dịch vụ Windows, cùng các cảnh báo của MAM cho máy đó.",
+       "The Machine errors tab on a machine's detail page lists the errors Windows recorded in the last 180 days: blue screens, sudden shutdowns, disk errors, hardware errors, app crashes and hangs, drivers, failed Windows updates, Windows services, plus MAM's own alerts for that machine.",
+       "设备详情页中的“设备错误”标签列出 Windows 在最近 180 天记录的错误：蓝屏、意外关机、硬盘错误、硬件错误、应用崩溃或无响应、驱动程序、Windows 更新失败、Windows 服务，以及 MAM 对该设备的告警。")),
+ ("img","errors",("Tab Lỗi của máy: biểu đồ theo tuần và danh sách lỗi đã gộp","The Machine errors tab: weekly chart and merged error list","设备错误标签：每周图表和合并后的错误列表")),
+ ("ul",[("Bốn ô đầu trang đếm tổng số lỗi, màn hình xanh và tắt đột ngột, ổ cứng và phần cứng, ứng dụng bị đóng hoặc treo. Số lỗi ổ cứng tăng dần là dấu hiệu nên sao lưu và thay ổ.","The four boxes at the top count all errors, blue screens and sudden shutdowns, disk and hardware errors, and app crashes. A rising number of disk errors is a sign to back up and replace the drive.","顶部四个方框统计错误总数、蓝屏和意外关机、硬盘和硬件错误、应用崩溃。硬盘错误持续增加说明应备份并更换硬盘。"),
+        ("Lỗi giống nhau trong cùng ngày được gộp một dòng kèm số lần. Lọc theo loại hoặc gõ vào ô tìm kiếm (nội dung, nguồn, mã sự kiện).","Identical errors on the same day are merged into one row with a count. Filter by type or search by text, source or event ID.","同一天的相同错误合并为一行并显示次数。可按类型筛选，或按内容、来源、事件 ID 搜索。")]),
+ ("note",("Agent Windows đọc nhật ký sự kiện System và Application (mức Lỗi và Nghiêm trọng) mỗi 10 phút; lần đầu lấy lại cả lỗi cũ còn trong Windows. Cần agent 1.1.48 trở lên. macOS, Linux và agent cho Windows 7/8 chưa gửi lỗi.","The Windows agent reads the System and Application event logs (Error and Critical) every 10 minutes; on first run it also collects older errors still kept by Windows. Needs agent 1.1.48 or later. macOS, Linux and the Windows 7/8 agent do not send errors yet.","Windows 代理每 10 分钟读取 System 和 Application 事件日志（错误和严重级别）；首次运行时还会补收 Windows 中仍保留的旧错误。需要 1.1.48 或更高版本的代理。macOS、Linux 和 Windows 7/8 代理暂不上报错误。")))
+
+S(("Sao lưu sang ổ khác và khôi phục","Backup to another drive and restore","备份到其他磁盘与恢复"),
+ ("p",("Bản sao lưu hằng ngày nằm cùng ổ với dữ liệu, ổ máy chủ hỏng là mất cả hai. Vào Cài đặt, thẻ Sao lưu sang ổ khác, nhập một thư mục ở ổ khác, USB hoặc NAS (ví dụ D:\\MAM-backup hoặc \\\\NAS\\MAM-backup) rồi bấm Lưu và sao lưu ngay. Từ đó server tự sao lưu mỗi giờ.",
+       "The daily backups sit on the same drive as the data, so a failed server drive loses both. In Settings, Backup to another drive, enter a folder on another drive, a USB drive or a NAS (for example D:\\MAM-backup or \\\\NAS\\MAM-backup) and press Save and back up now. From then on the server backs up every hour.",
+       "每日备份与数据位于同一磁盘，服务器磁盘损坏时两者都会丢失。在“设置”的“备份到其他磁盘”中输入其他磁盘、U 盘或 NAS 上的文件夹（例如 D:\\MAM-backup 或 \\\\NAS\\MAM-backup），点击“保存并立即备份”。之后服务器每小时自动备份一次。")),
+ ("img","backup",("Thẻ Sao lưu sang ổ khác và tình trạng ổ cứng máy chủ","The Backup to another drive card and the server drive status","“备份到其他磁盘”卡片和服务器磁盘状态")),
+ ("ul",[("Mỗi bản là một file zip gồm toàn bộ dữ liệu và được mở lại kiểm tra ngay sau khi ghi. Giữ 24 bản theo giờ, 7 theo ngày, 4 theo tuần, 12 theo tháng.","Each copy is one zip file with all data and is reopened and checked right after writing. It keeps 24 hourly, 7 daily, 4 weekly and 12 monthly copies.","每份备份是一个包含全部数据的 zip 文件，写入后立即重新打开检查。保留 24 份按小时、7 份按天、4 份按周、12 份按月。"),
+        ("Sao lưu lỗi (NAS tắt, ổ đầy, rút USB) thì có cảnh báo đỏ và thông báo ra ngoài nếu đã cấu hình.","A failed backup (NAS off, disk full, USB removed) raises a red alert and an outgoing notification if configured.","备份失败（NAS 关机、磁盘已满、U 盘拔出）会产生红色告警，并在配置后发送对外通知。"),
+        ("Ổ cứng của máy chủ được kiểm tra mỗi 6 giờ: sắp đầy hoặc Windows báo ổ có dấu hiệu hỏng thì có cảnh báo.","The server's own drives are checked every 6 hours: nearly full, or Windows reporting signs of failure, raises an alert.","每 6 小时检查服务器磁盘：即将满或 Windows 报告故障迹象时会告警。")]),
+ ("h",("Khôi phục","Restoring","恢复")),
+ ("ul",[("Còn vào được Console: bấm Khôi phục cạnh một bản sao lưu, hoặc Khôi phục từ file trên máy tính. Hệ thống tự lưu một bản hiện trạng ngay trước khi khôi phục, sau đó mọi người đăng nhập lại.","If the Console still works: press Restore next to a backup, or Restore from a file on this computer. The system saves a copy of the current state right before restoring, then everyone signs in again.","控制台仍可使用时：点击备份旁的“恢复”，或“从本机文件恢复”。系统会在恢复前自动保存一份当前数据，之后所有人重新登录。"),
+        ("Máy chủ chết hẳn: cài MAM trên máy mới, ở màn hình tạo tài khoản đầu tiên bấm Khôi phục từ bản sao lưu và chọn file zip. Máy client tự nối lại nếu máy chủ mới giữ đúng địa chỉ IP hoặc tên cũ.","If the server is gone: install MAM on a new machine and, on the first-account screen, press Restore from backup and choose the zip file. Clients reconnect on their own if the new server keeps the old IP address or name.","服务器彻底损坏时：在新机器上安装 MAM，在创建首个账户的界面点击“从备份恢复”并选择 zip 文件。如果新服务器沿用原 IP 地址或名称，客户端会自动重新连接。")]),
+ ("warn",("Thư mục mạng (NAS) phải cho tài khoản chạy dịch vụ MAM ghi vào. Nên bật thêm ổ gương (RAID 1) trên máy chủ để một ổ chết vẫn không mất dữ liệu.","A network folder (NAS) must allow the account running the MAM service to write to it. Also consider a mirrored drive (RAID 1) on the server so a single drive failure loses nothing.","网络文件夹 (NAS) 必须允许运行 MAM 服务的账户写入。建议在服务器上另外启用镜像磁盘 (RAID 1)，这样单块磁盘损坏也不会丢失数据。")))
+
 # xếp thứ tự cuối và đánh số lại
 G.extend([_rd, _tro, _lim]) if False else None
 G.append(_rd); G.append(_tro); G.append(_lim)
@@ -207,6 +240,14 @@ INTRO.insert(5, (('Yêu cầu hỗ trợ có xử lý', 'Support requests with f
   ('Người dùng báo sự cố ngay trên máy, kỹ thuật viên nhận, trả lời, ghi cách xử lý; lọc theo trạng thái, loại thiết bị và ngày, gợi ý từ những lần xử lý trước.',
    'Users report problems right on the machine; technicians pick them up, reply and record the fix; filter by status, device type and date, with suggestions from earlier fixes.',
    '用户直接在设备上报修，技术人员接单、回复并记录处理方法；可按状态、设备类型和日期筛选，并参考以往处理。')))
+INTRO.insert(6, (('Thời gian hoạt động và lỗi của máy', 'Uptime and machine errors', '运行时间与设备错误'),
+  ('Máy bật, tắt lúc nào, tổng bao nhiêu giờ theo ngày, tuần, tháng, năm; lỗi Windows 180 ngày (màn hình xanh, ổ cứng, ứng dụng bị đóng…).',
+   'When each machine was on and off and for how many hours by day, week, month, year; 180 days of Windows errors (blue screens, disk, app crashes…).',
+   '按日、周、月、年查看设备何时开关机及运行时长；180 天的 Windows 错误（蓝屏、硬盘、应用崩溃等）。')))
+INTRO.insert(7, (('Sao lưu sang ổ khác', 'Backup to another drive', '备份到其他磁盘'),
+  ('Tự sao lưu mỗi giờ sang ổ khác, USB hoặc NAS, có kiểm tra và cảnh báo; khôi phục cả khi máy chủ chết hẳn.',
+   'Hourly backup to another drive, USB or NAS, checked and alerted; restore even when the server is gone.',
+   '每小时自动备份到其他磁盘、U 盘或 NAS，带检查和告警；服务器彻底损坏也能恢复。')))
 INTRO_NOT = (('Chưa có', 'Not available yet', '暂未提供'),
   ('Gửi báo cáo tự động theo lịch. Điều khiển màn hình chỉ có trên Windows. Khóa màn hình cần Windows Pro trở lên.',
    'Scheduled report delivery. Screen control is Windows only. Lock screen needs Windows Pro or later.',

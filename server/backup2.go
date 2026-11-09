@@ -361,9 +361,18 @@ func (s *Server) hMirror(w http.ResponseWriter, r *http.Request, me *Account) {
 	s.mu.RLock()
 	dir := s.st.Settings.BackupDir
 	s.mu.RUnlock()
+	files := []map[string]interface{}{}
+	if dir != "" {
+		ents, _ := os.ReadDir(dir)
+		for i := len(ents) - 1; i >= 0; i-- { // tên theo thời gian: đọc ngược là mới nhất trước
+			if fi, err := ents[i].Info(); err == nil && reMirror.MatchString(ents[i].Name()) {
+				files = append(files, map[string]interface{}{"name": fi.Name(), "size": fi.Size(), "time": fi.ModTime()})
+			}
+		}
+	}
 	bk2.Lock()
 	defer bk2.Unlock()
-	jok(w, map[string]interface{}{"dir": dir, "at": bk2.At, "ok": bk2.OK, "err": bk2.Err, "file": bk2.File, "size": bk2.Size, "disk": bk2.Disk, "diskAt": bk2.DiskAt, "running": bk2.running})
+	jok(w, map[string]interface{}{"files": files, "dir": dir, "at": bk2.At, "ok": bk2.OK, "err": bk2.Err, "file": bk2.File, "size": bk2.Size, "disk": bk2.Disk, "diskAt": bk2.DiskAt, "running": bk2.running})
 }
 
 func orDash(s string) string {
