@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.49"
+const Version = "1.1.50"
 
 //go:embed lib.ps1
 var libPS string
@@ -162,13 +162,19 @@ func wolMACs() []string {
 	return out
 }
 
+// hostName: tên máy trong Windows/macOS/Linux (chế độ giả lập dùng tên giả).
+func hostName() string {
+	if *simName != "" {
+		return *simName
+	}
+	h, _ := os.Hostname()
+	return h
+}
+
 func enroll(hw map[string]interface{}) error {
 	name := cfg.Name
-	if name == "" {
-		name, _ = os.Hostname()
-	}
-	if *simName != "" {
-		name = *simName
+	if name == "" || *simName != "" {
+		name = hostName()
 	}
 	ip, mac := localAddr()
 	if *simName != "" { // giả lập: mỗi tên một MAC riêng để server coi là máy khác nhau
@@ -289,7 +295,7 @@ func runLoop() {
 		m := collectMetrics()
 		ip, _ := localAddr()
 		lastUser = m.User
-		rep := map[string]interface{}{"cpu": m.CPU, "ram": m.RAM, "temp": tNow, "uptime": m.Uptime, "disks": m.Disks, "user": m.User, "ip": ip, "ver": Version, "arch": runtime.GOARCH, "macs": wolMACs()}
+		rep := map[string]interface{}{"cpu": m.CPU, "ram": m.RAM, "temp": tNow, "uptime": m.Uptime, "disks": m.Disks, "user": m.User, "ip": ip, "ver": Version, "arch": runtime.GOARCH, "macs": wolMACs(), "host": hostName()}
 		if sendHw {
 			rep["hw"] = hwNow
 		}
@@ -338,6 +344,7 @@ func runLoop() {
 					Args map[string]string
 				}
 				Interval     int
+				Name         string
 				DeviceTypes  []string
 				ContactLabel string
 				Policy       *Policy
@@ -358,6 +365,10 @@ func runLoop() {
 				setDeviceTypes(out.DeviceTypes)
 			}
 			setContactLabel(out.ContactLabel)
+			if out.Name != "" && out.Name != cfg.Name { // quản trị đổi tên trên Console: cửa sổ MAM trên máy hiện tên mới
+				cfg.Name = out.Name
+				saveConfig()
+			}
 			if out.Policy != nil {
 				osApplyPolicy(out.Policy)
 			}

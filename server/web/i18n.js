@@ -1976,6 +1976,10 @@ var ZH = {
 "Bản quyền © 2026 Nguyễn Tấn Tài (Missing)": "版权所有 © 2026 Nguyễn Tấn Tài (Missing)",
 };
 var PAT = [
+["^Máy đổi tên trong Windows: (.+) thành (.+)$",
+"Machine renamed in Windows: $1 to $2",
+"机器在 Windows 中改名：$1 改为 $2"
+],
 ["^Không ghi được dữ liệu khôi phục: (.+)$",
 "Cannot write the restored data: $1",
 "无法写入恢复的数据：$1"

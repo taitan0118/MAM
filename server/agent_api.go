@@ -20,6 +20,7 @@ type reportIn struct {
 	Threats []ThreatIn             `json:"threats"`
 	Macs    []string               `json:"macs"`
 	Events  []SysEvent             `json:"events"`
+	Host    string                 `json:"host"`
 }
 
 func (s *Server) agentMachine(r *http.Request) *Machine {
@@ -120,6 +121,17 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 		m.Hw = in.Hw
 	}
 	m.LastSeen = now
+	persist := false
+	if h := cut(in.Host, 63); h != "" && h != m.Host {
+		// đổi tên máy trong Windows (System > About > Rename) thì tên trên MAM đổi theo; lần đầu chỉ ghi nhận
+		if m.Host != "" && m.Name != h {
+			old := m.Name
+			m.Name = h
+			persist = true
+			s.audit(AuditEntry{User: "system", Name: "Hệ thống", Role: "sys", IP: clientIP(r), Kind: "Máy", Msg: "Máy đổi tên trong Windows: " + old + " thành " + h, Target: h})
+		}
+		m.Host = h
+	}
 	s.upMark(m.ID, now.Unix(), in.Uptime)  // không lưu ngay: 1000 máy bật cùng lúc sẽ nghẽn; watchdog lưu mỗi phút
 	defer evAppend(s.dir, m.ID, in.Events) // chạy sau khi đã nhả s.mu
 	s.threatsIn(m, in.Threats)
@@ -137,7 +149,6 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 	}
 	s.checkMachine(m, l)
 	out := []map[string]interface{}{}
-	persist := false
 	for _, c := range s.st.Commands {
 		if c.Machine == m.ID && c.Status == "pending" {
 			c.Status = "sent"
@@ -154,7 +165,7 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 	dts := s.deviceTypes()
 	cl := s.contactLabel()
 	s.mu.Unlock()
-	jok(w, map[string]interface{}{"commands": out, "interval": interval, "policy": pol, "update": s.updateFor(in.Ver, in.Arch), "screen": scr, "deviceTypes": dts, "contactLabel": cl})
+	jok(w, map[string]interface{}{"commands": out, "name": m.Name, "interval": interval, "policy": pol, "update": s.updateFor(in.Ver, in.Arch), "screen": scr, "deviceTypes": dts, "contactLabel": cl})
 }
 
 func clamp(v float64) float64 {

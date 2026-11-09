@@ -1222,3 +1222,24 @@ func TestRestore(t *testing.T) {
 		t.Fatal("file rác phải bị từ chối")
 	}
 }
+
+func TestNameSync(t *testing.T) {
+	f := setup(t)
+	h := map[string]string{"Authorization": "Bearer " + f.tok1}
+	rep := func(host string) string {
+		code, m, _ := client(t, f.url).do("POST", "/api/agent/report", map[string]interface{}{"cpu": 1, "host": host}, h)
+		expect(t, code, 200, "report")
+		return m["name"].(string)
+	}
+	if n := rep("DESKTOP-ABC"); n != "PC-KT-01" { // lần đầu chỉ ghi nhận tên Windows
+		t.Fatalf("lần đầu không được đổi tên: %q", n)
+	}
+	if n := rep("KETOAN-02"); n != "KETOAN-02" { // đổi tên trong Windows: MAM đổi theo, agent nhận tên mới
+		t.Fatalf("đổi tên Windows chưa theo: %q", n)
+	}
+	code, _, _ := f.super.do("PUT", "/api/machines/"+f.m1+"/rename", map[string]string{"name": "Kế toán 02"}, nil)
+	expect(t, code, 200, "đổi tên trên Console")
+	if n := rep("KETOAN-02"); n != "Kế toán 02" { // agent nhận tên do quản trị đặt, tên Windows không đè lại
+		t.Fatalf("agent chưa nhận tên mới: %q", n)
+	}
+}

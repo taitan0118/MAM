@@ -39,6 +39,7 @@ type Machine struct {
 	OS          string                 `json:"os"`
 	Group       string                 `json:"group"`
 	IP          string                 `json:"ip"`
+	Host        string                 `json:"host,omitempty"` // tên máy trong Windows lần báo cáo gần nhất
 	MAC         string                 `json:"mac"`
 	MACs        []string               `json:"macs,omitempty"` // MAC thật của mọi card mạng (cho Wake-on-LAN)
 	Hw          map[string]interface{} `json:"hw"`

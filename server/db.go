@@ -7,7 +7,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 
 	_ "github.com/ncruces/go-sqlite3/driver" // SQLite thuần Go (WebAssembly): không cần cgo, build chéo Windows/Mac/Linux như cũ
 	_ "github.com/ncruces/go-sqlite3/embed"
@@ -77,14 +79,31 @@ func splitState(st *State) (map[string]rowVal, error) {
 				id = "#" + strconv.Itoa(i) // phần tử không có id (hoặc trùng): khóa theo vị trí
 			}
 			seen[id] = true
+			if k == "machines" && x.ID != "" {
+				// thông tin phần cứng + danh sách phần mềm (phần lớn dung lượng) để dòng riêng: chỉ ghi khi đổi,
+				// không phải mỗi phút như dòng máy (giờ báo cáo cuối đổi liên tục)
+				var mm map[string]json.RawMessage
+				if json.Unmarshal(it, &mm) == nil {
+					if hw, ok := mm["hw"]; ok {
+						if string(hw) != "null" {
+							out["hw\x00"+x.ID] = rowVal{0, string(hw)}
+						}
+						delete(mm, "hw")
+						it, _ = json.Marshal(mm)
+					}
+				}
+			}
 			out[k+"\x00"+id] = rowVal{i, string(it)}
 		}
 	}
-	var up map[string]json.RawMessage
+	// mỗi lần bật máy một dòng (id = máy/giờ bật): mỗi phút chỉ ghi lại dòng đang bật, không ghi cả năm lịch sử
+	var up map[string][][2]int64
 	json.Unmarshal(top["uptime"], &up)
 	delete(top, "uptime")
-	for id, v := range up {
-		out["uptime\x00"+id] = rowVal{0, string(v)}
+	for id, ss := range up {
+		for _, x := range ss {
+			out["up\x00"+id+"/"+strconv.FormatInt(x[0], 10)] = rowVal{0, "[" + strconv.FormatInt(x[0], 10) + "," + strconv.FormatInt(x[1], 10) + "]"}
+		}
 	}
 	rest, _ := json.Marshal(top)
 	out["state\x00"] = rowVal{0, string(rest)}
@@ -100,7 +119,8 @@ func loadState(db *sql.DB, st *State) (map[string]rowVal, bool, error) {
 	defer rs.Close()
 	cache := map[string]rowVal{}
 	lists := map[string][]json.RawMessage{}
-	up := map[string]json.RawMessage{}
+	up := map[string][][2]int64{}
+	hw := map[string]json.RawMessage{}
 	var base []byte
 	for rs.Next() {
 		var kind, id, data string
@@ -112,8 +132,17 @@ func loadState(db *sql.DB, st *State) (map[string]rowVal, bool, error) {
 		switch kind {
 		case "state":
 			base = []byte(data)
-		case "uptime":
-			up[id] = json.RawMessage(data)
+		case "uptime": // dạng của bản 1.1.49: cả lịch sử một máy trong một dòng
+			var ss [][2]int64
+			json.Unmarshal([]byte(data), &ss)
+			up[id] = append(up[id], ss...)
+		case "up":
+			var x [2]int64
+			if i := strings.LastIndexByte(id, '/'); i > 0 && json.Unmarshal([]byte(data), &x) == nil {
+				up[id[:i]] = append(up[id[:i]], x)
+			}
+		case "hw":
+			hw[id] = json.RawMessage(data)
 		default:
 			lists[kind] = append(lists[kind], json.RawMessage(data))
 		}
@@ -128,8 +157,22 @@ func loadState(db *sql.DB, st *State) (map[string]rowVal, bool, error) {
 	if err := json.Unmarshal(base, &top); err != nil {
 		return nil, false, err
 	}
+	for i, it := range lists["machines"] { // gắn lại phần cứng vào từng máy
+		var mm map[string]json.RawMessage
+		var x struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(it, &x) != nil || hw[x.ID] == nil || json.Unmarshal(it, &mm) != nil {
+			continue
+		}
+		mm["hw"] = hw[x.ID]
+		lists["machines"][i], _ = json.Marshal(mm)
+	}
 	for k, v := range lists {
 		top[k], _ = json.Marshal(v)
+	}
+	for id := range up {
+		sort.Slice(up[id], func(i, j int) bool { return up[id][i][0] < up[id][j][0] })
 	}
 	if len(up) > 0 {
 		top["uptime"], _ = json.Marshal(up)

@@ -66,3 +66,45 @@ func TestSQLiteMigrateAndSave(t *testing.T) {
 		t.Fatalf("dọn nhật ký: xóa %d", n)
 	}
 }
+
+// Phần cứng và từng lần bật máy nằm dòng riêng: báo cáo thường chỉ ghi dòng máy và dòng lần bật đang mở.
+func TestSQLiteSplitRows(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "state.json"), []byte(`{"accounts":[{"id":"a1","user":"admin","role":"super"}],
+		"machines":[{"id":"m1","name":"PC-1","hw":{"apps":[{"n":"Excel"}]}}],
+		"settings":{"temp":80},"uptime":{"m1":[[100,200],[300,400]]}}`), 0o600)
+	s, err := NewServer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	before := map[string]rowVal{}
+	for k, v := range s.rows {
+		before[k] = v
+	}
+	s.st.Machines[0].LastSeen = time.Now()
+	s.st.Uptime["m1"][1][1] = 460 // lần bật đang mở kéo dài thêm
+	s.save()
+	s.mu.Unlock()
+	changed := []string{}
+	for k, v := range s.rows {
+		if before[k] != v {
+			changed = append(changed, strings.ReplaceAll(k, "\x00", ":"))
+		}
+	}
+	if len(changed) != 2 {
+		t.Fatalf("chỉ được ghi dòng máy + dòng lần bật đang mở, lại ghi: %v", changed)
+	}
+	s.db.Close()
+	s2, err := NewServer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := s2.st.Machines[0]
+	if apps, _ := m.Hw["apps"].([]interface{}); len(apps) != 1 {
+		t.Fatalf("mất phần cứng khi mở lại: %+v", m.Hw)
+	}
+	if u := s2.st.Uptime["m1"]; len(u) != 2 || u[0] != [2]int64{100, 200} || u[1] != [2]int64{300, 460} {
+		t.Fatalf("lịch sử bật sai: %v", u)
+	}
+}
