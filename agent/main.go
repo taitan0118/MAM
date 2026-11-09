@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.47"
+const Version = "1.1.48"
 
 //go:embed lib.ps1
 var libPS string
@@ -266,6 +266,7 @@ func runLoop() {
 		}
 	}()
 	go threatLoop()
+	go eventLoop()
 	go enableWOL()
 	go uiWatchdog()
 	startLocal()
@@ -295,6 +296,10 @@ func runLoop() {
 		if th := currentThreats(); len(th) > 0 {
 			rep["threats"] = th
 		}
+		evs := takeEvents()
+		if len(evs) > 0 {
+			rep["events"] = evs
+		}
 		lastInfo.Lock()
 		lastInfo.rep = rep
 		if hwNow != nil {
@@ -320,6 +325,7 @@ func runLoop() {
 		case r.code == 200:
 			setOnline(true)
 			failStreak = 0
+			ackEvents(len(evs))
 			if sendHw {
 				mu.Lock()
 				hwNew = false

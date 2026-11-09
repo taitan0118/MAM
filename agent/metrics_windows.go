@@ -129,11 +129,17 @@ func activeUser() string {
 }
 
 func runPS(script string, timeout time.Duration) ([]byte, error) {
-	f := filepath.Join(exeDir(), "tmp.ps1")
-	if err := os.WriteFile(f, append([]byte{0xEF, 0xBB, 0xBF}, []byte(libPS+"\n"+script)...), 0o600); err != nil {
+	// mỗi lần chạy một file riêng: các vòng quét (phần cứng, virus, nhật ký lỗi) chạy song song
+	tf, err := os.CreateTemp(exeDir(), "tmp-*.ps1")
+	if err != nil {
 		return nil, err
 	}
+	f := tf.Name()
 	defer os.Remove(f)
+	_, err = tf.Write(append([]byte{0xEF, 0xBB, 0xBF}, []byte(libPS+"\n"+script)...))
+	if tf.Close(); err != nil {
+		return nil, err
+	}
 	c := hidden("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", f)
 	var out bytes.Buffer
 	c.Stdout = &out

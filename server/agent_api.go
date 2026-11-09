@@ -19,6 +19,7 @@ type reportIn struct {
 	Hw      map[string]interface{} `json:"hw"`
 	Threats []ThreatIn             `json:"threats"`
 	Macs    []string               `json:"macs"`
+	Events  []SysEvent             `json:"events"`
 }
 
 func (s *Server) agentMachine(r *http.Request) *Machine {
@@ -119,7 +120,8 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 		m.Hw = in.Hw
 	}
 	m.LastSeen = now
-	newUp := s.upMark(m.ID, now.Unix(), in.Uptime)
+	s.upMark(m.ID, now.Unix(), in.Uptime)  // không lưu ngay: 1000 máy bật cùng lúc sẽ nghẽn; watchdog lưu mỗi phút
+	defer evAppend(s.dir, m.ID, in.Events) // chạy sau khi đã nhả s.mu
 	s.threatsIn(m, in.Threats)
 	s.patchCheck(m)
 	if now.Sub(l.lastHist) >= 30*time.Second {
@@ -143,7 +145,7 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 			out = append(out, map[string]interface{}{"id": c.ID, "type": c.Type, "args": c.Args})
 		}
 	}
-	if persist || newUp {
+	if persist {
 		s.save()
 	}
 	interval := 5

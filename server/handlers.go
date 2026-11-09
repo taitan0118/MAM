@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -102,7 +103,7 @@ func (s *Server) hMachine(w http.ResponseWriter, r *http.Request, me *Account) {
 		s.hBulk(w, r, me)
 		return
 	}
-	if len(parts) > 1 && (s.machineExtra(w, r, me, id, parts[1:]) || s.screenExtra(w, r, me, id, parts[1:])) {
+	if len(parts) > 1 && (s.machineExtra(w, r, me, id, parts[1:]) || s.screenExtra(w, r, me, id, parts[1:]) || s.eventsExtra(w, r, me, id, parts[1:])) {
 		return
 	}
 	switch {
@@ -291,6 +292,7 @@ func (s *Server) hMachine(w http.ResponseWriter, r *http.Request, me *Account) {
 		m.Revoked = true
 		removeAvatar("m", id)
 		delete(s.st.Uptime, id)
+		os.Remove(evFile(s.dir, id))
 		delete(s.live, id)
 		name := m.Name
 		s.save()
@@ -660,7 +662,7 @@ func (s *Server) hSettings(w http.ResponseWriter, r *http.Request, me *Account) 
 		st := s.st.Settings
 		s.mu.RUnlock()
 		if me.Role != "super" {
-			st.EnrollKey, st.Telegram, st.Webhook, st.SmtpUser, st.SmtpTo = "", "", "", "", ""
+			st.EnrollKey, st.Telegram, st.Webhook, st.SmtpUser, st.SmtpTo, st.BackupDir = "", "", "", "", "", ""
 		}
 		st.SmtpPass = "" // không trả mật khẩu SMTP về client
 		jok(w, st)
@@ -679,6 +681,7 @@ func (s *Server) hSettings(w http.ResponseWriter, r *http.Request, me *Account) 
 	s.mu.Lock()
 	in.NoAutoUpdate = s.st.Settings.NoAutoUpdate
 	in.NoMachineAvatar = s.st.Settings.NoMachineAvatar
+	in.BackupDir = s.st.Settings.BackupDir
 	if in.SmtpPass == "" {
 		in.SmtpPass = s.st.Settings.SmtpPass // trống = giữ mật khẩu SMTP cũ
 	}

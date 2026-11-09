@@ -15,7 +15,7 @@ const (
 	upKeep = 366 * 24 * 3600 // giữ chi tiết 1 năm
 )
 
-// upMark: gọi khi đang giữ s.mu, mỗi lần agent báo cáo. Trả true khi mở lần bật mới (nên lưu ngay).
+// upMark: gọi khi đang giữ s.mu, mỗi lần agent báo cáo. Trả true khi mở lần bật mới.
 func (s *Server) upMark(id string, now, uptime int64) bool {
 	if s.st.Uptime == nil {
 		s.st.Uptime = map[string][][2]int64{}

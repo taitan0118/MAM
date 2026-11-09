@@ -1096,3 +1096,82 @@ func TestUptimeSessions(t *testing.T) {
 		t.Fatalf("thiếu ngày phải báo lỗi: %d", code)
 	}
 }
+
+func TestMachineEvents(t *testing.T) {
+	f := setup(t)
+	now := time.Now().Unix()
+	send := func(ev []map[string]interface{}) {
+		code, _, _ := client(t, f.url).do("POST", "/api/agent/report", map[string]interface{}{"cpu": 1, "uptime": 100, "events": ev}, map[string]string{"Authorization": "Bearer " + f.tok1})
+		expect(t, code, 200, "report kèm lỗi")
+	}
+	send([]map[string]interface{}{
+		{"id": "Sys1", "at": now - 60, "log": "System", "src": "Microsoft-Windows-Kernel-Power", "eid": 41, "lvl": 1, "msg": "Tắt đột ngột"},
+		{"id": "App2", "at": now - 30, "log": "Application", "src": "Application Error", "eid": 1000, "lvl": 2, "msg": "chrome.exe"},
+		{"id": "Old3", "at": now - 200*86400, "src": "disk", "eid": 7, "lvl": 2}, // quá 180 ngày: bỏ
+		{"id": "Warn4", "at": now - 10, "src": "x", "eid": 1, "lvl": 3},          // không phải lỗi: bỏ
+	})
+	send([]map[string]interface{}{{"id": "Sys1", "at": now - 60, "src": "Microsoft-Windows-Kernel-Power", "eid": 41, "lvl": 1}}) // gửi lại: bỏ trùng
+	code, m, _ := f.super.do("GET", "/api/machines/"+f.m1+"/events", nil, nil)
+	expect(t, code, 200, "xem lỗi")
+	ev := m["events"].([]interface{})
+	if len(ev) != 2 || ev[0].(map[string]interface{})["id"] != "App2" {
+		t.Fatalf("lỗi lưu sai: %v", ev)
+	}
+	if code, _, _ := f.tech.do("GET", "/api/machines/"+f.m2+"/events", nil, nil); code != 404 {
+		t.Fatalf("tech xem lỗi máy ngoài phạm vi: %d", code)
+	}
+	if code, _, _ := f.view.do("GET", "/api/machines/"+f.m1+"/events", nil, nil); code != 200 {
+		t.Fatalf("view phải xem được lỗi máy trong phạm vi: %d", code)
+	}
+	// dọn: giữ mục trong hạn
+	evPrune(f.s.dir)
+	if l := evRead(f.s.dir, f.m1); len(l) != 2 {
+		t.Fatalf("dọn xóa nhầm: %v", l)
+	}
+}
+
+func TestMirrorBackup(t *testing.T) {
+	// giữ mới nhất mỗi giờ (24), ngày (7), tuần (4), tháng (12)
+	names := []string{}
+	base := time.Date(2026, 11, 9, 10, 0, 0, 0, time.Local)
+	for h := 0; h < 24*400; h++ { // 400 ngày, mỗi giờ một bản
+		names = append(names, "mam-"+base.Add(-time.Duration(h)*time.Hour).Format("20060102-1504")+".zip")
+	}
+	keep := keepMirrors(names)
+	if len(keep) < 40 || len(keep) > 47 || !keep[names[0]] {
+		t.Fatalf("giữ %d bản, bản mới nhất giữ=%v", len(keep), keep[names[0]])
+	}
+	f := setup(t)
+	dest := filepath.Join(t.TempDir(), "o-khac")
+	code, m, _ := f.super.do("POST", "/api/backups/mirror", map[string]string{"dir": dest}, nil)
+	expect(t, code, 200, "đặt thư mục sao lưu")
+	if m["ok"] != true || m["file"] == "" {
+		t.Fatalf("sao lưu chưa chạy: %v", m)
+	}
+	zs, _ := filepath.Glob(filepath.Join(dest, "mam-*.zip"))
+	if len(zs) != 1 || verifyMirror(zs[0]) != nil {
+		t.Fatalf("file sao lưu: %v", zs)
+	}
+	if code, _, _ := f.tech.do("POST", "/api/backups/mirror", map[string]bool{"run": true}, nil); code != 403 {
+		t.Fatalf("tech không được sao lưu: %d", code)
+	}
+	if code, _, _ := f.super.do("POST", "/api/backups/mirror", map[string]string{"dir": "tuong-doi"}, nil); code != 400 {
+		t.Fatalf("đường dẫn tương đối phải bị từ chối: %d", code)
+	}
+	// thư mục không ghi được: báo lỗi + mở cảnh báo máy chủ
+	bad := filepath.Join(zs[0], "khong-the") // nằm trong một file nên không tạo được
+	code, _, _ = f.super.do("POST", "/api/backups/mirror", map[string]string{"dir": bad}, nil)
+	if code != 500 {
+		t.Fatalf("thư mục hỏng phải báo lỗi: %d", code)
+	}
+	f.s.mu.RLock()
+	open := false
+	for _, a := range f.s.st.Alerts {
+		open = open || (a.Machine == "__server" && a.Kind == "backup" && a.Status == "open")
+	}
+	f.s.mu.RUnlock()
+	if !open {
+		t.Fatal("thiếu cảnh báo sao lưu thất bại")
+	}
+	f.s.checkServerDisk() // không được treo/lỗi trên Linux
+}

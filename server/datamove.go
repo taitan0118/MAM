@@ -126,6 +126,16 @@ func (s *Server) moveData(newDir string) (string, error) {
 			}
 		}
 	}
+	evMu.Lock()
+	defer evMu.Unlock()
+	if files, _ := filepath.Glob(filepath.Join(old, "events", "*.jsonl")); len(files) > 0 {
+		os.MkdirAll(filepath.Join(newDir, "events"), 0o700)
+		for _, f := range files {
+			if err := copyFile(f, filepath.Join(newDir, "events", filepath.Base(f))); err != nil {
+				return fail(err)
+			}
+		}
+	}
 	rp := filepath.Join(s.boot, redirectFile)
 	if err := os.WriteFile(rp+".tmp", []byte(newDir+"\n"), 0o600); err != nil {
 		return fail(errors.New("Không ghi được con trỏ dữ liệu: " + err.Error()))

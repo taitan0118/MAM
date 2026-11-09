@@ -235,7 +235,7 @@ function tick() {
   // tab Tiến trình/Ổ cứng nạp dữ liệu theo yêu cầu: làm mới tự động sẽ xóa kết quả vừa lấy
   if (route.view === 'chat' && (document.activeElement || {}).tagName === 'TEXTAREA' && document.activeElement.value) return;
   if (route.view === 'chat') { render(true); return; }
-  if (route.view === 'detail' && (route.tab === 'procs' || route.tab === 'disk' || route.tab === 'up')) return;
+  if (route.view === 'detail' && (route.tab === 'procs' || route.tab === 'disk' || route.tab === 'up' || route.tab === 'err')) return;
   if (route.view === 'overview' || route.view === 'machines' || route.view === 'detail' || route.view === 'alerts') render(true);
 }
 let rendering = 0;
@@ -282,7 +282,7 @@ VIEWS.overview = async v => {
     el('div', { class: 'card-b' }, el('div', { class: 'tiles scrollbox' }, tiles.length ? tiles : el('div', { class: 'empty' }, ml.length ? 'Không có máy nào ở mức này' : 'Chưa có máy')),
       ''));
   const rowCss = 'display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--border);cursor:pointer';
-  const alerts = card('Cảnh báo gần đây', null, el('div', { class: 'scrollbox short' }, (o.recent || []).length ? o.recent.map(a => el('div', { style: rowCss, onclick: () => go('detail', a.machine) },
+  const alerts = card('Cảnh báo gần đây', null, el('div', { class: 'scrollbox short' }, (o.recent || []).length ? o.recent.map(a => el('div', { style: rowCss, onclick: () => a.machine === '__server' ? go('settings') : go('detail', a.machine) },
     pill(a.sev === 'crit' ? 'crit' : 'warn', a.sev === 'crit' ? 'Nghiêm trọng' : 'Cảnh báo'), el('div', { style: 'flex:1;min-width:0' }, el('b', {}, a.name), el('div', { style: 'font-size:12.5px;color:var(--muted)' }, a.msg)), el('span', { style: 'font-size:12px;color:var(--faint)' }, ago(a.opened)))) : el('div', { class: 'empty' }, 'Không có cảnh báo đang mở')),
     el('button', { class: 'btn', style: 'padding:2px 9px;font-size:12px', onclick: () => go('alerts') }, 'Xem tất cả'));
   const cnt = s => rq.filter(q => q.status === s).length;
@@ -422,7 +422,7 @@ VIEWS.detail = async (v, quiet) => {
     el('div', { class: 'card-b', style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
       el('span', { style: 'color:var(--faint);font-size:12.5px' }, 'Máy sẽ hiện hộp thoại xin phép, hoặc vào thẳng nếu bạn nhập đúng mật khẩu điều khiển từ xa. Người ngồi máy luôn bấm Dừng ngay được bất cứ lúc nào.'),
       ctl && !off ? btn('Xin xem màn hình', () => openRemote(m)) : el('span', { style: 'color:var(--faint)' }, off ? 'Máy offline' : 'Ngoài phạm vi của bạn'))));
-  const tabs = el('div', { class: 'tabs', style: 'margin-top:14px' }, [['live', 'Giám sát'], ['hw', 'Phần cứng'], ['disk', 'Ổ cứng'], ['apps', 'Phần mềm'], ['procs', 'Tiến trình'], ['cmd', 'Lệnh gần đây'], ['up', 'Thời gian hoạt động']].map(([k, l]) => el('button', { class: 'tab' + (route.tab === k ? ' on' : ''), onclick: () => { route.tab = k; render(); } }, l)));
+  const tabs = el('div', { class: 'tabs', style: 'margin-top:14px' }, [['live', 'Giám sát'], ['hw', 'Phần cứng'], ['disk', 'Ổ cứng'], ['apps', 'Phần mềm'], ['procs', 'Tiến trình'], ['cmd', 'Lệnh gần đây'], ['up', 'Thời gian hoạt động'], ['err', 'Lỗi của máy']].map(([k, l]) => el('button', { class: 'tab' + (route.tab === k ? ' on' : ''), onclick: () => { route.tab = k; render(); } }, l)));
   v.append(tabs);
   const body = el('div', { style: 'margin-top:14px' }); v.append(body);
   const H = m.hist || [];
@@ -437,6 +437,8 @@ VIEWS.detail = async (v, quiet) => {
     body.append(el('div', { style: 'margin-top:12px;font-size:12px;color:var(--faint)' }, 'Biểu đồ lấy mẫu mỗi 30 giây, giữ tối đa 4 giờ gần nhất kể từ lúc server chạy.'));
   } else if (route.tab === 'up') {
     body.append(await upDetail(m.id));
+  } else if (route.tab === 'err') {
+    body.append(await errTab(m));
   } else if (route.tab === 'hw') {
     const rows = [['Tên máy', m.name], ['Hệ điều hành', hw.os || m.os], ['Phiên bản', hw.osBuild], ['Kiến trúc', hw.arch], ['Hãng và model', hw.model], ['CPU', hw.cpu], ['Nhân / luồng', hw.cores ? hw.cores + ' / ' + (hw.threads || '—') : null], ['RAM', hw.ramGB ? hw.ramGB + ' GB' : null], ['Card đồ họa', hw.gpu], ['Bo mạch chủ', hw.board], ['BIOS', hw.bios], ['Số serial', hw.serial], ['Địa chỉ IP', (hw.ips || [m.ip]).join(', ')], ['Địa chỉ MAC', (hw.macs || [m.mac]).join(', ')], ['Miền / nhóm làm việc', hw.domain], ['Đăng ký lúc', fmtDT(m.registered)]];
     body.append(card('Thông tin máy', 'agent tự đọc, cập nhật mỗi giờ', el('div', { class: 'cols' }, [rows.slice(0, 8), rows.slice(8)].map(r => el('div', {}, r.map(x => srow(x[0], x[1])))))));
@@ -744,7 +746,7 @@ VIEWS.alerts = async v => {
   a = a.filter(x => (AF.sev === 'all' || x.sev === AF.sev) && hit(AF.q, x.name, x.msg)).sort((p, q) => (q.sev === 'crit') - (p.sev === 'crit') || String(q.opened).localeCompare(String(p.opened)));
   v.append(el('div', { class: 'filters' }, el('div', { class: 'seg' }, [['open', 'Đang mở'], ['closed', 'Đã đóng']].map(([k, l]) => el('button', { class: AF.st === k ? 'on' : '', onclick: () => { AF.st = k; render(); } }, l))), el('span', { style: 'color:var(--muted);font-size:12.5px' }, t('{0} cảnh báo', a.length))));
   v.append(el('div', { class: 'filters', style: 'margin-top:10px' }, segBar([['all', 'Mọi mức'], ['crit', 'Nghiêm trọng'], ['warn', 'Cảnh báo']], AF.sev, k => { AF.sev = k; render(); }), searchBox('afq', AF.q, x => AF.q = x, t('Tìm máy hoặc nội dung…'))));
-  v.append(el('div', { class: 'card', style: 'margin-top:12px' }, el('div', { class: 'card-b', style: 'padding:0 16px 8px' }, table(['Mức', 'Máy', 'Nội dung', 'Mở lúc', AF.st === 'closed' ? 'Đóng bởi' : '', ''], a.map(x => el('tr', { onclick: () => go('detail', x.machine) }, el('td', {}, pill(x.sev === 'crit' ? 'crit' : 'warn', x.sev === 'crit' ? 'Nghiêm trọng' : 'Cảnh báo')), el('td', { style: 'font-weight:600' }, x.name), el('td', {}, x.msg), el('td', {}, fmtDT(x.opened)), el('td', {}, AF.st === 'closed' ? (x.by || '—') + ' · ' + fmtDT(x.closed) : ''),
+  v.append(el('div', { class: 'card', style: 'margin-top:12px' }, el('div', { class: 'card-b', style: 'padding:0 16px 8px' }, table(['Mức', 'Máy', 'Nội dung', 'Mở lúc', AF.st === 'closed' ? 'Đóng bởi' : '', ''], a.map(x => el('tr', { onclick: () => x.machine === '__server' ? go('settings') : go('detail', x.machine) }, el('td', {}, pill(x.sev === 'crit' ? 'crit' : 'warn', x.sev === 'crit' ? 'Nghiêm trọng' : 'Cảnh báo')), el('td', { style: 'font-weight:600' }, x.name), el('td', {}, x.msg), el('td', {}, fmtDT(x.opened)), el('td', {}, AF.st === 'closed' ? (x.by || '—') + ' · ' + fmtDT(x.closed) : ''),
     el('td', { style: 'text-align:right' }, AF.st === 'open' && canWrite() ? el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: async e => { e.stopPropagation(); try { await api('POST', '/api/alerts/' + x.id + '/close', {}); render(); } catch (er) { fail(er); } } }, 'Đóng') : ''))), AF.st === 'open' ? 'Không có cảnh báo đang mở' : 'Chưa có cảnh báo nào đã đóng'))));
   v.append(el('div', { style: 'margin-top:12px' }, infoNote('Cảnh báo tự mở khi máy vượt ngưỡng (chỉnh ở mục Cài đặt) và tự đóng khi hết vượt ngưỡng. Mất kết nối quá số phút đã đặt cũng tạo cảnh báo.')));
 };
@@ -1048,6 +1050,24 @@ function rangePicker(from, to, apply, opts) {
   }
   return wrap;
 }
+/* ---------- Sao lưu sang ổ khác + ổ cứng máy chủ ---------- */
+async function mirrorCard() {
+  const st = await api('GET', '/api/backups/mirror');
+  const inp = el('input', { class: 'input', id: 'bkdir', placeholder: 'D:\\MAM-backup hoặc \\\\NAS\\MAM-backup', value: st.dir || '', style: 'flex:1;min-width:220px' });
+  const go2 = async body => { try { await api('POST', '/api/backups/mirror', body); toast('Đã sao lưu'); } catch (e) { fail(e); } render(); };
+  const stat = !st.dir ? infoNote('Chưa bật. Bản sao lưu hằng ngày đang nằm cùng ổ với dữ liệu: ổ máy chủ hỏng là mất cả hai. Hãy chọn một thư mục ở ổ khác, USB hoặc NAS.')
+    : !st.at || new Date(st.at).getFullYear() < 2000 ? el('div', { style: 'color:var(--muted)' }, 'Chưa sao lưu lần nào, bản đầu tiên sẽ chạy trong vài phút.')
+    : st.ok ? el('div', {}, pill('ok', 'Hoạt động tốt'), ' ', t('Lần cuối {0} · {1} · {2}', fmtDT(st.at), st.file, st.size < 1e6 ? Math.ceil(st.size / 1024) + ' KB' : (st.size / 1e6).toFixed(1) + ' MB'))
+    : el('div', {}, pill('crit', 'Lỗi'), ' ', el('span', { style: 'color:var(--crit)' }, t('Lần cuối {0}: {1}', fmtDT(st.at), st.err)));
+  const disks = (st.disk || []).map(d => el('div', { class: 'srow' }, el('span', {}, d.name),
+    el('b', {}, d.totalGB ? t('{0} / {1} GB trống', num(d.freeGB, 0), num(d.totalGB, 0)) : [/^healthy$/i.test(d.health) ? pill('ok', d.health) : pill('crit', d.health || 'Không rõ'), d.wear ? ' · ' + t('mòn {0}%', num(d.wear, 0)) : '', d.readErr ? ' · ' + t('{0} lỗi đọc', d.readErr) : ''])));
+  return card('Sao lưu sang ổ khác', 'mỗi giờ, giữ 24 bản theo giờ, 7 theo ngày, 4 theo tuần, 12 theo tháng', el('div', { style: 'display:flex;flex-direction:column;gap:12px' },
+    el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, inp, el('button', { class: 'btn primary', onclick: () => go2({ dir: inp.value }) }, 'Lưu và sao lưu ngay'), st.dir ? el('button', { class: 'btn', onclick: () => go2({ run: true }) }, 'Sao lưu ngay') : null, st.dir ? el('button', { class: 'btn', onclick: () => go2({ dir: '' }) }, 'Tắt') : null),
+    stat,
+    el('div', { style: 'font-size:12px;color:var(--faint)' }, 'Mỗi bản là một file zip gồm toàn bộ dữ liệu (máy, tài khoản, cài đặt, lịch sử bật máy, lỗi của máy, nhật ký thao tác, ảnh đại diện) và được mở lại kiểm tra ngay sau khi ghi. Sao lưu lỗi thì có cảnh báo đỏ. Thư mục mạng (NAS) phải cho tài khoản chạy dịch vụ MAM ghi vào. Khôi phục: dừng dịch vụ MAM, giải nén file zip vào thư mục dữ liệu, chạy lại.'),
+    el('div', {}, el('div', { style: 'font-weight:600;margin-bottom:4px' }, 'Ổ cứng máy chủ'), disks.length ? disks : el('div', { style: 'color:var(--faint)' }, 'Đang kiểm tra…'),
+      el('div', { style: 'font-size:12px;color:var(--faint);margin-top:6px' }, st.diskAt && new Date(st.diskAt).getFullYear() > 2000 ? t('Kiểm tra mỗi 6 giờ, lần cuối {0}. Ổ có dấu hiệu hỏng hoặc sắp đầy thì có cảnh báo.', fmtDT(st.diskAt)) : 'Kiểm tra mỗi 6 giờ. Ổ có dấu hiệu hỏng hoặc sắp đầy thì có cảnh báo.'))));
+}
 /* ---------- Thời gian hoạt động (máy bật lúc nào, bao lâu) ---------- */
 // Server trả các lần bật [bắt đầu, kết thúc] (giây unix); chia theo ngày bằng giờ của trình duyệt.
 const UP = { per: 'day', ref: null };
@@ -1128,16 +1148,18 @@ function upTimeline(ss) {
   return el('div', { class: 'up-chart', html: `<svg viewBox="0 0 ${W} 74">${o}</svg>` });
 }
 // biểu đồ cột tổng giờ: items [{lb, sub, v (phút), dim}]
-function upBars(items) {
-  const W = 960, H = 230, L = 34, B = 40, T = 22, max = Math.max(60, ...items.map(i => i.v));
-  const step = max > 6000 ? 3000 : max > 2400 ? 1200 : max > 900 ? 240 : 120, top = Math.ceil(max / step) * step;
+// n = true: cột là số lần (lỗi), không phải phút
+function upBars(items, n) {
+  const W = 960, H = 230, L = 34, B = 40, T = 22, max = Math.max(n ? 4 : 60, ...items.map(i => i.v));
+  const p10 = 10 ** Math.floor(Math.log10(max / 4)), q = max / 4 / p10;
+  const step = n ? Math.max(1, (q <= 1 ? 1 : q <= 2 ? 2 : q <= 5 ? 5 : 10) * p10) : max > 6000 ? 3000 : max > 2400 ? 1200 : max > 900 ? 240 : 120, top = Math.ceil(max / step) * step;
   const y = v => H - B - v / top * (H - B - T), bw = (W - L) / items.length;
   let o = '';
-  for (let v = 0; v <= top; v += step) o += `<line class="up-grid" x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${t('{0}g', v / 60)}</text>`;
+  for (let v = 0; v <= top; v += step) o += `<line class="up-grid" x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${n ? v : t('{0}g', v / 60)}</text>`;
   items.forEach((it, i) => {
     const cx = L + bw * i + bw / 2, w = Math.min(46, bw * .62), hg = Math.max(it.v ? 2 : 0, H - B - y(it.v));
-    o += `<rect class="up-b${it.dim ? ' dim' : ''}" x="${cx - w / 2}" y="${H - B - hg}" width="${w}" height="${hg}" rx="4"><title>${it.lb} ${it.sub || ''}: ${upDur(it.v)}</title></rect>`;
-    if (it.v && bw > 26) o += `<text class="up-val" x="${cx}" y="${H - B - hg - 6}" text-anchor="middle">${upH(it.v)}</text>`;
+    o += `<rect class="up-b${it.dim ? ' dim' : ''}" x="${cx - w / 2}" y="${H - B - hg}" width="${w}" height="${hg}" rx="4"><title>${it.lb} ${it.sub || ''}: ${n ? t('{0} lỗi', it.v) : upDur(it.v)}</title></rect>`;
+    if (it.v && bw > 26) o += `<text class="up-val" x="${cx}" y="${H - B - hg - 6}" text-anchor="middle">${n ? it.v : upH(it.v)}</text>`;
     o += `<text class="up-lb" x="${cx}" y="${H - B + 16}" text-anchor="middle">${it.lb}</text>`;
     if (it.sub) o += `<text x="${cx}" y="${H - B + 31}" text-anchor="middle">${it.sub}</text>`;
   });
@@ -1176,6 +1198,69 @@ async function upDetail(id) {
     wrap.append(card('Tổng giờ từng tháng trong năm', '', upBars(Array.from({ length: 12 }, (_, i) => { const ds = st.ds.filter(x => x.d.getMonth() === i); return { lb: t('T{0}', i + 1), v: ds.reduce((a, x) => a + upSum(x.ss), 0), dim: ds[0].fut }; }))));
   }
   wrap.append(el('div', { style: 'font-size:12px;color:var(--faint)' }, 'Máy tính là đang bật khi agent còn báo về server. Mất liên lạc quá 2 phút là tắt; khởi động lại được tách thành lần bật mới. Dữ liệu có từ khi cài bản 1.1.47 và giữ 1 năm.'));
+  return wrap;
+}
+/* ---------- Lỗi của máy (180 ngày) ---------- */
+// Nhóm lỗi theo nguồn trong nhật ký sự kiện Windows; tên nguồn/mã sự kiện là chuẩn của Microsoft.
+const ERRCAT = { crash: ['Màn hình xanh, tắt đột ngột', 'crit'], disk: ['Ổ cứng', 'crit'], hw: ['Phần cứng', 'crit'], app: ['Ứng dụng bị đóng, treo', 'warn'], drv: ['Driver', 'warn'], update: ['Cập nhật Windows', 'warn'], svc: ['Dịch vụ Windows', 'warn'], mam: ['Cảnh báo MAM', 'info'], other: ['Lỗi khác', 'off'] };
+function errCat(e) {
+  const s = e.src || '', id = e.eid;
+  if (e.mam) return 'mam';
+  if ((/Kernel-Power$/.test(s) && id === 41) || (s === 'EventLog' && id === 6008) || /BugCheck|WER-SystemErrorReporting/.test(s)) return 'crash';
+  if (/WHEA-Logger/.test(s)) return 'hw';
+  if (/^(disk|Ntfs|volmgr|storahci|stornvme|iaStorA?V?|Microsoft-Windows-Ntfs|Microsoft-Windows-StorPort)$/i.test(s)) return 'disk';
+  if (s === 'Application Error' || s === 'Application Hang') return 'app';
+  if (/WindowsUpdateClient/.test(s)) return 'update';
+  if (s === 'Service Control Manager') return 'svc';
+  if (/^Display$|nvlddmkm|amdkmdag|igfx|Kernel-PnP/i.test(s)) return 'drv';
+  return 'other';
+}
+function errTitle(e, c) {
+  if (c === 'mam') return e.msg;
+  if (c === 'crash') return e.eid === 41 ? 'Máy tắt đột ngột (mất điện, treo hoặc giữ nút nguồn)' : e.eid === 6008 ? 'Lần tắt máy trước không đúng cách' : 'Màn hình xanh (BSOD)';
+  return { disk: 'Ổ cứng báo lỗi đọc/ghi', hw: 'Lỗi phần cứng (CPU, RAM, bo mạch)', app: e.src === 'Application Hang' ? 'Ứng dụng bị treo (Not Responding)' : 'Ứng dụng bị đóng đột ngột', drv: 'Driver bị lỗi', update: 'Cài bản cập nhật Windows thất bại', svc: 'Dịch vụ Windows bị lỗi hoặc dừng đột ngột' }[c] || e.src;
+}
+async function errTab(m) {
+  const r = await api('GET', '/api/machines/' + m.id + '/events');
+  const all = r.events.map(e => ({ ...e })).concat(r.alerts.map(a => ({ at: a.at, mam: 1, src: 'MAM', eid: '', lvl: a.sev === 'crit' ? 1 : 2, msg: a.msg })));
+  all.forEach(e => { e.c = errCat(e); });
+  all.sort((a, b) => b.at - a.at);
+  // gom lỗi giống nhau trong cùng một ngày thành một dòng
+  const rows = [], idx = {};
+  for (const e of all) {
+    const d = new Date(e.at * 1000), k = d.toDateString() + '|' + e.src + '|' + e.eid + '|' + e.msg;
+    if (idx[k]) { idx[k].n++; idx[k].first = e.at; continue; }
+    rows.push(idx[k] = { ...e, n: 1, first: e.at });
+  }
+  const cnt = c => all.filter(e => e.c === c).length;
+  const wrap = el('div', { style: 'display:flex;flex-direction:column;gap:12px' });
+  if (!/win/i.test(r.os || m.os || '')) wrap.append(infoNote('Nhật ký lỗi chỉ đọc được trên máy Windows. Máy này chỉ có cảnh báo của MAM.'));
+  wrap.append(el('div', { class: 'kpis up-kpis' },
+    kpi('Tổng số lỗi', 'var(--accent)', all.length, t('trong {0} ngày qua', r.days)),
+    kpi('Màn hình xanh, tắt đột ngột', 'var(--crit)', cnt('crash'), 'Kernel-Power 41, BugCheck, EventLog 6008'),
+    kpi('Ổ cứng và phần cứng', 'var(--warn)', cnt('disk') + cnt('hw'), 'Nên sao lưu dữ liệu nếu tăng dần'),
+    kpi('Ứng dụng bị đóng, treo', 'var(--muted)', cnt('app'), 'Application Error, Application Hang')));
+  // số lỗi theo tuần, 26 tuần gần nhất
+  const w0 = upMon(upToday()), weeks = Array.from({ length: 26 }, (_, i) => ({ d: upAdd(w0, -7 * (25 - i)), v: 0 }));
+  for (const e of all) { const k = Math.floor((e.at * 1000 - weeks[0].d.getTime()) / (7 * 864e5)); if (k >= 0 && k < 26) weeks[k].v++; }
+  wrap.append(card('Số lỗi theo tuần', '26 tuần gần nhất', upBars(weeks.map((w, i) => ({ lb: i % 2 ? '' : upDD(w.d), v: w.v })), true)));
+  const sel = select([['all', t('Tất cả') + ' (' + all.length + ')'], ...Object.keys(ERRCAT).filter(c => cnt(c)).map(c => [c, t(ERRCAT[c][0]) + ' (' + cnt(c) + ')'])], 'all', () => draw());
+  const q = el('input', { class: 'input', id: 'errq', placeholder: 'Tìm theo nội dung, nguồn, mã lỗi…', style: 'max-width:300px' });
+  const box = el('div', {});
+  function draw() {
+    const c = sel.value, k = q.value.trim().toLowerCase();
+    const l = rows.filter(e => (c === 'all' || e.c === c) && (!k || (e.msg + ' ' + e.src + ' ' + e.eid + ' ' + t(errTitle(e, e.c))).toLowerCase().includes(k)));
+    box.replaceChildren(table(['Thời gian', 'Loại', 'Lỗi', 'Nguồn', { t: 'Số lần', cls: 'r' }], l.slice(0, 500).map(e => el('tr', { class: 'nohover' },
+      el('td', { class: 'mono', style: 'white-space:nowrap' }, fmtDT(e.at * 1000)),
+      el('td', { style: 'white-space:nowrap' }, pill(ERRCAT[e.c][1], ERRCAT[e.c][0])),
+      el('td', { style: 'min-width:260px' }, el('div', { style: 'font-weight:600' }, errTitle(e, e.c)), e.mam ? null : el('div', { style: 'font-size:12px;color:var(--faint);margin-top:2px;white-space:normal' }, e.msg)),
+      el('td', { style: 'font-size:12.5px;color:var(--muted)' }, e.mam ? 'MAM' : e.src + ' · ' + e.eid),
+      el('td', { class: 'r mono' }, e.n > 1 ? '×' + e.n : '1'))), all.length ? 'Không có lỗi nào khớp' : 'Không ghi nhận lỗi nào trong 180 ngày qua'));
+    if (l.length > 500) box.append(el('div', { style: 'margin-top:8px;font-size:12px;color:var(--faint)' }, t('Đang hiện 500 dòng mới nhất trong {0} dòng. Dùng ô tìm kiếm để lọc.', l.length)));
+  }
+  draw(); q.oninput = draw;
+  wrap.append(card('Danh sách lỗi', 'lỗi giống nhau trong cùng ngày được gộp một dòng', el('div', {}, el('div', { class: 'filters', style: 'margin-bottom:10px' }, sel, q), box)),
+    el('div', { style: 'font-size:12px;color:var(--faint)' }, 'Đọc từ nhật ký sự kiện Windows (System, Application) ở mức Lỗi và Nghiêm trọng, cập nhật khoảng 10 phút một lần, giữ 180 ngày. Cần agent 1.1.48 trở lên; lần đầu agent lấy lại lỗi cũ còn trong nhật ký Windows.'));
   return wrap;
 }
 // Trang "Thời gian hoạt động": mọi máy trong phạm vi
@@ -1485,7 +1570,8 @@ VIEWS.settings = async v => {
     const list2 = el('div', {});
     const renderBk = () => { list2.innerHTML = ''; list2.append(table(['Thời điểm', 'Dung lượng', ''], backups.map(b => el('tr', { class: 'nohover' }, el('td', { class: 'mono' }, fmtDT(b.time)), el('td', { class: 'mono' }, Math.round(b.size / 1024) + ' KB'), el('td', { style: 'text-align:right' }, isSuper() ? el('a', { class: 'btn', style: 'padding:3px 9px;font-size:12px', href: '/api/backups/' + b.name }, 'Tải') : null))), 'Chưa có bản sao lưu nào')); };
     renderBk();
-    v.append(el('div', { style: 'margin-top:14px' }, card('Sao lưu dữ liệu', 'tự động mỗi ngày, giữ 30 bản gần nhất', el('div', {}, isSuper() ? el('div', { style: 'margin-bottom:10px' }, el('button', { class: 'btn', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => { try { await api('POST', '/api/backups', {}); toast('Đã sao lưu'); render(); } catch (e) { fail(e); } } }, 'Sao lưu ngay')) : null, list2))));
+    v.append(el('div', { style: 'margin-top:14px' }, card('Sao lưu dữ liệu', 'tự động mỗi ngày, giữ 30 bản gần nhất, cùng ổ với dữ liệu', el('div', {}, isSuper() ? el('div', { style: 'margin-bottom:10px' }, el('button', { class: 'btn', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => { try { await api('POST', '/api/backups', {}); toast('Đã sao lưu'); render(); } catch (e) { fail(e); } } }, 'Sao lưu ngay')) : null, list2))));
+    if (isSuper()) v.append(el('div', { style: 'margin-top:14px' }, await mirrorCard()));
   }
   v.append(el('div', { style: 'margin-top:14px' }, card('Về MAM', null, el('div', {}, srow('Phiên bản server', (await (await fetch('/api/status')).json()).version), srow('Bản quyền', '© 2026 Nguyễn Tấn Tài (Missing)')))));
 };

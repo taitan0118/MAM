@@ -48,18 +48,17 @@ func (s *Server) cond(m *Machine, kind, sev string, on bool, msg string) {
 		if len(s.st.Alerts) > 2000 {
 			s.st.Alerts = s.st.Alerts[len(s.st.Alerts)-1500:]
 		}
-		s.save()
+		// không lưu ngay: cả nghìn máy tắt cùng lúc sẽ ghi file hàng nghìn lần; watchdog lưu mỗi phút
 		s.notify(s.st.Settings, "Cảnh báo: "+m.Name, msg)
 	case !on && open != nil:
 		open.Status, open.Closed, open.By = "closed", time.Now(), "tự động"
-		s.save()
 	}
 }
 
 // watchdog chạy nền: mất kết nối, lệnh treo, lưu lastSeen, sao lưu hằng ngày.
 func (s *Server) watchdog() {
 	tick := time.NewTicker(15 * time.Second)
-	lastSave, lastBackup := time.Now(), time.Time{}
+	lastSave, lastBackup, lastMirror, lastDisk := time.Now(), time.Time{}, time.Now().Add(-55*time.Minute), time.Time{}
 	for range tick.C {
 		s.mu.Lock()
 		cfg := s.st.Settings
@@ -95,7 +94,19 @@ func (s *Server) watchdog() {
 		s.mu.Unlock()
 		if now.Sub(lastBackup) > 24*time.Hour {
 			s.backup()
+			s.mu.RLock()
+			dir := s.dir
+			s.mu.RUnlock()
+			evPrune(dir)
 			lastBackup = now
+		}
+		if now.Sub(lastMirror) > time.Hour {
+			lastMirror = now
+			go s.runMirror()
+		}
+		if now.Sub(lastDisk) > 6*time.Hour {
+			lastDisk = now
+			go s.checkServerDisk()
 		}
 	}
 }
