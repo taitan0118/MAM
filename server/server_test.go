@@ -31,7 +31,8 @@ func newSrv(t *testing.T) (*Server, string) {
 		t.Fatal(err)
 	}
 	ts := httptest.NewServer(s.routes())
-	t.Cleanup(ts.Close)
+	// đóng DB (s.db có thể đã đổi sau moveData) để Windows xóa được thư mục tạm
+	t.Cleanup(func() { ts.Close(); s.db.Close() })
 	return s, ts.URL
 }
 
@@ -442,7 +443,11 @@ func TestPersistence(t *testing.T) {
 	c.do("POST", "/api/setup", map[string]string{"name": "Admin", "user": "admin", "password": "Matkhau2026"}, nil)
 	c.do("POST", "/api/groups", map[string]string{"name": "Nhóm A"}, nil)
 	ts.Close()
+	s.db.Close()
 	s2, err := NewServer(dir)
+	if err == nil {
+		defer s2.db.Close()
+	}
 	if err != nil || len(s2.st.Accounts) != 1 || len(s2.st.Groups) != 1 {
 		t.Fatal("dữ liệu không được nạp lại")
 	}
@@ -520,6 +525,9 @@ func TestMoveData(t *testing.T) {
 		t.Fatalf("resolveDir = %q, %v", d, err)
 	}
 	s2, err := NewServer(d)
+	if err == nil {
+		defer s2.db.Close()
+	}
 	if err != nil || len(s2.st.Accounts) != 3 || len(s2.st.Machines) != 2 {
 		t.Fatalf("mất dữ liệu sau khi chuyển: %v", err)
 	}
@@ -530,6 +538,8 @@ func TestMoveData(t *testing.T) {
 		t.Fatal("mất nhật ký sau khi chuyển")
 	}
 	// thư mục đích biến mất (ổ chưa gắn): báo lỗi, không tạo dữ liệu trống
+	s2.db.Close() // Windows không xóa được thư mục khi mam.db còn mở
+	f.s.db.Close()
 	os.RemoveAll(nd)
 	if _, err := resolveDir(old); err == nil {
 		t.Fatal("phải báo lỗi khi thư mục dữ liệu mới không còn")

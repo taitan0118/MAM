@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.51"
+const Version = "1.1.52"
 
 //go:embed web
 var webFS embed.FS

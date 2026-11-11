@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -228,6 +229,7 @@ type Server struct {
 	fails   map[string]*failRec
 	tok     map[string]*Machine // băm token → máy
 	dirty   bool
+	saveBad bool // lần save gần nhất lỗi (ổ đầy, file bị khóa...): đã ghi log + mở cảnh báo máy chủ
 	db      *sql.DB
 	rows    map[string]rowVal // nội dung từng dòng trong mam.db ở lần ghi gần nhất, để save() chỉ ghi phần đổi
 	auditMu sync.Mutex
@@ -263,10 +265,14 @@ func NewServer(dir string) (*Server, error) {
 	}
 	s.rows = rows
 	if !ok {
-		if err := s.migrateJSON(); err != nil {
-			db.Close()
-			return nil, err
-		}
+		err = s.migrateJSON()
+	}
+	if err == nil {
+		err = s.migrateAudit()
+	}
+	if err != nil {
+		db.Close()
+		return nil, err
 	}
 	if s.st.Settings.TempC == 0 {
 		s.st.Settings = defaultSettings()
@@ -280,11 +286,21 @@ func NewServer(dir string) (*Server, error) {
 // save ghi những bản ghi đã đổi vào mam.db trong một giao dịch. Gọi khi đang giữ s.mu.
 func (s *Server) save() {
 	cur, err := splitState(&s.st)
-	if err != nil {
+	if err == nil {
+		err = writeRows(s.db, s.rows, cur)
+	}
+	if err != nil { // giữ s.rows cũ: lần save sau ghi lại phần chưa lưu được
+		if !s.saveBad { // chỉ ghi log lần đầu, không ghi lại mỗi lần save
+			log.Printf(T("Không lưu được dữ liệu vào mam.db: %v"), err)
+		}
+		s.saveBad = true
+		s.cond(srvM, "save", "crit", true, "Không lưu được dữ liệu vào mam.db: "+err.Error())
 		return
 	}
-	if err := writeRows(s.db, s.rows, cur); err != nil {
-		return // giữ s.rows cũ: lần save sau ghi lại phần chưa lưu được
+	if s.saveBad {
+		s.saveBad = false
+		log.Print(T("Đã lưu lại được dữ liệu vào mam.db"))
+		s.cond(srvM, "save", "crit", false, "")
 	}
 	s.rows = cur
 	s.dirty = false
@@ -333,7 +349,9 @@ func (s *Server) audit(e AuditEntry) {
 	e.T = time.Now()
 	s.auditMu.Lock()
 	defer s.auditMu.Unlock()
-	s.insertAudit(e)
+	if err := s.insertAudit(e); err != nil {
+		log.Printf(T("Không ghi được nhật ký thao tác: %v"), err)
+	}
 }
 
 func (s *Server) readAudit(max int) []AuditEntry {

@@ -239,15 +239,26 @@ func (s *Server) migrateJSON() error {
 		return err
 	}
 	s.rows = cur
-	ap := filepath.Join(s.dir, "audit.jsonl")
-	if ab, err := os.ReadFile(ap); err == nil {
-		if err := s.importAudit(ab); err != nil {
-			return err
-		}
-		os.Rename(ap, ap+".migrated")
-	}
 	os.Rename(p, p+".migrated") // giữ lại để đối chiếu, không xóa
 	return nil
+}
+
+// migrateAudit nhập audit.jsonl cũ khi bảng nhật ký còn trống. Gọi mỗi lần khởi động chứ không chỉ lúc nhập
+// state.json: server chết giữa hai bước thì lần bật sau vẫn nhập nốt, không bỏ quên nhật ký trên ổ.
+func (s *Server) migrateAudit() error {
+	ap := filepath.Join(s.dir, "audit.jsonl")
+	ab, err := os.ReadFile(ap)
+	if err != nil {
+		return nil
+	}
+	var n int
+	if err := s.db.QueryRow(`SELECT count(*) FROM audit`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	if err := s.importAudit(ab); err != nil {
+		return err
+	}
+	return os.Rename(ap, ap+".migrated")
 }
 
 // ---------- nhật ký thao tác ----------

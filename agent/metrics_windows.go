@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -141,8 +142,8 @@ func runPS(script string, timeout time.Duration) ([]byte, error) {
 		return nil, err
 	}
 	c := hidden("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", f)
-	var out bytes.Buffer
-	c.Stdout = &out
+	var out, errb bytes.Buffer
+	c.Stdout, c.Stderr = &out, &errb
 	if err := c.Start(); err != nil {
 		return nil, err
 	}
@@ -150,6 +151,13 @@ func runPS(script string, timeout time.Duration) ([]byte, error) {
 	go func() { done <- c.Wait() }()
 	select {
 	case err := <-done:
+		if msg := strings.Join(strings.Fields(errb.String()), " "); err != nil && msg != "" {
+			// kèm lời PowerShell báo, không thì log chỉ có "exit status 1"
+			if r := []rune(msg); len(r) > 300 {
+				msg = string(r[:300])
+			}
+			err = fmt.Errorf("%w: %s", err, msg)
+		}
 		return out.Bytes(), err
 	case <-time.After(timeout):
 		c.Process.Kill()

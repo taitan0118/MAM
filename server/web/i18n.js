@@ -1988,6 +1988,10 @@ var PAT = [
 "Restored data from $1",
 "从 $1 恢复了数据"
 ],
+["^Không lưu được dữ liệu vào mam\\.db: (.+)$",
+"Cannot save data to mam.db: $1",
+"无法将数据保存到 mam.db：$1"
+],
 ["^Sao lưu sang thư mục thứ hai thất bại: (.+)$",
 "Backup to the second folder failed: $1",
 "备份到第二文件夹失败：$1"

@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.51"
+const Version = "1.1.52"
 
 //go:embed lib.ps1
 var libPS string
