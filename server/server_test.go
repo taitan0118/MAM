@@ -422,8 +422,32 @@ func TestAgentRename(t *testing.T) {
 	expect(t, code, 400, "tên rỗng")
 	code, _, _ = c.do("POST", "/api/agent/rename", map[string]string{"name": "Tên mới"}, map[string]string{"Authorization": "Bearer sai"})
 	expect(t, code, 401, "token sai")
+	// đổi tên trên agent phải nhập mật khẩu gỡ; chưa đặt mật khẩu gỡ thì không đổi được
 	code, _, _ = c.do("POST", "/api/agent/rename", map[string]string{"name": "Kế toán 02"}, h)
-	expect(t, code, 200, "đổi tên")
+	expect(t, code, 409, "đổi tên khi chưa đặt mật khẩu gỡ")
+	code, _, _ = f.super.do("PUT", "/api/uninstall-password", map[string]string{"password": "Go-MAM-2026"}, nil)
+	expect(t, code, 200, "đặt mật khẩu gỡ")
+	code, _, _ = c.do("POST", "/api/agent/rename", map[string]string{"name": "Kế toán 02"}, h)
+	expect(t, code, 403, "đổi tên không nhập mật khẩu")
+	code, _, _ = c.do("POST", "/api/agent/rename", map[string]string{"name": "Kế toán 02", "code": "sai"}, h)
+	expect(t, code, 403, "đổi tên sai mật khẩu")
+	for _, m := range f.s.st.Machines {
+		if m.Name == "Kế toán 02" {
+			t.Fatal("sai mật khẩu mà vẫn đổi tên")
+		}
+	}
+	code, _, _ = c.do("POST", "/api/agent/rename", map[string]string{"name": "Kế toán 02", "code": "Go-MAM-2026"}, h)
+	expect(t, code, 200, "đổi tên đúng mật khẩu")
+	code, _, _ = c.do("POST", "/api/agent/rename", map[string]string{"name": "Kế toán 02"}, h)
+	expect(t, code, 200, "giữ nguyên tên thì không cần mật khẩu")
+	// sai 5 lần thì khóa, khóa chung với gỡ agent
+	for i := 0; i < 5; i++ {
+		c.do("POST", "/api/agent/rename", map[string]string{"name": "X", "code": "sai"}, h)
+	}
+	code, _, _ = c.do("POST", "/api/agent/rename", map[string]string{"name": "X", "code": "Go-MAM-2026"}, h)
+	expect(t, code, 429, "đổi tên sau 5 lần sai")
+	code, _, _ = c.do("POST", "/api/agent/uninstall", map[string]string{"code": "Go-MAM-2026"}, h)
+	expect(t, code, 429, "gỡ agent cũng bị khóa")
 	found := false
 	for _, m := range f.s.st.Machines {
 		if m.Name == "Kế toán 02" {

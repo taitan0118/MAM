@@ -186,7 +186,6 @@ func (s *Server) hUninstall(w http.ResponseWriter, r *http.Request) {
 		jerr(w, 400, "Dữ liệu không hợp lệ")
 		return
 	}
-	key := "unins|" + clientIP(r)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.agentMachine(r)
@@ -194,15 +193,29 @@ func (s *Server) hUninstall(w http.ResponseWriter, r *http.Request) {
 		jerr(w, 401, "Token không hợp lệ")
 		return
 	}
+	if !s.uninstCodeOK(w, r, m, in.Code) {
+		return
+	}
+	m.Revoked = true
+	delete(s.live, m.ID)
+	s.save()
+	s.audit(AuditEntry{User: "system", Name: "Hệ thống", Role: "sys", IP: clientIP(r), Kind: "Máy", Msg: "Gỡ agent khỏi máy " + m.Name + " bằng mật khẩu gỡ", Target: m.Name, Sens: true})
+	jok(w, map[string]bool{"ok": true})
+}
+
+// uninstCodeOK kiểm mật khẩu gỡ agent (dùng cho gỡ agent và đổi tên máy trên agent); sai thì tự trả lỗi.
+// Sai 5 lần khóa 1 phút theo IP, chung bộ đếm cho cả hai việc. Gọi khi đang giữ s.mu.
+func (s *Server) uninstCodeOK(w http.ResponseWriter, r *http.Request, m *Machine, code string) bool {
+	key := "unins|" + clientIP(r)
 	if f := s.fails[key]; f != nil && time.Now().Before(f.until) {
 		jerr(w, 429, "Sai quá nhiều lần, thử lại sau 1 phút")
-		return
+		return false
 	}
 	if s.st.UninstHash == "" {
 		jerr(w, 409, "Quản trị viên chưa đặt mật khẩu gỡ")
-		return
+		return false
 	}
-	if hashPw(in.Code, s.st.UninstSalt, pbkdfIter) != s.st.UninstHash {
+	if hashPw(code, s.st.UninstSalt, pbkdfIter) != s.st.UninstHash {
 		f := s.fails[key]
 		if f == nil {
 			f = &failRec{}
@@ -219,14 +232,10 @@ func (s *Server) hUninstall(w http.ResponseWriter, r *http.Request) {
 		} else {
 			jerr(w, 403, "Mật khẩu gỡ không đúng. Còn "+itoa(left)+" lần thử")
 		}
-		return
+		return false
 	}
 	delete(s.fails, key)
-	m.Revoked = true
-	delete(s.live, m.ID)
-	s.save()
-	s.audit(AuditEntry{User: "system", Name: "Hệ thống", Role: "sys", IP: clientIP(r), Kind: "Máy", Msg: "Gỡ agent khỏi máy " + m.Name + " bằng mật khẩu gỡ", Target: m.Name, Sens: true})
-	jok(w, map[string]bool{"ok": true})
+	return true
 }
 
 // Người ngồi máy trả lời tin nhắn của admin: ghi vào nhật ký để admin xem ở Console.
@@ -263,9 +272,9 @@ func (s *Server) hReply(w http.ResponseWriter, r *http.Request) {
 	jok(w, map[string]bool{"ok": true})
 }
 
-// hAgentRename: người dùng đổi tên máy ngay trên client, cập nhật lên server (cùng giới hạn như admin đổi).
+// hAgentRename: đổi tên máy ngay trên client, phải nhập mật khẩu gỡ agent (admin đổi trong Console thì không cần).
 func (s *Server) hAgentRename(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Name string }
+	var in struct{ Name, Code string }
 	if r.Method != "POST" || readJSON(r, &in) != nil {
 		jerr(w, 400, "Dữ liệu không hợp lệ")
 		return
@@ -283,6 +292,9 @@ func (s *Server) hAgentRename(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if old := m.Name; old != in.Name {
+		if !s.uninstCodeOK(w, r, m, in.Code) {
+			return
+		}
 		m.Name = in.Name
 		s.save()
 		s.audit(AuditEntry{User: "system", Name: "Hệ thống", Role: "sys", IP: clientIP(r), Kind: "Máy", Msg: "Người dùng đổi tên máy " + old + " thành " + in.Name, Target: in.Name})

@@ -89,3 +89,12 @@ func T(key string, a ...any) string {
 	}
 	return s
 }
+
+// uninstErr dịch lời từ chối của server (server trả tiếng Việt) sang ngôn ngữ của agent.
+// Dùng khi gỡ agent và khi đổi tên máy trên cửa sổ MAM (cùng mật khẩu gỡ).
+func uninstErr(m string) string {
+	if n := strings.TrimSuffix(strings.TrimPrefix(m, "Mật khẩu gỡ không đúng. Còn "), " lần thử"); n != m && len(n) < 3 {
+		return T("Mật khẩu gỡ không đúng. Còn %s lần thử", n)
+	}
+	return T(m)
+}

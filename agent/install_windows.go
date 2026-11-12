@@ -218,11 +218,3 @@ func doUninstall() {
 	hidden("cmd", "/c", fmt.Sprintf(`ping 127.0.0.1 -n 3 >nul & rmdir /s /q "%s"`, installDir())).Start()
 	fmt.Println(T("Đã gỡ MAM Agent."))
 }
-
-// uninstErr dịch lời từ chối của server (server trả tiếng Việt) sang ngôn ngữ của agent.
-func uninstErr(m string) string {
-	if n := strings.TrimSuffix(strings.TrimPrefix(m, "Mật khẩu gỡ không đúng. Còn "), " lần thử"); n != m && len(n) < 3 {
-		return T("Mật khẩu gỡ không đúng. Còn %s lần thử", n)
-	}
-	return T(m)
-}

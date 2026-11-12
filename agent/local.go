@@ -179,8 +179,8 @@ func startLocal() {
 		w.Write([]byte("{}"))
 	})
 	mux.HandleFunc("/api/rename", func(w http.ResponseWriter, r *http.Request) {
-		var in struct{ Name string }
-		if r.Method != "POST" || json.NewDecoder(http.MaxBytesReader(w, r.Body, 512)).Decode(&in) != nil {
+		var in struct{ Name, Code string }
+		if r.Method != "POST" || json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&in) != nil {
 			http.Error(w, "bad", 400)
 			return
 		}
@@ -189,8 +189,19 @@ func startLocal() {
 			http.Error(w, "1-40", 400)
 			return
 		}
-		if resp, err := post("/api/agent/rename", map[string]string{"name": in.Name}, cfg.Token); err != nil || resp.code != 200 {
+		resp, err := post("/api/agent/rename", map[string]string{"name": in.Name, "code": in.Code}, cfg.Token)
+		if err != nil {
 			http.Error(w, "server", 502)
+			return
+		}
+		if resp.code != 200 { // sai/thiếu mật khẩu gỡ: đưa lời server báo (đã dịch) lên cửa sổ
+			var e struct{ Error string }
+			json.Unmarshal(resp.body, &e)
+			msg := "server"
+			if e.Error != "" && resp.code != 401 {
+				msg = uninstErr(e.Error)
+			}
+			http.Error(w, msg, resp.code)
 			return
 		}
 		cfg.Name = in.Name
