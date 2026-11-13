@@ -850,6 +850,26 @@ var EN = {
 "Khôi phục từ file trên máy tính…": "Restore from a file on this computer…",
 "File sao lưu không hợp lệ hoặc bị hỏng": "The backup file is invalid or damaged",
 "Không đọc được file sao lưu": "Cannot read the backup file",
+"Chưa xử lý": "Not handled",
+"Cần kiểm tra": "Needs checking",
+"không rõ trang": "unknown site",
+"Chưa xác định được nguồn": "Source not determined",
+"Từ thư mục chia sẻ trong mạng": "From a shared network folder",
+"Có thể là file đính kèm thư email (mở trực tiếp từ Outlook)": "Possibly an email attachment (opened directly from Outlook)",
+"Trình duyệt vừa tải hoặc mở file này (có thể là trang web độc hại)": "A browser just downloaded or opened this file (possibly a malicious website)",
+"Giải nén từ một file nén": "Extracted from an archive",
+"Nằm trong thư mục Downloads: nhiều khả năng tải từ web hoặc nhận qua tin nhắn": "In the Downloads folder: most likely downloaded from the web or received via a message",
+"Tắt bảo vệ thời gian thực của Defender": "Defender real-time protection is off",
+"Windows Defender đang bật nhưng bảo vệ thời gian thực bị tắt": "Windows Defender is on but real-time protection is off",
+"Loại trừ nguy hiểm trong Defender": "Risky exclusion in Defender",
+"Chương trình tự chạy khi mở máy từ thư mục tạm": "Startup program running from a temporary folder",
+"chạy từ thư mục tạm/tải về và không có chữ ký số hợp lệ": "running from a temp/download folder without a valid digital signature",
+"tên giống phần mềm đào coin": "name looks like crypto-mining software",
+"Windows Defender: đang bật": "Windows Defender: on",
+"Windows Defender: đang TẮT": "Windows Defender: OFF",
+"Xong": "Done",
+"Đang gửi lệnh tới {0}…": "Sending command to {0}…",
+"Chức năng này chỉ có trên Windows": "This feature is only available on Windows",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -1852,6 +1872,27 @@ var ZH = {
 "Khôi phục từ file trên máy tính…": "从本机文件恢复…",
 "File sao lưu không hợp lệ hoặc bị hỏng": "备份文件无效或已损坏",
 "Không đọc được file sao lưu": "无法读取备份文件",
+"Chưa xử lý": "未处理",
+"Cần kiểm tra": "需检查",
+"không rõ trang": "未知网站",
+"Chưa xác định được nguồn": "无法确定来源",
+"Từ thư mục chia sẻ trong mạng": "来自网络共享文件夹",
+"Có thể là file đính kèm thư email (mở trực tiếp từ Outlook)": "可能是电子邮件附件（直接从 Outlook 打开）",
+"Trình duyệt vừa tải hoặc mở file này (có thể là trang web độc hại)": "浏览器刚下载或打开了此文件（可能是恶意网站）",
+"Giải nén từ một file nén": "从压缩文件中解压",
+"Nằm trong thư mục Downloads: nhiều khả năng tải từ web hoặc nhận qua tin nhắn": "位于“下载”文件夹：很可能是从网上下载或通过消息收到的",
+"Tắt bảo vệ thời gian thực của Defender": "Defender 实时保护已关闭",
+"Windows Defender đang bật nhưng bảo vệ thời gian thực bị tắt": "Windows Defender 已开启，但实时保护被关闭",
+"Loại trừ nguy hiểm trong Defender": "Defender 中存在危险的排除项",
+"Chương trình tự chạy khi mở máy từ thư mục tạm": "从临时文件夹开机自启动的程序",
+"chạy từ thư mục tạm/tải về và không có chữ ký số hợp lệ": "从临时/下载文件夹运行且没有有效数字签名",
+"tên giống phần mềm đào coin": "名称类似挖矿软件",
+"Windows Defender: đang bật": "Windows Defender：已开启",
+"Windows Defender: đang TẮT": "Windows Defender：已关闭",
+"Không ai phản hồi hộp thoại xin phép": "无人响应许可请求对话框",
+"Quản trị viên đã đóng cửa sổ xem": "管理员已关闭查看窗口",
+"Hết thời gian không thao tác": "长时间无操作，已超时",
+"Người ngồi máy từ chối": "电脑使用者拒绝了请求",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -1976,6 +2017,81 @@ var ZH = {
 "Bản quyền © 2026 Nguyễn Tấn Tài (Missing)": "版权所有 © 2026 Nguyễn Tấn Tài (Missing)",
 };
 var PAT = [
+[
+"^Phát hiện virus (.+?) tại (.+?) \\[(.+?)\\]\\. Nguyên nhân có thể: (.+)$",
+"Virus detected: $1 at $2 [$3]. Possible cause: $4",
+"检测到病毒：$1，位置 $2 [$3]。可能原因：$4"
+],
+[
+"^Phát hiện virus (.+?) tại (.+?) \\[(.+?)\\]$",
+"Virus detected: $1 at $2 [$3]",
+"检测到病毒：$1，位置 $2 [$3]"
+],
+[
+"^Phát hiện virus (.+?) \\[(.+?)\\]\\. Nguyên nhân có thể: (.+)$",
+"Virus detected: $1 [$2]. Possible cause: $3",
+"检测到病毒：$1 [$2]。可能原因：$3"
+],
+[
+"^Phát hiện virus (.+?) \\[(.+?)\\]$",
+"Virus detected: $1 [$2]",
+"检测到病毒：$1 [$2]"
+],
+[
+"^Nghi ngờ mã độc: (.+?) - (.+) \\[(.+?)\\]$",
+"Suspected malware: $1 - $2 [$3]",
+"疑似恶意软件：$1 - $2 [$3]"
+],
+[
+"^Nghi ngờ mã độc: (.+?) \\[(.+?)\\]$",
+"Suspected malware: $1 [$2]",
+"疑似恶意软件：$1 [$2]"
+],
+[
+"^Đã xử lý \\((.+)\\)$",
+"Handled ($1)",
+"已处理（$1）"
+],
+[
+"^Tải từ web, trang nguồn: (.+)$",
+"Downloaded from the web, source site: $1",
+"从网上下载，来源网站：$1"
+],
+[
+"^Từ USB hoặc ổ cắm ngoài \\(ổ (.+)\\)$",
+"From a USB or external drive (drive $1)",
+"来自 U 盘或外接硬盘（盘符 $1）"
+],
+[
+"^Từ thư mục chia sẻ trong mạng \\(máy (.+)\\)$",
+"From a shared network folder (computer $1)",
+"来自网络共享文件夹（电脑 $1）"
+],
+[
+"^Do một đoạn lệnh/script chạy \\((.+)\\)$",
+"Run by a command/script ($1)",
+"由命令/脚本运行（$1）"
+],
+[
+"^Tiến trình đáng ngờ: (.+)$",
+"Suspicious process: $1",
+"可疑进程：$1"
+],
+[
+"^Thư mục không bị quét: (.+)$",
+"Folder excluded from scanning: $1",
+"不扫描的文件夹：$1"
+],
+[
+"^Đuôi file không bị quét: (.+)$",
+"File extension excluded from scanning: $1",
+"不扫描的文件扩展名：$1"
+],
+[
+"^(.+) \\((chạy từ thư mục tạm/tải về và không có chữ ký số hợp lệ|tên giống phần mềm đào coin)\\)$",
+"$1 ($2)",
+"$1（$2）"
+],
 ["^Máy đổi tên trong Windows: (.+) thành (.+)$",
 "Machine renamed in Windows: $1 to $2",
 "机器在 Windows 中改名：$1 改为 $2"
