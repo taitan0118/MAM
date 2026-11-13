@@ -29,9 +29,12 @@ type netResource struct {
 
 func wnetAdd(remote, user, pass string) syscall.Errno {
 	r, _ := syscall.UTF16PtrFromString(remote)
-	u, _ := syscall.UTF16PtrFromString(user)
-	p, _ := syscall.UTF16PtrFromString(pass)
 	nr := netResource{RemoteName: r}
+	var u, p *uint16 // để trống: truyền NULL để Windows dùng tài khoản đang chạy server (pass-through)
+	if user != "" {
+		u, _ = syscall.UTF16PtrFromString(user)
+		p, _ = syscall.UTF16PtrFromString(pass)
+	}
 	ret, _, _ := pWNetAdd.Call(uintptr(unsafe.Pointer(&nr)), uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(u)), 0)
 	return syscall.Errno(ret)
 }

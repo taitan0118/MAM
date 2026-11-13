@@ -62,8 +62,9 @@ func (s *Server) hRemoteInstall(w http.ResponseWriter, r *http.Request, me *Acco
 		return
 	}
 	in.User = strings.TrimSpace(in.User)
-	if in.User == "" || in.Password == "" || len(in.User) > 120 || len(in.Password) > 200 {
-		jerr(w, 400, "Nhập tài khoản quản trị và mật khẩu của máy cần cài")
+	// để trống cả hai = dùng tài khoản đang chạy server (pass-through); điền thì phải đủ cả hai
+	if len(in.User) > 120 || len(in.Password) > 200 || (in.User == "") != (in.Password == "") {
+		jerr(w, 400, "Nhập cả tài khoản và mật khẩu, hoặc để trống cả hai để dùng tài khoản đang chạy server")
 		return
 	}
 	if len(in.IPs) == 0 || len(in.IPs) > 50 {
@@ -104,7 +105,11 @@ func (s *Server) hRemoteInstall(w http.ResponseWriter, r *http.Request, me *Acco
 		started = append(started, ip)
 	}
 	riMu.Unlock()
-	s.auditBy(me, r, "Máy", "Cài agent từ xa lên "+strings.Join(started, ", ")+" (tài khoản "+in.User+")", strings.Join(started, ", "), true)
+	acct := in.User
+	if acct == "" {
+		acct = "đang chạy server" // ghép thành "(tài khoản đang chạy server)"
+	}
+	s.auditBy(me, r, "Máy", "Cài agent từ xa lên "+strings.Join(started, ", ")+" (tài khoản "+acct+")", strings.Join(started, ", "), true)
 	who := *me
 	cip := clientIP(r)
 	sem := make(chan struct{}, 4) // tối đa 4 máy cùng lúc

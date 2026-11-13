@@ -1032,11 +1032,13 @@ VIEWS.discover = async v => {
       el('div', { style: 'font-size:12.5px;color:var(--muted);margin-bottom:10px;word-break:break-all' }, ips.join(', ')),
       field('Tài khoản quản trị của máy', u, 'Tài khoản quản trị domain, hoặc Administrator gốc của máy. Tài khoản quản trị tự tạo thường bị Windows chặn quản trị từ xa.'),
       field('Mật khẩu', p),
+      el('div', { style: 'font-size:12px;color:var(--muted);margin:2px 0 6px;line-height:1.5' }, t('Để trống cả hai ô để dùng chính tài khoản đang chạy server MAM — chỉ được khi server chạy bằng tài khoản quản trị domain có quyền trên máy đích.')),
       el('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;margin:6px 0' }, keep, t('Nhớ tạm cho các máy tiếp theo (mất khi tải lại trang)')), err),
       [{ label: 'Hủy', on: c => c() }, { label: 'Cài', cls: 'primary', on: async c => {
-        if (!u.value.trim() || !p.value) { err.textContent = t('Nhập tài khoản quản trị và mật khẩu của máy cần cài'); return; }
-        VIEWS.discover.cred = keep.checked ? { user: u.value.trim(), password: p.value } : null;
-        try { await api('POST', '/api/remote-install', { ips, user: u.value.trim(), password: p.value, lang: MAMI.lang() }); c(); riPoll(); } catch (e) { err.textContent = trErr(e.message); }
+        const uu = u.value.trim();
+        if ((uu === '') !== (p.value === '')) { err.textContent = t('Nhập cả tài khoản và mật khẩu, hoặc để trống cả hai'); return; }
+        VIEWS.discover.cred = keep.checked && uu ? { user: uu, password: p.value } : null;
+        try { await api('POST', '/api/remote-install', { ips, user: uu, password: p.value, lang: MAMI.lang() }); c(); riPoll(); } catch (e) { err.textContent = trErr(e.message); }
       } }]);
   }
   // cập nhật cột "Cài từ xa" mỗi 2 giây cho tới khi không còn máy đang cài
