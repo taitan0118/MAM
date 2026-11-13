@@ -1488,3 +1488,32 @@ func TestOfflineDaysAlert(t *testing.T) {
 		t.Fatalf("máy bật lại phải đóng cảnh báo: %+v", a)
 	}
 }
+
+// Server khởi động lại (nâng cấp): máy vẫn bật, không được tách thành lần bật mới; server tắt lâu thì vẫn tách.
+func TestUptimeServerRestart(t *testing.T) {
+	s, _ := newSrv(t)
+	old := srvStart
+	defer func() { srvStart = old }()
+	now := time.Now().Unix()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.st.Uptime = map[string][][2]int64{
+		"m1": {{now - 3600, now - 300}},  // báo cuối cách đây 5 phút
+		"m2": {{now - 7200, now - 1200}}, // báo cuối cách đây 20 phút
+	}
+	srvStart = now - 10 // server vừa bật lại 10 giây trước
+	if s.upMark("m1", now, 7200) {
+		t.Fatal("server khởi động lại ngắn: không được tách lần bật mới")
+	}
+	if ss := s.st.Uptime["m1"]; len(ss) != 1 || ss[0][1] != now {
+		t.Fatalf("phải nối tiếp lần bật cũ: %v", ss)
+	}
+	if !s.upMark("m2", now, 7200) {
+		t.Fatal("server tắt lâu (20 phút): phải tách lần bật mới")
+	}
+	// máy khởi động lại thật thì vẫn tách, dù server cũng vừa bật lại
+	s.st.Uptime["m3"] = [][2]int64{{now - 3600, now - 300}}
+	if !s.upMark("m3", now, 30) {
+		t.Fatal("máy vừa khởi động lại: phải tách lần bật mới")
+	}
+}

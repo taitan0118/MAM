@@ -11,9 +11,13 @@ import (
 // Máy coi là đang bật khi agent còn báo về; mất liên lạc quá upGap giây là tắt.
 // Agent gửi sẵn uptime nên khởi động lại nhanh (dưới upGap) vẫn tách thành lần bật mới.
 const (
-	upGap  = 120
-	upKeep = 366 * 24 * 3600 // giữ chi tiết 1 năm
+	upGap    = 120
+	upKeep   = 366 * 24 * 3600 // giữ chi tiết 1 năm
+	upSrvGap = 600             // server tắt dưới 10 phút (nâng cấp, khởi động lại): máy vẫn coi là bật liên tục
 )
+
+// srvStart: lúc tiến trình server bắt đầu, để biết khoảng máy "mất liên lạc" là do server tắt chứ không phải máy tắt.
+var srvStart = time.Now().Unix()
 
 // upMark: gọi khi đang giữ s.mu, mỗi lần agent báo cáo. Trả true khi mở lần bật mới.
 func (s *Server) upMark(id string, now, uptime int64) bool {
@@ -26,7 +30,17 @@ func (s *Server) upMark(id string, now, uptime int64) bool {
 		boot = now - uptime
 	}
 	n := len(ss)
-	if n > 0 && now-ss[n-1][1] <= upGap && !(boot > ss[n-1][1]-10) {
+	noReboot := false
+	if n > 0 {
+		noReboot = !(boot > ss[n-1][1]-10) // máy không khởi động lại kể từ lần báo trước
+	}
+	if n > 0 && now-ss[n-1][1] <= upGap && noReboot {
+		ss[n-1][1] = now
+		return false
+	}
+	// Server vừa bật lại và máy báo về ngay: khoảng trống là do server tắt, không phải máy tắt — nối tiếp lần bật cũ.
+	// Chỉ nối khi server tắt ngắn (dưới upSrvGap) và máy không khởi động lại, để server tắt lâu không cộng nhầm giờ.
+	if n > 0 && noReboot && ss[n-1][1] <= srvStart && now >= srvStart && now-srvStart <= upGap && now-ss[n-1][1] <= upSrvGap {
 		ss[n-1][1] = now
 		return false
 	}

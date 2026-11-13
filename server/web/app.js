@@ -1235,9 +1235,17 @@ const upSum = ss => ss.reduce((a, s) => a + s[1] - s[0], 0);
 function upStats(S, nowMs) {
   const ds = upDays().map(d => ({ d, fut: d.getTime() > nowMs, ss: upDaySes(S, d) }));
   const used = ds.filter(x => x.ss.length), tot = ds.reduce((a, x) => a + upSum(x.ss), 0);
-  return { ds, used, tot, firsts: used.map(x => x.ss[0][0]), lasts: used.map(x => x.ss[x.ss.length - 1][1]), live: S.some(x => x[2]) };
+  // Chỉ tính lần bật/tắt THẬT: phiên bắt đầu đúng 00:00 là nối từ hôm trước (không phải vừa bật máy),
+  // phiên chạm 24:00 hoặc còn đang chạy là chưa tắt. Máy bật suốt thì hai cột này để trống, không bịa giờ.
+  return {
+    ds, used, tot, live: S.some(x => x[2]),
+    firsts: used.map(x => x.ss[0]).filter(s => s[0] > 0).map(s => s[0]),
+    lasts: used.map(x => x.ss[x.ss.length - 1]).filter(s => !s[2] && s[1] < 1440).map(s => s[1]),
+  };
 }
 const upAvg = a => a.length ? upClock(Math.round(a.reduce((x, y) => x + y, 0) / a.length)) : '—';
+// giờ tắt trung bình: chưa tắt lần nào thì nói rõ "Bật liên tục" thay vì dấu gạch
+const upAvgOff = st => st.lasts.length ? upAvg(st.lasts) : (st.used.length ? t('Bật liên tục') : '—');
 // thanh 24 giờ nhỏ (dùng trong bảng)
 function upStrip(ss) {
   let o = '<rect x="0" y="7" width="1440" height="2" fill="var(--border)"/>' + [360, 720, 1080].map(x => `<rect x="${x}" y="0" width="3" height="16" fill="var(--border)"/>`).join('');
@@ -1286,8 +1294,8 @@ async function upDetail(id) {
     kpi('Số lần bật', 'var(--warn)', ss.length, ss.length > 1 ? t('Tắt giữa chừng {0} lần, tổng {1}', ss.length - 1, upDur(offs)) : ss.length ? 'Bật liên tục' : '')] : [
     kpi('Tổng thời gian bật', 'var(--accent)', upDur(st.tot), t('{0} ngày có bật máy', st.used.length)),
     kpi('Trung bình mỗi ngày', 'var(--good)', st.used.length ? upDur(st.tot / st.used.length) : '—', 'Tính trên ngày có bật máy'),
-    kpi('Bật trung bình lúc', 'var(--muted)', upAvg(st.firsts), t('Sớm nhất {0}', st.firsts.length ? upClock(Math.min(...st.firsts)) : '—')),
-    kpi('Tắt trung bình lúc', 'var(--warn)', upAvg(st.lasts), t('Muộn nhất {0}', st.lasts.length ? upClock(Math.max(...st.lasts)) : '—'))]));
+    kpi('Bật trung bình lúc', 'var(--muted)', upAvg(st.firsts), st.firsts.length ? t('Sớm nhất {0}', upClock(Math.min(...st.firsts))) : t('Không có lần bật nào trong kỳ (máy bật sẵn từ trước)')),
+    kpi('Tắt trung bình lúc', 'var(--warn)', upAvgOff(st), st.lasts.length ? t('Muộn nhất {0}', upClock(Math.max(...st.lasts))) : t('Chưa tắt lần nào trong kỳ'))]));
   if (one) {
     wrap.append(card('Các khoảng giờ hoạt động', 'rê chuột lên từng khúc để xem giờ', upTimeline(ss)),
       card('Chi tiết từng lần bật', '', ss.length ? el('div', { class: 'up-list' }, ss.flatMap((s, i) => [
@@ -1386,7 +1394,7 @@ VIEWS.uptime = async v => {
     return el('tr', { onclick: () => { route.tab = 'up'; route.view = 'detail'; route.id = m.id; renderNav(); render(); scrollTo(0, 0); } },
       el('td', {}, el('div', { style: 'font-weight:600' }, m.name), el('div', { style: 'font-size:11.5px;color:var(--faint)' }, m.group || t('Chưa phân nhóm'))),
       one ? [el('td', { style: 'width:42%;min-width:220px' }, upStrip(ss)), el('td', { class: 'mono' }, ss.length ? upClock(ss[0][0]) : '—'), el('td', {}, !lt ? '—' : lt[2] ? pill('ok', 'Đang bật') : el('span', { class: 'mono' }, upClock(lt[1]))), el('td', { class: 'r mono' }, ss.length)]
-        : [el('td', { class: 'r mono' }, st.used.length), el('td', { class: 'r mono' }, st.used.length ? upDur(st.tot / st.used.length) : '—'), el('td', { class: 'mono' }, upAvg(st.firsts)), el('td', { class: 'mono' }, upAvg(st.lasts))],
+        : [el('td', { class: 'r mono' }, st.used.length), el('td', { class: 'r mono' }, st.used.length ? upDur(st.tot / st.used.length) : '—'), el('td', { class: 'mono' }, upAvg(st.firsts)), el('td', { class: st.lasts.length ? 'mono' : '' }, upAvgOff(st))],
       el('td', { class: 'r mono', style: 'font-weight:600' }, upDur(st.tot)));
   });
   const heads = one ? ['Máy', 'Các khoảng giờ bật (0h – 24h)', 'Bật lúc', 'Tắt lúc', { t: 'Số lần bật', cls: 'r' }, { t: 'Tổng giờ bật', cls: 'r' }]
