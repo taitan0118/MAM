@@ -830,6 +830,26 @@ func TestThreatAlert(t *testing.T) {
 	if s.st.Alerts[1].Kind != "suspect" {
 		t.Fatal("loại nghi ngờ:", s.st.Alerts[1].Kind)
 	}
+	// Defender phát hiện lại cùng file với mã mới, trạng thái khác: không mở thêm, cập nhật trạng thái cảnh báo đang mở
+	s.threatsIn(m, []ThreatIn{{ID: "v2", Kind: "virus", Name: "Trojan:Win32/X", Detail: `C:\Users\a\Downloads\x.exe`, Cause: "Chưa xác định được nguồn", Status: "Chưa xử lý"}})
+	if len(s.st.Alerts) != 2 || !strings.Contains(s.st.Alerts[0].Msg, "[Chưa xử lý]") {
+		t.Fatalf("cùng virus cùng file phải gộp vào cảnh báo cũ: %d cảnh báo, %q", len(s.st.Alerts), s.st.Alerts[0].Msg)
+	}
+	// đóng rồi phát hiện lại trong 24 giờ: vẫn không mở thêm
+	s.st.Alerts[0].Status, s.st.Alerts[0].Closed = "closed", time.Now()
+	s.threatsIn(m, []ThreatIn{{ID: "v3", Kind: "virus", Name: "Trojan:Win32/X", Detail: `C:\Users\a\Downloads\x.exe`, Status: "Đã xử lý (Quarantine)"}})
+	if len(s.st.Alerts) != 2 {
+		t.Fatal("đóng chưa quá 24 giờ mà vẫn mở thêm cảnh báo")
+	}
+	// đóng quá 24 giờ, hoặc file khác, hoặc máy khác: báo như mới
+	s.st.Alerts[0].Opened, s.st.Alerts[0].Closed = time.Now().Add(-50*time.Hour), time.Now().Add(-48*time.Hour)
+	s.threatsIn(m, []ThreatIn{{ID: "v4", Kind: "virus", Name: "Trojan:Win32/X", Detail: `C:\Users\a\Downloads\x.exe`}})
+	s.threatsIn(m, []ThreatIn{{ID: "v5", Kind: "virus", Name: "Trojan:Win32/X", Detail: `C:\Users\a\Downloads\y.exe`}})
+	m2 := &Machine{ID: "m2", Name: "PC-02"}
+	s.threatsIn(m2, []ThreatIn{{ID: "v1", Kind: "virus", Name: "Trojan:Win32/X", Detail: `C:\Users\a\Downloads\x.exe`}})
+	if len(s.st.Alerts) != 5 {
+		t.Fatal("cần 5 cảnh báo, có", len(s.st.Alerts))
+	}
 }
 
 func TestSchedule(t *testing.T) {
@@ -1325,5 +1345,35 @@ func TestWakeAndChatWait(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Console đợi tin quá 5 giây")
+	}
+}
+
+// Máy đổi tên (Console, agent, hay tên Windows) không bị tách thành nhiều dòng trong "máy nhiều cảnh báo nhất",
+// và cảnh báo cũ mang tên mới.
+func TestAlertsFollowRename(t *testing.T) {
+	f := setup(t)
+	m := f.s.st.Machines[0]
+	now := time.Now()
+	f.s.mu.Lock()
+	for _, n := range []string{"Admin", "Adminaa", "VN10220"} { // tên cũ ghi trong cảnh báo của cùng một máy
+		f.s.st.Alerts = append(f.s.st.Alerts, &Alert{ID: rid(5), Machine: m.ID, Name: n, Kind: "cpu", Sev: "warn", Msg: "x", Opened: now, Status: "open"})
+	}
+	f.s.mu.Unlock()
+	code, _, _ := f.super.do("PUT", "/api/machines/"+m.ID+"/rename", map[string]string{"name": "Ke toan 01"}, nil)
+	expect(t, code, 200, "đổi tên trong Console")
+	day := now.Format("2006-01-02")
+	code, r, _ := f.super.do("GET", "/api/report?from="+day+"&to="+day, nil, nil)
+	expect(t, code, 200, "báo cáo")
+	top, _ := r["top"].([]interface{})
+	if len(top) != 1 {
+		t.Fatalf("một máy phải là một dòng, có %d dòng: %v", len(top), top)
+	}
+	if x := top[0].(map[string]interface{}); x["name"] != "Ke toan 01" || x["count"].(float64) != 3 {
+		t.Fatalf("dòng sai: %v", x)
+	}
+	for _, a := range f.s.st.Alerts {
+		if a.Machine == m.ID && a.Name != "Ke toan 01" {
+			t.Fatalf("cảnh báo cũ còn tên %q", a.Name)
+		}
 	}
 }

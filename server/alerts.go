@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -155,11 +156,21 @@ func (s *Server) threatsIn(m *Machine, in []ThreatIn) {
 		} else if t.Detail != "" {
 			msg += " - " + clip(t.Detail, 200)
 		}
+		base := msg // virus + file (không kể trạng thái, nguyên nhân): để nhận ra cùng một phát hiện
 		if t.Status != "" {
 			msg += " [" + clip(t.Status, 60) + "]"
 		}
 		if t.Kind == "virus" && t.Cause != "" {
 			msg += ". Nguyên nhân có thể: " + clip(t.Cause, 160)
+		}
+		// Defender phát hiện lại cùng file (quét lại, giải nén lại...) thì ra mã phát hiện mới: không mở thêm cảnh báo
+		// nếu máy đã có cảnh báo cùng virus + cùng file đang mở, hoặc mới đóng trong 24 giờ. Cảnh báo đang mở thì cập nhật trạng thái mới.
+		if a := s.sameThreatAlert(m.ID, kind, base); a != nil {
+			if a.Status == "open" && a.Msg != msg {
+				a.Msg = msg
+				s.save()
+			}
+			continue
 		}
 		s.st.Alerts = append(s.st.Alerts, &Alert{ID: rid(5), Machine: m.ID, Name: m.Name, Kind: kind, Sev: sev, Msg: msg, Opened: time.Now(), Status: "open"})
 		if len(s.st.Alerts) > 2000 {
@@ -168,6 +179,22 @@ func (s *Server) threatsIn(m *Machine, in []ThreatIn) {
 		s.save()
 		s.notify(s.st.Settings, "Cảnh báo: "+m.Name, msg)
 	}
+}
+
+// sameThreatAlert tìm cảnh báo của máy về cùng một virus/dấu hiệu (base = phần câu trước " [trạng thái]")
+// đang mở, hoặc đóng chưa quá 24 giờ. Gọi khi đang giữ s.mu.
+func (s *Server) sameThreatAlert(machine, kind, base string) *Alert {
+	since := time.Now().Add(-24 * time.Hour)
+	for i := len(s.st.Alerts) - 1; i >= 0 && i > len(s.st.Alerts)-600; i-- {
+		a := s.st.Alerts[i]
+		if a.Machine != machine || a.Kind != kind || !(a.Msg == base || strings.HasPrefix(a.Msg, base+" [") || strings.HasPrefix(a.Msg, base+". ")) {
+			continue
+		}
+		if a.Status == "open" || a.Closed.After(since) || a.Opened.After(since) {
+			return a
+		}
+	}
+	return nil
 }
 
 // patchCheck cảnh báo khi máy Windows hơn 90 ngày chưa cài bản vá nào (lastPatch do agent đọc từ Get-HotFix);

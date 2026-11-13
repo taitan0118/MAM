@@ -126,7 +126,7 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 		// đổi tên máy trong Windows (System > About > Rename) thì tên trên MAM đổi theo; lần đầu chỉ ghi nhận
 		if m.Host != "" && m.Name != h {
 			old := m.Name
-			m.Name = h
+			s.setMachineName(m, h)
 			persist = true
 			s.audit(AuditEntry{User: "system", Name: "Hệ thống", Role: "sys", IP: clientIP(r), Kind: "Máy", Msg: "Máy đổi tên trong Windows: " + old + " thành " + h, Target: h})
 		}
@@ -295,7 +295,7 @@ func (s *Server) hAgentRename(w http.ResponseWriter, r *http.Request) {
 		if !s.uninstCodeOK(w, r, m, in.Code) {
 			return
 		}
-		m.Name = in.Name
+		s.setMachineName(m, in.Name)
 		s.save()
 		s.audit(AuditEntry{User: "system", Name: "Hệ thống", Role: "sys", IP: clientIP(r), Kind: "Máy", Msg: "Người dùng đổi tên máy " + old + " thành " + in.Name, Target: in.Name})
 	}

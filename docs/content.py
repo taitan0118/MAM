@@ -1,5 +1,5 @@
 # Nội dung tài liệu MAM, mỗi chuỗi là bộ ba (vi, en, zh). Khối: p, ul, ol, code, img, note, warn, table.
-V = "1.1.55"
+V = "1.1.56"
 G = []   # hướng dẫn
 def S(title, *blocks): G.append((title, list(blocks)))
 
@@ -18,7 +18,7 @@ S(("2. Chuẩn bị","2. Before you start","2. 准备工作"),
          "一台常开的服务器，使用固定 IP 或 DHCP 保留地址。Windows 10/11、Server 2016 及更高版本，或 Linux。非常轻量：几百台设备只需几十 MB 内存。"),
         ("Quyền Administrator trên server và trên từng máy client khi cài.","Administrator rights on the server and on each client when installing.","安装时需要服务器和每台客户端的管理员权限。"),
         ("Các máy client nối được tới server qua mạng LAN, cổng TCP 7070 (đổi được).","Client machines that can reach the server over the LAN on TCP port 7070 (changeable).","客户端能通过局域网访问服务器的 TCP 7070 端口（可更改）。"),
-        ("Gói cài MAM-1.1.55.zip đã giải nén. Bên trong có thư mục server, agent, docs và source.","The extracted MAM-1.1.0.zip package, containing the folders server, agent, docs and source.","已解压的 MAM-1.1.0.zip 安装包，内含 server、agent、docs 和 source 文件夹。")]),
+        ("Gói cài MAM-1.1.56.zip đã giải nén. Bên trong có thư mục server, agent, docs và source.","The extracted MAM-1.1.0.zip package, containing the folders server, agent, docs and source.","已解压的 MAM-1.1.0.zip 安装包，内含 server、agent、docs 和 source 文件夹。")]),
  ("warn",("MAM chạy trên mạng LAN bằng HTTP thường. Đừng mở cổng 7070 ra Internet. Muốn truy cập từ xa hãy dùng VPN, hoặc bật HTTPS bằng cờ -cert và -key.",
           "MAM runs over plain HTTP on the LAN. Do not expose port 7070 to the Internet. For remote access use a VPN, or turn on HTTPS with the -cert and -key flags.",
           "MAM 在局域网内使用普通 HTTP。不要把 7070 端口暴露到互联网。需要远程访问请使用 VPN，或用 -cert 和 -key 参数启用 HTTPS。")))

@@ -272,7 +272,7 @@ func (s *Server) hMachine(w http.ResponseWriter, r *http.Request, me *Account) {
 			return
 		}
 		old := m.Name
-		m.Name = in.Name
+		s.setMachineName(m, in.Name)
 		s.save()
 		s.mu.Unlock()
 		s.auditBy(me, r, "Máy", "Đổi tên máy "+old+" thành "+in.Name, in.Name, false)

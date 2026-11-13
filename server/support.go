@@ -283,7 +283,7 @@ func (s *Server) hReport2(w http.ResponseWriter, r *http.Request, me *Account) {
 		}
 		opened++
 		byKind[a.Kind]++
-		perMachine[a.Name]++
+		perMachine[a.Machine]++ // theo mã máy: máy đổi tên vẫn là một dòng
 		if a.Status == "closed" && !a.Closed.IsZero() {
 			closed++
 			durSum += a.Closed.Sub(a.Opened)
@@ -294,8 +294,15 @@ func (s *Server) hReport2(w http.ResponseWriter, r *http.Request, me *Account) {
 		Count int    `json:"count"`
 	}
 	top := []kv{}
-	for n, c := range perMachine {
-		top = append(top, kv{n, c})
+	names := map[string]string{}
+	for _, a := range s.st.Alerts { // tên cũ trong cảnh báo, dùng khi máy đã bị xóa khỏi danh sách
+		names[a.Machine] = a.Name
+	}
+	for _, m := range s.st.Machines {
+		names[m.ID] = m.Name
+	}
+	for id, c := range perMachine {
+		top = append(top, kv{names[id], c})
 	}
 	sort.Slice(top, func(i, j int) bool {
 		return top[i].Count > top[j].Count || (top[i].Count == top[j].Count && top[i].Name < top[j].Name)

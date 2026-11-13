@@ -279,8 +279,20 @@ func NewServer(dir string) (*Server, error) {
 	}
 	for _, m := range s.st.Machines {
 		s.tok[m.TokenHash] = m
+		s.setMachineName(m, m.Name) // cảnh báo cũ còn mang tên trước khi đổi (bản ≤1.1.55): đồng bộ một lần lúc bật
 	}
 	return s, nil
+}
+
+// setMachineName đổi tên máy và tên trên mọi cảnh báo của máy đó, để danh sách cảnh báo và báo cáo
+// không tách một máy thành nhiều dòng sau khi đổi tên. Gọi khi đang giữ s.mu (hoặc lúc khởi động).
+func (s *Server) setMachineName(m *Machine, name string) {
+	m.Name = name
+	for _, a := range s.st.Alerts {
+		if a.Machine == m.ID && a.Name != name {
+			a.Name = name
+		}
+	}
 }
 
 // save ghi những bản ghi đã đổi vào mam.db trong một giao dịch. Gọi khi đang giữ s.mu.
