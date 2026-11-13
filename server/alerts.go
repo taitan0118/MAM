@@ -72,6 +72,9 @@ func (s *Server) watchdog() {
 			if gap > time.Duration(cfg.OfflineMin*float64(time.Minute)) {
 				s.cond(m, "offline", "crit", true, fmt.Sprintf("Mất kết nối %.0f phút", gap.Minutes()))
 			}
+			// máy tắt (không báo về) nhiều ngày liền: cảnh báo riêng, tự đóng khi máy bật lại hoặc khi tắt ngưỡng
+			long := cfg.OfflineDays > 0 && gap > time.Duration(cfg.OfflineDays*float64(24*time.Hour))
+			s.cond(m, "offdays", "warn", long, fmt.Sprintf("Máy không bật %.0f ngày (lần cuối %s)", gap.Hours()/24, m.LastSeen.Format("02/01/2006 15:04")))
 		}
 		for _, c := range s.st.Commands {
 			if c.Status == "sent" && now.Sub(c.Created) > 3*time.Minute {

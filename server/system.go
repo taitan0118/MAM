@@ -76,9 +76,9 @@ func (s *Server) hInventory(w http.ResponseWriter, r *http.Request, me *Account)
 			continue
 		}
 		hw := m.Hw
-		d := map[string]interface{}{"id": m.ID, "name": m.Name, "group": m.Group, "ip": m.IP, "os": m.OS, "licenseNote": m.LicenseNote}
+		d := map[string]interface{}{"id": m.ID, "name": m.Name, "group": m.Group, "ip": m.IP, "os": m.OS}
 		if hw != nil {
-			d["model"], d["cpu"], d["ramGB"], d["serial"] = hw["model"], hw["cpu"], hw["ramGB"], hw["serial"]
+			d["board"], d["cpu"], d["ramGB"], d["ramType"], d["disks"] = hw["board"], hw["cpu"], hw["ramGB"], hw["ramType"], hw["disks"]
 		}
 		out = append(out, d)
 	}

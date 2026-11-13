@@ -42,13 +42,33 @@ function Get-MamHw {
   }
   try {
     if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
+      # Ghép theo số sê-ri (hoặc tên), KHÔNG theo thứ tự: thứ tự Win32_DiskDrive và Get-PhysicalDisk có thể ngược nhau,
+      # ghép theo thứ tự thì SSD bị ghi thành HDD và ngược lại. Không khớp được thì để nguyên, không đoán.
       $pds = @(Get-PhysicalDisk)
-      for ($i = 0; $i -lt $disks.Count -and $i -lt $pds.Count; $i++) {
-        $pd = $pds[$i]; $disks[$i].health = [string]$pd.HealthStatus; $disks[$i].type = [string]$pd.MediaType
+      for ($i = 0; $i -lt $disks.Count; $i++) {
+        $sn = [string]$disks[$i].serial
+        $pd = $null
+        if ($sn) { $pd = @($pds | Where-Object { ([string]$_.SerialNumber).Trim() -eq $sn })[0] }
+        if (-not $pd) { $pd = @($pds | Where-Object { ([string]$_.FriendlyName).Trim() -eq ([string]$disks[$i].model).Trim() })[0] }
+        if (-not $pd) { continue }
+        $disks[$i].health = [string]$pd.HealthStatus; $disks[$i].type = [string]$pd.MediaType
         try { $rc = $pd | Get-StorageReliabilityCounter -ErrorAction Stop
           $disks[$i].tempC = $rc.Temperature; $disks[$i].wear = $rc.Wear; $disks[$i].hours = $rc.PowerOnHours } catch { }
       }
     }
+  } catch { }
+  # Loại RAM (DDR3/DDR4/DDR5) để Kiểm kê hiện rõ; Windows 7 không có SMBIOSMemoryType thì dùng MemoryType
+  $ramType = ''
+  try {
+    $mt = @{ 20 = 'DDR'; 21 = 'DDR2'; 24 = 'DDR3'; 26 = 'DDR4'; 34 = 'DDR5' }
+    $ts = @()
+    foreach ($m in @(Get-WmiObject Win32_PhysicalMemory)) {
+      $k = 0
+      try { $k = [int]$m.SMBIOSMemoryType } catch { }
+      if (-not $mt[$k]) { try { $k = [int]$m.MemoryType } catch { } }
+      if ($mt[$k] -and $ts -notcontains $mt[$k]) { $ts += $mt[$k] }
+    }
+    $ramType = ($ts -join '/')
   } catch { }
   $macs = @(); $ips = @()
   foreach ($n in @(Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled })) {
@@ -85,7 +105,7 @@ function Get-MamHw {
   try { if ((Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending')) { $reboot = $true } } catch { }
   return @{
     cpu = ([string]$cpu[0].Name).Trim(); cores = $cores; threads = $threads
-    ramGB = [math]::Round($cs.TotalPhysicalMemory / 1GB, 1)
+    ramGB = [math]::Round($cs.TotalPhysicalMemory / 1GB, 1); ramType = $ramType
     gpu = ($gpu | ForEach-Object { [string]$_.Name }) -join '; '
     board = (([string]$bd.Manufacturer) + ' ' + ([string]$bd.Product)).Trim()
     bios = ([string]$bios.SMBIOSBIOSVersion); serial = ([string]$bios.SerialNumber)

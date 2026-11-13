@@ -675,8 +675,8 @@ func (s *Server) hSettings(w http.ResponseWriter, r *http.Request, me *Account) 
 		return
 	}
 	var in Settings
-	if readJSON(r, &in) != nil || in.TempC < 40 || in.TempC > 120 || in.CPU < 30 || in.CPU > 100 || in.DiskFreePc < 1 || in.DiskFreePc > 90 || in.OfflineMin < 1 || in.OfflineMin > 1440 {
-		jerr(w, 400, "Giá trị ngoài khoảng cho phép (nhiệt độ 40–120, CPU 30–100, ổ trống 1–90%, offline 1–1440 phút)")
+	if readJSON(r, &in) != nil || in.TempC < 40 || in.TempC > 120 || in.CPU < 30 || in.CPU > 100 || in.DiskFreePc < 1 || in.DiskFreePc > 90 || in.OfflineMin < 1 || in.OfflineMin > 1440 || in.OfflineDays < 0 || in.OfflineDays > 365 {
+		jerr(w, 400, "Giá trị ngoài khoảng cho phép (nhiệt độ 40–120, CPU 30–100, ổ trống 1–90%, offline 1–1440 phút, máy tắt 0–365 ngày)")
 		return
 	}
 	in.EnrollKey = strings.TrimSpace(in.EnrollKey)
@@ -690,7 +690,7 @@ func (s *Server) hSettings(w http.ResponseWriter, r *http.Request, me *Account) 
 	s.st.Settings = in
 	s.save()
 	s.mu.Unlock()
-	s.auditBy(me, r, "Cài đặt", "Đổi ngưỡng cảnh báo: nhiệt độ "+itoa(int(in.TempC))+"°C, CPU "+itoa(int(in.CPU))+"%, ổ trống "+itoa(int(in.DiskFreePc))+"%, offline "+itoa(int(in.OfflineMin))+" phút", "—", true)
+	s.auditBy(me, r, "Cài đặt", "Đổi ngưỡng cảnh báo: nhiệt độ "+itoa(int(in.TempC))+"°C, CPU "+itoa(int(in.CPU))+"%, ổ trống "+itoa(int(in.DiskFreePc))+"%, offline "+itoa(int(in.OfflineMin))+" phút, máy tắt "+itoa(int(in.OfflineDays))+" ngày", "—", true)
 	jok(w, map[string]bool{"ok": true})
 }
 

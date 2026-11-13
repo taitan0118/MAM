@@ -58,6 +58,7 @@ type Settings struct {
 	CPU             float64 `json:"cpu"`
 	DiskFreePc      float64 `json:"disk"`
 	OfflineMin      float64 `json:"offline"`
+	OfflineDays     float64 `json:"offlineDays"` // máy không bật quá N ngày thì cảnh báo; 0 = tắt
 	EnrollKey       string  `json:"enrollKey"`       // để trống = máy nào cài agent cũng tự đăng ký
 	NoAutoUpdate    bool    `json:"noAutoUpdate"`    // true: không tự cập nhật agent
 	NoMachineAvatar bool    `json:"noMachineAvatar"` // true: máy không được tự đổi ảnh đại diện

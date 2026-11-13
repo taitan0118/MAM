@@ -912,27 +912,40 @@ VIEWS.requests = async v => {
 };
 
 /* ---------- Kiểm kê ---------- */
-function licenseModal(it) {
-  const ta = el('textarea', { class: 'input', rows: 5, maxlength: 2000, placeholder: 'Ví dụ:\nWindows 11 Pro — key XXXXX-XXXXX-XXXXX-XXXXX-XXXXX\nMicrosoft 365 — thuê bao công ty, hết hạn 12/2026', style: 'width:100%' }, it.licenseNote || '');
-  modal(t('Bản quyền phần mềm · {0}', it.name), ta, [{ label: 'Hủy', on: c => c() }, { label: 'Lưu', cls: 'primary', on: async c => {
-    try { await api('PUT', '/api/machines/' + it.id + '/license-note', { note: ta.value }); c(); toast('Đã lưu'); render(); } catch (e) { fail(e); } } }]);
-}
+// một ổ cứng: tên, loại (SSD/HDD), dung lượng, tình trạng theo Windows; rê chuột xem nhiệt độ, độ mòn, giờ chạy
+const diskLine = d => {
+  const ok = /^(healthy|ok)$/i.test(d.health || ''), tip = [];
+  if (d.tempC != null) tip.push(t('Nhiệt độ {0}°C', Math.round(d.tempC)));
+  if (d.wear != null) tip.push(t('Mòn {0}%', Math.round(d.wear)));
+  if (d.hours != null) tip.push(t('{0} giờ chạy', d.hours));
+  if (d.serial) tip.push(d.serial);
+  return el('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:1px 0', title: tip.join(' · ') },
+    el('span', { class: 'mono', style: 'font-size:12px' }, (d.sizeGB ? d.sizeGB + ' GB' : '') + (d.type ? ' ' + d.type : '')),
+    el('span', { style: 'font-size:12px;color:var(--muted)' }, d.model || ''),
+    d.health ? pill(ok ? 'ok' : 'crit', d.health) : null);
+};
 const IV = { group: 'all', q: '' };
 VIEWS.inventory = async v => {
   const [all, g] = await Promise.all([api('GET', '/api/inventory'), api('GET', '/api/groups')]);
   groups = g.groups.map(x => x.name);
   const q = IV.q.trim().toLowerCase();
-  const list = all.filter(it => (IV.group === 'all' || (IV.group === '__none' ? !it.group : it.group === IV.group)) && (!q || [it.name, it.ip, it.os, it.model, it.cpu, it.serial, it.licenseNote].join(' ').toLowerCase().includes(q)));
+  const dtxt = it => (it.disks || []).map(d => [d.model, d.type, d.sizeGB].join(' ')).join(' ');
+  const list = all.filter(it => (IV.group === 'all' || (IV.group === '__none' ? !it.group : it.group === IV.group)) && (!q || [it.name, it.ip, it.os, it.board, it.cpu, it.ramType, dtxt(it)].join(' ').toLowerCase().includes(q)));
   v.append(el('div', { class: 'fbar' }, el('div', { class: 'frow' },
     select([['all', 'Tất cả nhóm'], ['__none', 'Chưa phân nhóm'], ...groups.map(x => [x, x])], IV.group, x => { IV.group = x; render(); }),
     el('span', { style: 'color:var(--muted);font-size:12.5px' }, t('{0} máy', list.length)), el('div', { style: 'flex:1' }),
     el('a', { class: 'btn', href: '/api/export/inventory.xlsx' + grpQ(IV.group) }, 'Xuất Excel'), el('a', { class: 'btn', href: '/api/export/inventory.csv' + grpQ(IV.group) }, 'Xuất CSV'),
-    searchBox('ivq', IV.q, x => IV.q = x, t('Tìm máy, IP, model, serial, bản quyền…')))));
-  v.append(el('div', { class: 'card' }, el('div', { class: 'card-b', style: 'padding:0 16px 8px' }, table(['Máy', 'IP', 'Nhóm', 'Hệ điều hành', 'Model', 'CPU', 'RAM', 'Serial', 'Bản quyền phần mềm', ''], list.map(it => el('tr', { class: 'nohover' },
-    el('td', { style: 'font-weight:600' }, it.name), el('td', { class: 'mono' }, it.ip || '—'), el('td', {}, it.group || el('span', { style: 'color:var(--faint)' }, 'Chưa phân nhóm')), el('td', {}, it.os || '—'), el('td', {}, it.model || '—'), el('td', {}, it.cpu || '—'), el('td', { class: 'mono' }, it.ramGB ? it.ramGB + ' GB' : '—'), el('td', { class: 'mono' }, it.serial || '—'),
-    el('td', { style: 'max-width:220px;white-space:pre-wrap;font-size:12px;color:var(--muted)' }, it.licenseNote ? it.licenseNote.slice(0, 80) + (it.licenseNote.length > 80 ? '…' : '') : el('span', { style: 'color:var(--faint)' }, 'Chưa ghi')),
-    canWrite() ? el('td', { style: 'text-align:right' }, el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: () => licenseModal(it) }, it.licenseNote ? 'Sửa' : '+ Ghi')) : null)), 'Không có máy nào'))));
-  v.append(el('div', { style: 'margin-top:12px' }, infoNote('Phần cứng lấy tự động từ agent. Bản quyền phần mềm (key Windows/Office, thuê bao...) do admin tự ghi — MAM không đọc hay kiểm tra key.')));
+    searchBox('ivq', IV.q, x => IV.q = x, t('Tìm máy, IP, main, chip, ổ cứng…')))));
+  v.append(el('div', { class: 'card' }, el('div', { class: 'card-b', style: 'padding:0 16px 8px' }, table(['Máy', 'Nhóm', 'Main', 'Chip', 'RAM', 'Ổ cứng', 'Windows', 'IP'], list.map(it => el('tr', { class: 'nohover' },
+    el('td', { style: 'font-weight:600' }, it.name),
+    el('td', {}, it.group || el('span', { style: 'color:var(--faint)' }, 'Chưa phân nhóm')),
+    el('td', { style: 'font-size:12.5px' }, it.board || '—'),
+    el('td', { style: 'font-size:12.5px' }, it.cpu || '—'),
+    el('td', { class: 'mono', style: 'white-space:nowrap' }, it.ramGB ? it.ramGB + ' GB' + (it.ramType ? ' ' + it.ramType : '') : '—'),
+    el('td', {}, (it.disks || []).length ? (it.disks || []).map(diskLine) : '—'),
+    el('td', { style: 'font-size:12.5px' }, it.os || '—'),
+    el('td', { class: 'mono' }, it.ip || '—'))), 'Không có máy nào'))));
+  v.append(el('div', { style: 'margin-top:12px' }, infoNote('Phần cứng và tình trạng ổ cứng lấy tự động từ agent (tình trạng, nhiệt độ, độ mòn theo Windows). Rê chuột vào ổ cứng để xem nhiệt độ, độ mòn, giờ chạy và số sê-ri.')));
 };
 
 /* ---------- Bảo mật & bản vá ---------- */
@@ -1544,11 +1557,12 @@ VIEWS.audit = async v => {
 VIEWS.settings = async v => {
   settings = await api('GET', '/api/settings');
   const f = k => { const i = input('', 'number', settings[k]); if (!isSuper()) i.disabled = true; return i; };
-  const ft = f('temp'), c = f('cpu'), d = f('disk'), o = f('offline');
+  const ft = f('temp'), c = f('cpu'), d = f('disk'), o = f('offline'), od = f('offlineDays');
   const key = input('Để trống = máy nào cài agent cũng tự đăng ký', 'text', settings.enrollKey || ''); if (!isSuper()) key.style.display = 'none';
   const fe = field('Nhiệt độ CPU cảnh báo (°C)', ft), fc = field('CPU cảnh báo (%) khi cao liên tục khoảng 30 giây', c), fd = field('Ổ cứng cảnh báo khi trống còn (%)', d), fo = field('Mất kết nối cảnh báo sau (phút)', o);
-  v.append(card('Ngưỡng cảnh báo', isSuper() ? null : 'chỉ Super admin được sửa', el('div', { class: 'row2' }, fe, fc, fd, fo), isSuper() ? el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => {
-    try { await api('PUT', '/api/settings', { temp: +ft.value, cpu: +c.value, disk: +d.value, offline: +o.value, enrollKey: key.value }); toast('Đã lưu ngưỡng cảnh báo'); settings = await api('GET', '/api/settings'); } catch (e) { fail(e); } } }, 'Lưu') : null));
+  const fod = field('Máy không bật cảnh báo sau (ngày)', od, '0 = tắt. Ví dụ 3, 5, 7 — máy không báo về quá số ngày này thì mở cảnh báo, máy bật lại thì tự đóng.');
+  v.append(card('Ngưỡng cảnh báo', isSuper() ? null : 'chỉ Super admin được sửa', el('div', { class: 'row2' }, fe, fc, fd, fo, fod), isSuper() ? el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => {
+    try { await api('PUT', '/api/settings', { temp: +ft.value, cpu: +c.value, disk: +d.value, offline: +o.value, offlineDays: +od.value, enrollKey: key.value }); toast('Đã lưu ngưỡng cảnh báo'); settings = await api('GET', '/api/settings'); } catch (e) { fail(e); } } }, 'Lưu') : null));
   if (isSuper()) {
     const rp = (await api('GET', '/api/remote-password')).set, pwi = input(rp ? 'Nhập mật khẩu mới để đổi' : 'Ít nhất 8 ký tự', 'password');
     const sv = async v => { try { await api('PUT', '/api/remote-password', { password: v }); toast(v ? 'Đã lưu mật khẩu điều khiển từ xa' : 'Đã tắt mật khẩu điều khiển từ xa'); render(); } catch (e) { fail(e); } };

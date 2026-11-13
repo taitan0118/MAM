@@ -1446,3 +1446,45 @@ func TestAlertsFollowRename(t *testing.T) {
 		}
 	}
 }
+
+// Ngưỡng "máy không bật N ngày": lưu được, chặn giá trị ngoài khoảng, và watchdog mở/đóng đúng cảnh báo.
+func TestOfflineDaysAlert(t *testing.T) {
+	f := setup(t)
+	code, _, _ := f.super.do("PUT", "/api/settings", map[string]interface{}{"temp": 85, "cpu": 90, "disk": 10, "offline": 5, "offlineDays": 3}, nil)
+	expect(t, code, 200, "lưu ngưỡng máy tắt 3 ngày")
+	code, r, _ := f.super.do("GET", "/api/settings", nil, nil)
+	expect(t, code, 200, "đọc cài đặt")
+	if r["offlineDays"] != 3.0 {
+		t.Fatalf("ngưỡng ngày không lưu: %v", r["offlineDays"])
+	}
+	code, _, _ = f.super.do("PUT", "/api/settings", map[string]interface{}{"temp": 85, "cpu": 90, "disk": 10, "offline": 5, "offlineDays": 400}, nil)
+	expect(t, code, 400, "ngưỡng ngày quá lớn")
+
+	open := func(m *Machine) *Alert {
+		for i := len(f.s.st.Alerts) - 1; i >= 0; i-- {
+			if a := f.s.st.Alerts[i]; a.Machine == m.ID && a.Kind == "offdays" && a.Status == "open" {
+				return a
+			}
+		}
+		return nil
+	}
+	m := f.s.st.Machines[0]
+	f.s.mu.Lock()
+	cfg := f.s.st.Settings
+	// máy tắt 5 ngày: mở cảnh báo
+	m.LastSeen = time.Now().Add(-5 * 24 * time.Hour)
+	gap := time.Since(m.LastSeen)
+	f.s.cond(m, "offdays", "warn", cfg.OfflineDays > 0 && gap > time.Duration(cfg.OfflineDays*float64(24*time.Hour)), "Máy không bật 5 ngày (lần cuối x)")
+	f.s.mu.Unlock()
+	if open(m) == nil {
+		t.Fatal("tắt 5 ngày (ngưỡng 3) phải mở cảnh báo")
+	}
+	// máy bật lại: tự đóng
+	f.s.mu.Lock()
+	m.LastSeen = time.Now()
+	f.s.cond(m, "offdays", "warn", false, "")
+	f.s.mu.Unlock()
+	if a := open(m); a != nil {
+		t.Fatalf("máy bật lại phải đóng cảnh báo: %+v", a)
+	}
+}

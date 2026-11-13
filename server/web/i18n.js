@@ -918,6 +918,15 @@ var EN = {
 "Tải file cài agent": "Download the agent installer",
 "Bản 32-bit (máy cũ)": "32-bit version (old computers)",
 "Đã tải file cài agent": "Agent installer downloaded",
+"Main": "Mainboard",
+"Chip": "CPU",
+"Windows": "Windows",
+"Tìm máy, IP, main, chip, ổ cứng…": "Search computer, IP, mainboard, CPU, disk…",
+"Phần cứng và tình trạng ổ cứng lấy tự động từ agent (tình trạng, nhiệt độ, độ mòn theo Windows). Rê chuột vào ổ cứng để xem nhiệt độ, độ mòn, giờ chạy và số sê-ri.": "Hardware and disk condition are read automatically by the agent (condition, temperature and wear as reported by Windows). Hover a disk to see its temperature, wear, power-on hours and serial number.",
+"Nhiệt độ {0}°C": "Temperature {0}°C",
+"Mòn {0}%": "Wear {0}%",
+"Máy không bật cảnh báo sau (ngày)": "Alert when a computer has not been on for (days)",
+"0 = tắt. Ví dụ 3, 5, 7 — máy không báo về quá số ngày này thì mở cảnh báo, máy bật lại thì tự đóng.": "0 = off. For example 3, 5, 7 — if a computer does not report in for longer than this, an alert opens; it closes by itself when the computer comes back.",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -1989,6 +1998,15 @@ var ZH = {
 "Tải file cài agent": "下载代理安装文件",
 "Bản 32-bit (máy cũ)": "32 位版本（旧电脑）",
 "Đã tải file cài agent": "代理安装文件已下载",
+"Main": "主板",
+"Chip": "处理器",
+"Windows": "Windows",
+"Tìm máy, IP, main, chip, ổ cứng…": "搜索设备、IP、主板、处理器、硬盘…",
+"Phần cứng và tình trạng ổ cứng lấy tự động từ agent (tình trạng, nhiệt độ, độ mòn theo Windows). Rê chuột vào ổ cứng để xem nhiệt độ, độ mòn, giờ chạy và số sê-ri.": "硬件和硬盘状况由代理自动读取（状况、温度、磨损以 Windows 为准）。将鼠标悬停在硬盘上可查看温度、磨损、运行小时数和序列号。",
+"Nhiệt độ {0}°C": "温度 {0}°C",
+"Mòn {0}%": "磨损 {0}%",
+"Máy không bật cảnh báo sau (ngày)": "电脑未开机超过多少天时告警",
+"0 = tắt. Ví dụ 3, 5, 7 — máy không báo về quá số ngày này thì mở cảnh báo, máy bật lại thì tự đóng.": "0 = 关闭。例如 3、5、7——电脑超过这个天数没有上报就会产生告警，电脑恢复后自动关闭。",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -2113,6 +2131,21 @@ var ZH = {
 "Bản quyền © 2026 Nguyễn Tấn Tài (Missing)": "版权所有 © 2026 Nguyễn Tấn Tài (Missing)",
 };
 var PAT = [
+[
+"^Máy không bật (\\d+) ngày \\(lần cuối (.+)\\)$",
+"Computer has not been on for $1 days (last seen $2)",
+"电脑已有 $1 天未开机（最后上报 $2）"
+],
+[
+"^Đổi ngưỡng cảnh báo: nhiệt độ (\\d+)°C, CPU (\\d+)%, ổ trống (\\d+)%, offline (\\d+) phút, máy tắt (\\d+) ngày$",
+"Changed alert thresholds: temperature $1°C, CPU $2%, free disk $3%, offline $4 min, computer off $5 days",
+"修改告警阈值：温度 $1°C，CPU $2%，剩余磁盘 $3%，离线 $4 分钟，电脑关机 $5 天"
+],
+[
+"^Giá trị ngoài khoảng cho phép \\(nhiệt độ 40–120, CPU 30–100, ổ trống 1–90%, offline 1–1440 phút, máy tắt 0–365 ngày\\)$",
+"Value out of range (temperature 40–120, CPU 30–100, free disk 1–90%, offline 1–1440 min, computer off 0–365 days)",
+"数值超出允许范围（温度 40–120，CPU 30–100，剩余磁盘 1–90%，离线 1–1440 分钟，电脑关机 0–365 天）"
+],
 [
 "^(Không đăng nhập được vào máy|Không mở được trình quản lý dịch vụ của máy|Không tạo được dịch vụ cài đặt trên máy|Không chạy được dịch vụ cài đặt): (.+)$",
 "$1: $2",

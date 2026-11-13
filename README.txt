@@ -1,4 +1,4 @@
-MAM - Missing App Monitor  v1.1.59
+MAM - Missing App Monitor  v1.1.60
 =================================================================
 [VI] Phần mềm giám sát và điều khiển máy tính trong mạng LAN.
 [EN] Software to monitor and control computers on a LAN.

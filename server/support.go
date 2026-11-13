@@ -430,18 +430,52 @@ func (s *Server) exportRows(what, group string, me *Account) ([][]string, bool) 
 			}
 		}
 	case "inventory":
-		rows = append(rows, []string{"Máy", "IP", "Nhóm", "Hệ điều hành", "Model", "CPU", "RAM (GB)", "Serial", "Bản quyền phần mềm"})
+		rows = append(rows, []string{"Máy", "Nhóm", "Main", "Chip", "RAM", "Ổ cứng", "Windows", "IP"})
 		hw := func(m *Machine, k string) string {
 			if v := m.Hw[k]; v != nil {
 				return fmt.Sprint(v)
 			}
 			return ""
 		}
+		ram := func(m *Machine) string {
+			g := hw(m, "ramGB")
+			if g == "" {
+				return ""
+			}
+			return strings.TrimSpace(g + " GB " + hw(m, "ramType"))
+		}
+		// mỗi ổ: "112 GB SSD KINGSTON ... (Healthy)"
+		disks := func(m *Machine) string {
+			ds, _ := m.Hw["disks"].([]interface{})
+			out := []string{}
+			for _, x := range ds {
+				d, _ := x.(map[string]interface{})
+				if d == nil {
+					continue
+				}
+				part := ""
+				if v, ok := d["sizeGB"].(float64); ok {
+					part = strconv.FormatFloat(v, 'f', -1, 64) + " GB"
+				}
+				for _, k := range []string{"type", "model"} {
+					if v, _ := d[k].(string); v != "" {
+						part = strings.TrimSpace(part + " " + v)
+					}
+				}
+				if v, _ := d["health"].(string); v != "" {
+					part = strings.TrimSpace(part) + " (" + v + ")"
+				}
+				if part != "" {
+					out = append(out, part)
+				}
+			}
+			return strings.Join(out, "; ")
+		}
 		for _, m := range s.st.Machines {
 			if m.Revoked || !inG(m.ID) {
 				continue
 			}
-			rows = append(rows, []string{m.Name, m.IP, nz(m.Group), m.OS, hw(m, "model"), hw(m, "cpu"), hw(m, "ramGB"), hw(m, "serial"), m.LicenseNote})
+			rows = append(rows, []string{m.Name, nz(m.Group), hw(m, "board"), hw(m, "cpu"), ram(m), disks(m), m.OS, m.IP})
 		}
 	default:
 		return nil, false
