@@ -30,6 +30,7 @@ var cat = map[string][2]string{ // khóa tiếng Việt -> {en, zh}
 	"Không đọc được dữ liệu ở %s: %v":            {"Cannot read data in %s: %v", "无法读取 %s 中的数据：%v"},
 	"MAM Server %s · dữ liệu: %s · lắng nghe %s": {"MAM Server %s · data: %s · listening on %s", "MAM Server %s · 数据：%s · 监听 %s"},
 	"Không lưu được dữ liệu vào mam.db: %v":      {"Cannot save data to mam.db: %v", "无法将数据保存到 mam.db：%v"},
+	"Đã gộp %d bản ghi máy trùng (cùng MAC)":   {"Merged %d duplicate machine records (same MAC)", "已合并 %d 条重复的设备记录（相同 MAC）"},
 	"Đã lưu lại được dữ liệu vào mam.db":         {"Saving data to mam.db works again", "已恢复向 mam.db 保存数据"},
 	"Không ghi được nhật ký thao tác: %v":        {"Cannot write the audit log: %v", "无法写入操作日志：%v"},
 	"Không có tài khoản ":                       {"No such account: ", "没有账号："},

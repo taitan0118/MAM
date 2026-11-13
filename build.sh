@@ -44,7 +44,7 @@ mkdir -p "$OUT/agent/android"
 echo "== Bộ cài một file .exe / single-file setup"
 (cd installer/setup-server && rm -rf payload/agents payload/mam-agent.exe && mkdir -p payload/agents && cp "../../$OUT/server/windows/mam-server.exe" payload/ && A="../../$OUT/agent" &&
  cp "$A/windows/mam-agent.exe" "$A/windows/mam-agent-x86.exe" payload/agents/ && cp "$A/linux/mam-agent" payload/agents/mam-agent-linux-amd64 && cp "$A/linux/mam-agent-arm64" payload/agents/mam-agent-linux-arm64 &&
- cp "$A/mac/mam-agent-amd64" payload/agents/mam-agent-mac-amd64 && cp "$A/mac/mam-agent-arm64" payload/agents/mam-agent-mac-arm64 && GOOS=windows GOARCH=amd64 go vet . && GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$VER" -o "../../$OUT/MAM-Server-Setup.exe" .)
+ cp "$A/mac/mam-agent-amd64" payload/agents/mam-agent-mac-amd64 && cp "$A/mac/mam-agent-arm64" payload/agents/mam-agent-mac-arm64 && cp "$A/windows-legacy/MAM-Agent.ps1" payload/agents/ && GOOS=windows GOARCH=amd64 go vet . && GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$VER" -o "../../$OUT/MAM-Server-Setup.exe" .)
 (cd installer/setup-agent && mkdir -p payload && cp "../../$OUT/agent/windows/mam-agent.exe" payload/ && GOOS=windows GOARCH=amd64 go vet . && GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$VER" -o "../../$OUT/MAM-Agent-Setup.exe" .)
 echo "== Bộ cài / installers"
 cp installer/install-server.* installer/uninstall-server.* "$OUT/server/windows/"

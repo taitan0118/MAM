@@ -700,6 +700,75 @@ func TestReenrollAfterRevoke(t *testing.T) {
 	if !strings.Contains(string(raw), `"id":"`+m["id"].(string)+`"`) {
 		t.Fatal("máy cài lại không hiện trong danh sách")
 	}
+	// cùng MAC: dùng lại bản ghi cũ (không thành hai máy), giữ nhóm
+	if m["id"] != f.m1 {
+		t.Fatalf("cài lại sau khi thu hồi phải dùng lại bản ghi %s, lại tạo %v", f.m1, m["id"])
+	}
+	n := 0
+	for _, x := range f.s.st.Machines {
+		if x.MAC == "AA:BB:CC:00:00:01" {
+			n++
+			if x.Revoked || x.Group != "Tầng 2" {
+				t.Fatalf("bản ghi dùng lại sai: revoked=%v nhóm=%q", x.Revoked, x.Group)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("cùng MAC phải còn 1 bản ghi, có %d", n)
+	}
+}
+
+// Dữ liệu cũ (≤1.1.56) đã có hai bản ghi cùng MAC (bản cũ bị thu hồi): lúc khởi động gộp vào bản đang dùng.
+func TestMergeDupMachines(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewServer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := &Machine{ID: "cu", Name: "Adminaa", MAC: "B4:2E:99:4A:15:13", Revoked: true, ThreatSeen: []string{"v1"}}
+	cur := &Machine{ID: "moi", Name: "VN10220", MAC: "B4:2E:99:4A:15:13"}
+	other := &Machine{ID: "khac", Name: "VN10531", MAC: "F0:2F:74:16:E8:A6", Revoked: true}
+	s.mu.Lock()
+	s.st.Machines = []*Machine{old, cur, other}
+	s.st.Alerts = []*Alert{{ID: "a1", Machine: "cu", Name: "Adminaa", Kind: "virus"}, {ID: "a2", Machine: "moi", Name: "VN10220", Kind: "virus"}}
+	s.st.Chat = []*ChatLine{{Machine: "cu", Text: "chào"}}
+	s.st.Requests = []*Request{{ID: "r1", Machine: "cu"}}
+	s.st.Uptime = map[string][][2]int64{"cu": {{100, 200}}, "moi": {{300, 400}}}
+	s.save()
+	s.mu.Unlock()
+	os.MkdirAll(filepath.Join(dir, "events"), 0o700)
+	os.WriteFile(evFile(dir, "cu"), []byte("{\"t\":1}\n"), 0o600)
+	os.WriteFile(evFile(dir, "moi"), []byte("{\"t\":2}\n"), 0o600)
+	s.db.Close()
+	s2, err := NewServer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.db.Close()
+	ids := []string{}
+	for _, m := range s2.st.Machines {
+		ids = append(ids, m.ID)
+	}
+	if strings.Join(ids, ",") != "moi,khac" {
+		t.Fatalf("máy còn lại: %v", ids)
+	}
+	for _, a := range s2.st.Alerts {
+		if a.Machine != "moi" || a.Name != "VN10220" {
+			t.Fatalf("cảnh báo chưa chuyển: %+v", a)
+		}
+	}
+	if s2.st.Chat[0].Machine != "moi" || s2.st.Requests[0].Machine != "moi" {
+		t.Fatal("chat/yêu cầu hỗ trợ chưa chuyển")
+	}
+	if u := s2.st.Uptime["moi"]; len(u) != 2 || u[0] != [2]int64{100, 200} || s2.st.Uptime["cu"] != nil {
+		t.Fatalf("thời gian hoạt động gộp sai: %v", s2.st.Uptime)
+	}
+	if b, _ := os.ReadFile(evFile(dir, "moi")); string(b) != "{\"t\":2}\n{\"t\":1}\n" {
+		t.Fatalf("lỗi của máy gộp sai: %q", b)
+	}
+	if _, err := os.Stat(evFile(dir, "cu")); err == nil {
+		t.Fatal("file lỗi của bản ghi cũ phải bỏ")
+	}
 }
 
 func TestCSPAllowsBlobImages(t *testing.T) { // viewer remote hiện hình bằng blob: URL

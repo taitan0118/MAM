@@ -1001,15 +1001,62 @@ VIEWS.discover = async v => {
     box.innerHTML = '';
     try {
       const r = await api('POST', '/api/discover', { cidr: cidr.value });
+      // Cài từ xa (Super admin): máy Windows mở cổng 445, chưa cài MAM
+      const canRI = f => isSuper() && !f.agent && f.ports.indexOf(445) >= 0;
+      const ri = VIEWS.discover.ri = { cells: {}, picks: new Set() };
+      const riCell = f => { const c = el('td', { style: 'white-space:nowrap' }); ri.cells[f.ip] = c; c.append(el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: () => riAsk([f.ip]) }, 'Cài agent')); return c; };
       const foundRow = f => el('tr', { class: 'nohover' },
+        isSuper() ? el('td', {}, canRI(f) ? el('input', { type: 'checkbox', onchange: e => { e.target.checked ? ri.picks.add(f.ip) : ri.picks.delete(f.ip); bulk.disabled = !ri.picks.size; } }) : null) : null,
         el('td', {}, kindIcon[f.kind] || '❓'), el('td', { class: 'mono' }, f.ip), el('td', {}, f.host || '—'), el('td', { class: 'mono' }, f.ports.join(', ')),
-        el('td', {}, f.agent ? pill('ok', f.agent) : pill('warn', 'Chưa')));
-      const tb = table(['', 'IP', 'Tên máy (DNS)', 'Cổng mở', 'Đã cài MAM?'], r.found.map(foundRow), 'Không thấy thiết bị nào phản hồi');
+        el('td', {}, f.agent ? pill('ok', f.agent) : pill('warn', 'Chưa')),
+        isSuper() ? (canRI(f) ? riCell(f) : el('td', {})) : null);
+      const bulk = el('button', { class: 'btn primary', disabled: true, onclick: () => riAsk([...ri.picks]) }, 'Cài agent cho các máy đã chọn');
+      const tb = table([...(isSuper() ? [''] : []), '', 'IP', 'Tên máy (DNS)', 'Cổng mở', 'Đã cài MAM?', ...(isSuper() ? ['Cài từ xa'] : [])], r.found.map(foundRow), 'Không thấy thiết bị nào phản hồi');
+      if (isSuper() && r.found.some(canRI)) box.append(el('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0' }, bulk,
+        el('span', { style: 'font-size:12.5px;color:var(--muted)' }, t('Chỉ máy Windows mở cổng 445. Cần tài khoản quản trị của máy đó.'))));
+      riPoll();
       box.append(el('div', { style: 'margin:10px 0;color:var(--muted);font-size:12.5px' }, t('Đã quét {0} địa chỉ trong {1}, thấy {2} thiết bị có phản hồi.', r.scanned, r.cidr, r.found.length) + (r.partial ? ' ' + t('(hết thời gian, có thể chưa quét xong)') : '')));
       box.append(card('Kết quả', null, tb));
     } catch (e) { fail(e); } finally { btn.disabled = false; btn.textContent = t('Quét mạng'); }
   }
   v.append(el('div', { style: 'margin-top:12px' }, infoNote('Dò cổng TCP thường gặp (135, 445, 3389, 22, 80, 443, 5900, 62078) để đoán có máy đang chạy, không đọc được nội dung máy. Dùng để tìm máy chưa cài MAM Agent trong mạng nội bộ.')));
+  if (isSuper()) v.append(el('div', { style: 'margin-top:8px' }, infoNote('Cài agent từ xa: server chép agent qua ổ quản trị ẩn ADMIN$ (cổng 445) rồi chạy cài bằng quyền SYSTEM, như PsExec. Cần tài khoản quản trị của máy đó: tài khoản quản trị domain, hoặc tài khoản Administrator gốc của máy. Máy Windows 7/8 được cài bản agent PowerShell. Người dùng máy đó không phải bấm gì, chỉ thấy cửa sổ MAM hiện lên khi cài xong. Mật khẩu không được lưu.')));
+  // hộp nhập tài khoản quản trị; "nhớ tạm" chỉ giữ trong trang này, tải lại trang là mất
+  function riAsk(ips) {
+    if (!ips.length) return;
+    const u = input('Administrator, hoặc TENMIEN\\admin', 'text', (VIEWS.discover.cred || {}).user || '');
+    const p = input('', 'password', (VIEWS.discover.cred || {}).password || '');
+    const keep = el('input', { type: 'checkbox', checked: !!VIEWS.discover.cred });
+    const err = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
+    modal(t('Cài agent lên {0} máy', ips.length), el('div', {},
+      el('div', { style: 'font-size:12.5px;color:var(--muted);margin-bottom:10px;word-break:break-all' }, ips.join(', ')),
+      field('Tài khoản quản trị của máy', u, 'Tài khoản quản trị domain, hoặc Administrator gốc của máy. Tài khoản quản trị tự tạo thường bị Windows chặn quản trị từ xa.'),
+      field('Mật khẩu', p),
+      el('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;margin:6px 0' }, keep, t('Nhớ tạm cho các máy tiếp theo (mất khi tải lại trang)')), err),
+      [{ label: 'Hủy', on: c => c() }, { label: 'Cài', cls: 'primary', on: async c => {
+        if (!u.value.trim() || !p.value) { err.textContent = t('Nhập tài khoản quản trị và mật khẩu của máy cần cài'); return; }
+        VIEWS.discover.cred = keep.checked ? { user: u.value.trim(), password: p.value } : null;
+        try { await api('POST', '/api/remote-install', { ips, user: u.value.trim(), password: p.value, lang: MAMI.lang() }); c(); riPoll(); } catch (e) { err.textContent = trErr(e.message); }
+      } }]);
+  }
+  // cập nhật cột "Cài từ xa" mỗi 2 giây cho tới khi không còn máy đang cài
+  async function riPoll() {
+    const ri = VIEWS.discover.ri;
+    if (!ri || !isSuper() || ri.timer) return;
+    let jobs = [];
+    try { jobs = await api('GET', '/api/remote-install'); } catch (e) { return; }
+    let running = false;
+    jobs.forEach(j => {
+      const c = ri.cells[j.ip]; if (!c) return;
+      if (j.state === 'running') running = true;
+      c.innerHTML = '';
+      c.append(el('div', { style: 'display:flex;gap:8px;align-items:center;white-space:normal;max-width:360px' },
+        j.state === 'running' ? pill('warn', t('Đang cài')) : j.state === 'ok' ? pill('ok', t('Xong')) : pill('crit', t('Lỗi')),
+        el('span', { style: 'font-size:12px;color:var(--muted)' }, t(j.status)),
+        j.state === 'fail' ? el('button', { class: 'btn', style: 'padding:3px 9px;font-size:12px', onclick: () => riAsk([j.ip]) }, 'Thử lại') : null));
+    });
+    if (running && document.body.contains(Object.values(ri.cells)[0] || document.body)) ri.timer = setTimeout(() => { ri.timer = null; riPoll(); }, 2000);
+  }
 };
 
 /* ---------- Báo cáo ---------- */

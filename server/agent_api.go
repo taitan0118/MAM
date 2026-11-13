@@ -65,15 +65,17 @@ func (s *Server) hEnroll(w http.ResponseWriter, r *http.Request) {
 	tok := rid(32)
 	var m *Machine
 	if in.MAC != "" {
+		// cài lại agent trên cùng máy (cùng MAC): dùng lại bản ghi cũ, kể cả đã thu hồi, để không thành hai máy
+		// trong danh sách và cảnh báo, lịch sử vẫn liền một máy. Ưu tiên bản ghi đang dùng.
 		for _, x := range s.st.Machines {
-			if !x.Revoked && x.MAC == in.MAC {
+			if x.MAC == in.MAC && (m == nil || m.Revoked && !x.Revoked) {
 				m = x
-				break
 			}
 		}
 	}
-	if m != nil { // cài lại agent trên cùng máy: cấp token mới, giữ nhóm và tên
+	if m != nil { // cấp token mới, giữ nhóm và tên
 		delete(s.tok, m.TokenHash)
+		m.Revoked = false
 	} else {
 		m = &Machine{ID: rid(5), Registered: time.Now(), Name: strings.TrimSpace(in.Name)}
 		s.st.Machines = append(s.st.Machines, m)

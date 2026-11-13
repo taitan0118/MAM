@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -279,8 +280,14 @@ func NewServer(dir string) (*Server, error) {
 	}
 	for _, m := range s.st.Machines {
 		s.tok[m.TokenHash] = m
+	}
+	if n := s.mergeDupMachines(); n > 0 {
+		log.Printf(T("Đã gộp %d bản ghi máy trùng (cùng MAC)"), n)
+	}
+	for _, m := range s.st.Machines {
 		s.setMachineName(m, m.Name) // cảnh báo cũ còn mang tên trước khi đổi (bản ≤1.1.55): đồng bộ một lần lúc bật
 	}
+	s.save() // ghi ngay phần vừa gộp/đồng bộ (chỉ ghi dòng đổi), không đợi lần lưu mỗi phút
 	return s, nil
 }
 
@@ -387,4 +394,61 @@ func (s *Server) readAudit(max int) []AuditEntry {
 		}
 	}
 	return out
+}
+
+// mergeDupMachines gộp bản ghi máy trùng (cùng MAC) có từ bản ≤1.1.56: máy bị thu hồi rồi cài lại agent thành bản ghi
+// mới, cảnh báo và lịch sử cũ nằm ở bản ghi đã thu hồi. Chuyển cảnh báo, thời gian hoạt động, chat, yêu cầu hỗ trợ,
+// lỗi của máy sang bản ghi đang dùng rồi bỏ bản ghi đã thu hồi. Gọi lúc khởi động, trả số bản ghi đã gộp.
+func (s *Server) mergeDupMachines() int {
+	keep := map[string]*Machine{} // MAC → bản ghi đang dùng
+	for _, m := range s.st.Machines {
+		if !m.Revoked && m.MAC != "" {
+			keep[m.MAC] = m
+		}
+	}
+	n := 0
+	out := s.st.Machines[:0]
+	for _, old := range s.st.Machines {
+		k := keep[old.MAC]
+		if !old.Revoked || old.MAC == "" || k == nil {
+			out = append(out, old)
+			continue
+		}
+		for _, a := range s.st.Alerts {
+			if a.Machine == old.ID {
+				a.Machine, a.Name = k.ID, k.Name
+			}
+		}
+		for _, c := range s.st.Chat {
+			if c.Machine == old.ID {
+				c.Machine = k.ID
+			}
+		}
+		for _, q := range s.st.Requests {
+			if q.Machine == old.ID {
+				q.Machine = k.ID
+			}
+		}
+		if up := s.st.Uptime[old.ID]; len(up) > 0 {
+			if s.st.Uptime == nil {
+				s.st.Uptime = map[string][][2]int64{}
+			}
+			all := append(up, s.st.Uptime[k.ID]...)
+			sort.Slice(all, func(i, j int) bool { return all[i][0] < all[j][0] })
+			s.st.Uptime[k.ID] = all
+		}
+		delete(s.st.Uptime, old.ID)
+		if b, err := os.ReadFile(evFile(s.dir, old.ID)); err == nil { // lỗi của máy: nối file cũ vào file đang dùng
+			if f, err := os.OpenFile(evFile(s.dir, k.ID), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+				f.Write(b)
+				f.Close()
+				os.Remove(evFile(s.dir, old.ID))
+			}
+		}
+		k.ThreatSeen = append(k.ThreatSeen, old.ThreatSeen...)
+		delete(s.tok, old.TokenHash)
+		n++
+	}
+	s.st.Machines = out
+	return n
 }
