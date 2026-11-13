@@ -994,6 +994,20 @@ VIEWS.discover = async v => {
   const box = el('div', { style: 'margin-top:12px' });
   v.append(el('div', { class: 'filters' }, field('Dải mạng nội bộ (tối đa 1.024 địa chỉ)', cidr), btn));
   if (sg.suggest && sg.suggest.length) v.append(el('div', { style: 'font-size:12px;color:var(--muted);margin-top:4px' }, t('Gợi ý theo máy server: {0}', sg.suggest.join(', '))));
+  // Tự cài hàng loạt: tải file agent đã gắn sẵn địa chỉ server, đưa tới từng máy cho người dùng bấm đúp (không cần mật khẩu máy)
+  const riDl = async osKey => {
+    try {
+      const r = await fetch('/api/agent-download?lang=' + MAMI.lang() + (osKey === 'windows32' ? '&os=windows32' : ''), { credentials: 'same-origin' });
+      if (!r.ok) { let m = 'Lỗi ' + r.status; try { m = (await r.json()).error || m; } catch (e) { } throw new Error(trErr(m)); }
+      const a = el('a', { href: URL.createObjectURL(await r.blob()), download: osKey === 'windows32' ? 'Cai-MAM-Agent-x86.exe' : 'Cai-MAM-Agent.exe' }); document.body.append(a); a.click(); a.remove();
+      toast(t('Đã tải file cài agent'));
+    } catch (e) { fail(e); }
+  };
+  if (isSuper()) v.append(el('div', { style: 'margin-top:12px' }, card('Tự cài hàng loạt (không cần mật khẩu máy)', 'cách chắc ăn, hợp mạng không có domain', el('div', { style: 'display:flex;flex-direction:column;gap:8px' },
+    el('div', { style: 'font-size:12.5px;color:var(--muted);line-height:1.6' }, t('Tải file dưới đây (đã gắn sẵn địa chỉ server và mã đăng ký), bỏ vào thư mục chia sẻ / USB / gửi Zalo. Trên mỗi máy bấm đúp file rồi bấm Yes ở hộp quyền Administrator — máy hiện trên Console sau vài giây. Cách này không cần mật khẩu máy, chạy được cả máy không mật khẩu hay tài khoản admin tự tạo.')),
+    el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+      el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: () => riDl() }, 'Tải file cài agent'),
+      el('button', { class: 'btn', style: 'padding:6px 12px;font-size:12.5px', onclick: () => riDl('windows32') }, 'Bản 32-bit (máy cũ)'))))));
   v.append(box);
   async function scan() {
     VIEWS.discover.cidr = cidr.value;
