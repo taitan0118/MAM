@@ -208,6 +208,22 @@ func startLocal() {
 		saveConfig()
 		w.Write([]byte("{}"))
 	})
+	// Người dùng đổi ngôn ngữ ngay trên cửa sổ MAM: lưu vào config, câu agent hiện ra (thông báo tắt máy...) cũng đổi theo.
+	mux.HandleFunc("/api/lang", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Lang string }
+		if r.Method != "POST" || json.NewDecoder(http.MaxBytesReader(w, r.Body, 256)).Decode(&in) != nil {
+			http.Error(w, "bad", 400)
+			return
+		}
+		if in.Lang != "vi" && in.Lang != "en" && in.Lang != "zh" {
+			http.Error(w, "vi|en|zh", 400)
+			return
+		}
+		setLang(in.Lang)
+		cfg.Lang = uiLang
+		saveConfig()
+		w.Write([]byte("{}"))
+	})
 	// Thông tin máy cho cửa sổ MAM.
 	mux.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {
 		ip, mac := localAddr()
