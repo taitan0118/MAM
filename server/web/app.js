@@ -475,7 +475,7 @@ VIEWS.detail = async (v, quiet) => {
   } else if (route.tab === 'err') {
     body.append(await errTab(m));
   } else if (route.tab === 'hw') {
-    const rows = [['Tên máy', m.name], ['Hệ điều hành', hw.os || m.os], ['Phiên bản', hw.osBuild], ['Kiến trúc', hw.arch], ['Hãng và model', hw.model], ['CPU', hw.cpu], ['Nhân / luồng', hw.cores ? hw.cores + ' / ' + (hw.threads || '—') : null], ['RAM', hw.ramGB ? hw.ramGB + ' GB' : null], ['Card đồ họa', hw.gpu], ['Bo mạch chủ', hw.board], ['BIOS', hw.bios], ['Số serial', hw.serial], ['Địa chỉ IP', (hw.ips || [m.ip]).join(', ')], ['Địa chỉ MAC', (hw.macs || [m.mac]).join(', ')], ['Miền / nhóm làm việc', hw.domain], ['Đăng ký lúc', fmtDT(m.registered)]];
+    const rows = [['Tên máy', m.name], ['Hệ điều hành', hw.os || m.os], ['Phiên bản', hw.osBuild], ['Kiến trúc', hw.arch], ['Hãng và model', hw.model], ['CPU', hw.cpu], ['Nhân / luồng', hw.cores ? hw.cores + ' / ' + (hw.threads || '—') : null], ['RAM', ramText(hw) || null], ['Card đồ họa', hw.gpu], ['Bo mạch chủ', hw.board], ['BIOS', hw.bios], ['Số serial', hw.serial], ['Địa chỉ IP', (hw.ips || [m.ip]).join(', ')], ['Địa chỉ MAC', (hw.macs || [m.mac]).join(', ')], ['Miền / nhóm làm việc', hw.domain], ['Đăng ký lúc', fmtDT(m.registered)]];
     body.append(card('Thông tin máy', 'agent tự đọc, cập nhật mỗi giờ', el('div', { class: 'cols' }, [rows.slice(0, 8), rows.slice(8)].map(r => el('div', {}, r.map(x => srow(x[0], x[1])))))));
   } else if (route.tab === 'disk') {
     const ds = hw.disks || [];
@@ -937,6 +937,9 @@ VIEWS.requests = async v => {
 
 /* ---------- Kiểm kê ---------- */
 // một ổ cứng: tên, loại (SSD/HDD), dung lượng, tình trạng theo Windows; rê chuột xem nhiệt độ, độ mòn, giờ chạy
+// RAM: dung lượng, loại, và cắm mấy thanh trên tổng số khe. Agent cũ chưa gửi số thanh thì chỉ hiện dung lượng.
+const ramText = h => !h || !h.ramGB ? '' : h.ramGB + ' GB' + (h.ramType ? ' ' + h.ramType : '')
+  + (h.ramSticks ? ' · ' + t('{0}/{1} khe', h.ramSticks, h.ramSlots || h.ramSticks) : '');
 const diskLine = d => {
   const tip = [];
   if (d.note) tip.push(t(d.note));
@@ -968,7 +971,7 @@ VIEWS.inventory = async v => {
     el('td', {}, it.group || el('span', { style: 'color:var(--faint)' }, 'Chưa phân nhóm')),
     el('td', { style: 'font-size:12.5px' }, it.board || '—'),
     el('td', { style: 'font-size:12.5px' }, it.cpu || '—'),
-    el('td', { class: 'mono', style: 'white-space:nowrap' }, it.ramGB ? it.ramGB + ' GB' + (it.ramType ? ' ' + it.ramType : '') : '—'),
+    el('td', { class: 'mono', style: 'white-space:nowrap' }, ramText(it) || '—'),
     el('td', {}, (it.disks || []).length ? (it.disks || []).map(diskLine) : '—'),
     el('td', { style: 'font-size:12.5px' }, it.os || '—'),
     el('td', { class: 'mono' }, it.ip || '—'))), 'Không có máy nào'))));

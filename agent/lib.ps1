@@ -99,10 +99,17 @@ function Get-MamHw {
   } catch { }
   # Loại RAM (DDR3/DDR4/DDR5) để Kiểm kê hiện rõ; Windows 7 không có SMBIOSMemoryType thì dùng MemoryType
   $ramType = ''
+  $ramSticks = 0
+  $ramSlots = 0
   try {
     $mt = @{ 20 = 'DDR'; 21 = 'DDR2'; 24 = 'DDR3'; 26 = 'DDR4'; 34 = 'DDR5' }
     $ts = @()
-    foreach ($m in @(Get-WmiObject Win32_PhysicalMemory)) {
+    $mems = @(Get-WmiObject Win32_PhysicalMemory)
+    $ramSticks = $mems.Count
+    # Tổng số khe của bo mạch; máy ảo hoặc BIOS khai thiếu thì để 0, Console chỉ hiện số thanh
+    try { foreach ($a in @(Get-WmiObject Win32_PhysicalMemoryArray)) { $ramSlots += [int]$a.MemoryDevices } } catch { }
+    if ($ramSlots -lt $ramSticks) { $ramSlots = 0 }
+    foreach ($m in $mems) {
       $k = 0
       try { $k = [int]$m.SMBIOSMemoryType } catch { }
       if (-not $mt[$k]) { try { $k = [int]$m.MemoryType } catch { } }
@@ -145,7 +152,7 @@ function Get-MamHw {
   try { if ((Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending')) { $reboot = $true } } catch { }
   return @{
     cpu = ([string]$cpu[0].Name).Trim(); cores = $cores; threads = $threads
-    ramGB = [math]::Round($cs.TotalPhysicalMemory / 1GB, 1); ramType = $ramType
+    ramGB = [math]::Round($cs.TotalPhysicalMemory / 1GB, 1); ramType = $ramType; ramSticks = $ramSticks; ramSlots = $ramSlots
     gpu = ($gpu | ForEach-Object { [string]$_.Name }) -join '; '
     board = (([string]$bd.Manufacturer) + ' ' + ([string]$bd.Product)).Trim()
     bios = ([string]$bios.SMBIOSBIOSVersion); serial = ([string]$bios.SerialNumber)
