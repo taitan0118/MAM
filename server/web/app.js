@@ -492,8 +492,9 @@ VIEWS.detail = async (v, quiet) => {
           if (d.status === 'failed') { smartBox.innerHTML = ''; smartBox.append(infoNote(trErr(d.result || 'Lỗi'))); return; }
           const rows = d.hasData ? await api('GET', '/api/machines/' + m.id + '/cmd/' + d.id + '/data') : [];
           smartBox.innerHTML = '';
-          smartBox.append(card('Kết quả S.M.A.R.T (trực tiếp)', 'vừa đọc từ ' + m.name, table(['Ổ', 'Loại', 'Tình trạng', 'Nhiệt độ', 'Mòn', 'Giờ chạy', 'Lỗi đọc/ghi'], rows.map(x => el('tr', { class: 'nohover' }, el('td', {}, x.name), el('td', {}, x.type || x.bus || '—'),
-            el('td', {}, /^(ok|healthy)$/i.test(x.health || '') ? pill('ok', x.health) : pill('warn', x.health || x.status || 'Không rõ')), el('td', { class: 'mono' }, x.temp != null ? x.temp + '°C' : '—'), el('td', { class: 'mono' }, x.wear != null ? x.wear + '%' : '—'), el('td', { class: 'mono' }, x.hours != null ? x.hours : '—'), el('td', { class: 'mono' }, (x.readErr || 0) + ' / ' + (x.writeErr || 0)))), 'Không đọc được')));
+          smartBox.append(card('Kết quả S.M.A.R.T (trực tiếp)', 'vừa đọc từ ' + m.name, table(['Ổ', 'Loại', 'Tình trạng', 'Nhiệt độ', 'Mòn', 'Giờ chạy'], rows.map(x => el('tr', { class: 'nohover' }, el('td', {}, x.model || x.name), el('td', {}, x.type || x.bus || '—'),
+            el('td', {}, x.health ? pill(diskPill(x.health), t(x.health) + (x.healthPct != null ? ' ' + Math.round(x.healthPct) + '%' : '')) : pill('warn', x.status || 'Không rõ'), x.note ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:2px' }, t(x.note)) : null),
+            el('td', { class: 'mono' }, (x.tempC != null ? x.tempC : x.temp) != null ? (x.tempC != null ? x.tempC : x.temp) + '°C' : '—'), el('td', { class: 'mono' }, x.wear != null ? x.wear + '%' : '—'), el('td', { class: 'mono' }, x.hours != null ? x.hours : '—'))), 'Không đọc được')));
         } catch (e) { smartBox.innerHTML = ''; smartBox.append(infoNote(e.message)); }
       } }, 'Kiểm tra S.M.A.R.T ngay'), smartBox));
     }

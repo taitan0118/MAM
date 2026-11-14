@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // Chấm sức khỏe ổ cứng từ chỉ số S.M.A.R.T agent gửi lên.
 // Windows chỉ báo Unhealthy khi ổ gần chết: SSD mòn 63% vẫn ra "Healthy", nên không dùng được một mình.
@@ -81,4 +84,23 @@ func rateDisks(hw map[string]interface{}) {
 			rateDisk(d)
 		}
 	}
+}
+
+// rateDiskList chấm sức khỏe cho kết quả lệnh "Kiểm tra S.M.A.R.T ngay" (một mảng ổ dạng JSON),
+// để bảng đọc trực tiếp nói đúng như bảng Ổ cứng vật lý. Dữ liệu lạ thì trả nguyên, không làm hỏng.
+func rateDiskList(raw []byte) []byte {
+	var ds []interface{}
+	if json.Unmarshal(raw, &ds) != nil {
+		return raw
+	}
+	for _, x := range ds {
+		if d, ok := x.(map[string]interface{}); ok {
+			rateDisk(d)
+		}
+	}
+	out, err := json.Marshal(ds)
+	if err != nil {
+		return raw
+	}
+	return out
 }

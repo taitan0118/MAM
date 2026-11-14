@@ -39,10 +39,12 @@ func osKill(pid string) error {
 }
 
 func osSmart() ([]map[string]interface{}, error) {
+	// Dùng chung Get-MamHw với phần Ổ cứng vật lý: cùng chỉ số S.M.A.R.T, khỏi hai bảng nói ngược nhau.
 	var out []map[string]interface{}
-	err := psJSON(`@(foreach($d in @(Get-PhysicalDisk)){ $c=$null; try{ $c = $d | Get-StorageReliabilityCounter -ErrorAction Stop }catch{}; @{ name=[string]$d.FriendlyName; type=[string]$d.MediaType; bus=[string]$d.BusType; health=[string]$d.HealthStatus; status=[string]$d.OperationalStatus; sizeGB=[math]::Round($d.Size/1GB); temp=$(if($c){$c.Temperature}else{$null}); wear=$(if($c){$c.Wear}else{$null}); hours=$(if($c){$c.PowerOnHours}else{$null}); readErr=$(if($c){$c.ReadErrorsTotal}else{$null}); writeErr=$(if($c){$c.WriteErrorsTotal}else{$null}) } })`, &out)
+	err := psJSON("@((Get-MamHw).disks)", &out)
 	return out, err
 }
+
 
 var applied struct {
 	usb      *bool

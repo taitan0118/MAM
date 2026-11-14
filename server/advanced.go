@@ -120,6 +120,9 @@ func (s *Server) hResult(w http.ResponseWriter, r *http.Request) {
 			c.Status = "failed"
 		}
 		c.Result, c.Done = clip(in.Output, 400), time.Now()
+		if c.Type == "smart" && raw != nil {
+			raw = rateDiskList(raw)
+		}
 		if raw != nil && !s.putBlob(c.ID, &Blob{Machine: m.ID, Name: clip(in.Name, 120), Mime: clip(in.Mime, 60), Data: raw}) {
 			c.Status, c.Result = "failed", "Bộ nhớ server đầy, thử lại sau ít phút"
 		}

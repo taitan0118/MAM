@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // Chấm sức khỏe ổ: số liệu lấy từ máy thật của đại ca (SSD Kingston còn 37% tuổi thọ mà Windows vẫn báo Healthy).
 func TestRateDisk(t *testing.T) {
@@ -61,5 +64,24 @@ func TestRateDisksTrongHw(t *testing.T) {
 	}
 	if d := ds[1].(map[string]interface{}); d["health"] != "OK" {
 		t.Errorf("ổ 2 bị sửa: %v", d["health"])
+	}
+}
+
+// Bảng "Kiểm tra S.M.A.R.T ngay" phải nói đúng như bảng Ổ cứng vật lý: cùng một hàm chấm.
+func TestRateDiskList(t *testing.T) {
+	out := rateDiskList([]byte(`[{"model":"KINGSTON","smart":true,"type":"SSD","lifeLeft":37,"health":"Healthy"},{"model":"USB DISK","health":"Healthy"}]`))
+	var ds []map[string]interface{}
+	if err := json.Unmarshal(out, &ds); err != nil {
+		t.Fatalf("kết quả không đọc được: %v", err)
+	}
+	if ds[0]["health"] != "Cần chú ý" || ds[0]["note"] != "tuổi thọ còn 37%" {
+		t.Errorf("ổ SSD: %v / %v", ds[0]["health"], ds[0]["note"])
+	}
+	if ds[1]["health"] != "Healthy" {
+		t.Errorf("ổ không có S.M.A.R.T bị sửa: %v", ds[1]["health"])
+	}
+	// Dữ liệu lạ thì trả nguyên chứ không làm hỏng kết quả lệnh.
+	if s := string(rateDiskList([]byte("không phải JSON"))); s != "không phải JSON" {
+		t.Errorf("dữ liệu lạ bị đổi: %q", s)
 	}
 }
