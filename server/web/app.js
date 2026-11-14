@@ -408,6 +408,20 @@ function spark(vals, color, max) {
   const d = vals.map((x, i) => x == null || x < 0 ? null : (i / (n - 1) * w).toFixed(1) + ',' + (h - 3 - x / mx * (h - 6)).toFixed(1)).filter(Boolean).join(' ');
   return el('div', { html: '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><polyline fill="none" stroke="' + color + '" stroke-width="1.8" stroke-linejoin="round" points="' + d + '"/></svg>' });
 }
+// Biểu đồ nhanh: trang chi tiết tự nạp lại mỗi 4 giây, mỗi lần nạp mà máy vừa báo cáo mới thì giữ lại một mẫu.
+// 48 mẫu × 5 giây = 4 phút. Chỉ nằm trong trình duyệt: đóng trang là mất, server không tốn gì.
+const FAST = { id: null, at: null, s: [] };
+const FAST_MAX = 48;
+function fastPush(m) {
+  if (FAST.id !== m.id) { FAST.id = m.id; FAST.s = []; FAST.at = null; }
+  const at = m.lastSeen || '';
+  if (!m.online || at === FAST.at) return;
+  FAST.at = at;
+  FAST.s.push({ cpu: m.cpu, ram: m.ram, temp: m.temp });
+  if (FAST.s.length > FAST_MAX) FAST.s = FAST.s.slice(-FAST_MAX);
+}
+let liveSpan = 'fast'; // 'fast' = 4 phút (mẫu 5 giây), 'slow' = 4 giờ (mẫu 30 giây)
+try { if (localStorage.getItem('mam-live-span') === 'slow') liveSpan = 'slow'; } catch (e) { }
 function liveCard(name, big, unit, color, hist) { return el('div', { class: 'livecard' }, el('div', { class: 'top' }, el('span', { class: 'nm' }, name), el('span', { class: 'big' }, big, el('small', { style: 'font-size:13px;color:var(--faint);margin-left:2px' }, unit))), spark(hist, color, unit === '°C' ? 110 : 100)); }
 const srow = (k, val) => el('div', { class: 'srow' }, el('span', {}, k), el('b', { style: 'font-weight:600;text-align:right;max-width:62%;word-break:break-word' }, val == null || val === '' ? '—' : String(val)));
 
@@ -441,15 +455,21 @@ VIEWS.detail = async (v, quiet) => {
   v.append(tabs);
   const body = el('div', { style: 'margin-top:14px' }); v.append(body);
   const H = m.hist || [];
+  fastPush(m);
   if (route.tab === 'live') {
     if (off) body.append(infoNote('Máy đang offline: số liệu bên dưới dừng ở lần báo cáo cuối.'));
+    const fast = liveSpan === 'fast', G = fast ? FAST.s : H;
+    const spanBtn = (k, l) => el('button', { class: 'btn' + (liveSpan === k ? ' primary' : ''), style: 'padding:4px 10px;font-size:12px', onclick: () => { liveSpan = k; try { localStorage.setItem('mam-live-span', k); } catch (e) { } render(); } }, l);
+    body.append(el('div', { style: 'display:flex;gap:6px;align-items:center;margin-top:12px' }, spanBtn('fast', '4 phút'), spanBtn('slow', '4 giờ')));
     body.append(el('div', { class: 'live', style: off ? 'margin-top:12px;opacity:.6' : 'margin-top:12px' },
-      liveCard('CPU', num(m.cpu), '%', 'var(--accent)', H.map(s => s.cpu)),
-      liveCard('RAM', num(m.ram), '%', 'var(--good)', H.map(s => s.ram)),
-      liveCard('Nhiệt độ bo mạch (ACPI)', m.temp != null ? num(m.temp) : 'N/A', m.temp != null ? '°C' : '', 'var(--crit)', H.map(s => s.temp)),
+      liveCard('CPU', num(m.cpu), '%', 'var(--accent)', G.map(s => s.cpu)),
+      liveCard('RAM', num(m.ram), '%', 'var(--good)', G.map(s => s.ram)),
+      liveCard('Nhiệt độ bo mạch (ACPI)', m.temp != null ? num(m.temp) : 'N/A', m.temp != null ? '°C' : '', 'var(--crit)', G.map(s => s.temp)),
       el('div', { class: 'livecard' }, el('div', { class: 'top' }, el('span', { class: 'nm' }, 'Ổ đĩa')), (m.disks || []).map(d => { const used = d.totalGB ? 100 - d.freeGB / d.totalGB * 100 : 0; return el('div', { style: 'margin-top:9px' }, el('div', { style: 'display:flex;justify-content:space-between;font-size:12.5px' }, el('b', {}, d.name), el('span', { class: 'mono' }, t('{0} / {1} GB trống', num(d.freeGB, 0), num(d.totalGB, 0)))), el('div', { class: 'bar', style: 'max-width:none;margin-top:4px' }, el('i', { style: 'width:' + used + '%;background:' + col(used, 80, 100 - (settings ? settings.disk : 10)) }))); }))));
     if (m.temp == null) body.append(el('div', { style: 'margin-top:12px' }, infoNote('Không đọc được nhiệt độ CPU qua Windows (nhiều máy không công khai cảm biến này). Các mục khác vẫn hoạt động bình thường.')));
-    body.append(el('div', { style: 'margin-top:12px;font-size:12px;color:var(--faint)' }, 'Biểu đồ lấy mẫu mỗi 30 giây, giữ tối đa 4 giờ gần nhất kể từ lúc server chạy.'));
+    body.append(el('div', { style: 'margin-top:12px;font-size:12px;color:var(--faint)' }, fast
+      ? 'Biểu đồ vẽ theo từng lần máy báo về (khoảng 5 giây), 4 phút gần nhất kể từ lúc bạn mở trang này.'
+      : 'Biểu đồ lấy mẫu mỗi 30 giây, giữ tối đa 4 giờ gần nhất kể từ lúc server chạy.'));
   } else if (route.tab === 'up') {
     body.append(await upDetail(m.id));
   } else if (route.tab === 'err') {
