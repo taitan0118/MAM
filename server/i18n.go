@@ -8,17 +8,17 @@ import (
 
 // Ngôn ngữ cho dòng lệnh và nhật ký của server: vi (mặc định), en, zh. Chọn bằng -lang hoặc biến MAM_LANG.
 // Giao diện web tự dịch ở i18n.js; ở đây chỉ có các câu in ra cửa sổ lệnh.
-var uiLang = "vi"
+var uiLang = "en"
 
 func setLang(l string) {
 	l = strings.ToLower(strings.TrimSpace(l))
 	switch {
 	case strings.HasPrefix(l, "zh"):
 		uiLang = "zh"
-	case strings.HasPrefix(l, "en"):
-		uiLang = "en"
-	default:
+	case strings.HasPrefix(l, "vi"):
 		uiLang = "vi"
+	default:
+		uiLang = "en"
 	}
 }
 

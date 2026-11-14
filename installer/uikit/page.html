@@ -102,7 +102,7 @@ const UI={
  working:["Đang thực hiện, vui lòng không tắt cửa sổ này...","Working, please keep this window open...","正在处理，请不要关闭此窗口..."]};
 const $=s=>document.querySelector(s);
 let spec,tab='install',lang=0,st=null,timer=null,vals={};
-const nav=(navigator.language||'vi').toLowerCase();lang=nav.startsWith('zh')?2:(nav.startsWith('en')&&false?1:0);
+const nav=(navigator.language||'en').toLowerCase();lang=nav.startsWith('zh')?2:(nav.startsWith('vi')?0:1);
 try{const s=localStorage.getItem('mam-setup-lang');if(s!==null)lang=+s}catch(e){}
 const T=k=>UI[k][lang];
 const L=a=>a?(a[lang]||a[0]):'';

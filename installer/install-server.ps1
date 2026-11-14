@@ -6,7 +6,7 @@
 param([string]$Lang = '', [int]$Port = 7070, [string]$DataDir = '')
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
 $ErrorActionPreference = 'Continue'   # lệnh native ghi stderr không được làm script dừng (PowerShell 5)
-if (-not $Lang) { $c = (Get-UICulture).Name.ToLower(); if ($c.StartsWith('zh')) { $Lang = 'zh' } elseif ($c.StartsWith('en')) { $Lang = 'en' } else { $Lang = 'vi' } }
+if (-not $Lang) { $c = (Get-UICulture).Name.ToLower(); if ($c.StartsWith('zh')) { $Lang = 'zh' } elseif ($c.StartsWith('vi')) { $Lang = 'vi' } else { $Lang = 'en' } }
 $M = @{
   admin  = @('Cần chạy bằng quyền Administrator (bấm phải vào install-server.bat > Run as administrator).', 'Please run as Administrator (right-click install-server.bat > Run as administrator).', '请以管理员身份运行（右键 install-server.bat > 以管理员身份运行）。')
   nofile = @('Không thấy mam-server.exe cạnh file cài này.', 'mam-server.exe was not found next to this installer.', '在安装脚本旁边找不到 mam-server.exe。')

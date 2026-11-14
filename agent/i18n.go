@@ -8,17 +8,17 @@ import (
 
 // Ngôn ngữ của agent: vi (mặc định), en, zh. Chọn lúc cài bằng -lang, lưu trong config.json.
 // Chỉ có các câu in ra cửa sổ lệnh, nhật ký agent và lời nhắn "tắt/khởi động lại máy" người dùng thấy.
-var uiLang = "vi"
+var uiLang = "en"
 
 func setLang(l string) {
 	l = strings.ToLower(strings.TrimSpace(l))
 	switch {
 	case strings.HasPrefix(l, "zh"):
 		uiLang = "zh"
-	case strings.HasPrefix(l, "en"):
-		uiLang = "en"
-	default:
+	case strings.HasPrefix(l, "vi"):
 		uiLang = "vi"
+	default:
+		uiLang = "en"
 	}
 }
 

@@ -38,7 +38,7 @@ function Get-MamHw {
   try { foreach ($x in @(Get-WmiObject -Namespace 'root\wmi' -Class MSStorageDriver_FailurePredictStatus -ErrorAction Stop)) { if ($x.PredictFailure) { $fail = $true } } } catch { }
   $disks = @()
   foreach ($d in @(Get-WmiObject Win32_DiskDrive)) {
-    $disks += @{ model = [string]$d.Model; sizeGB = [math]::Round($d.Size / 1GB, 0); type = [string]$d.MediaType; health = [string]$d.Status; tempC = $null; wear = $null; hours = $null; serial = ([string]$d.SerialNumber).Trim() }
+    $disks += @{ model = [string]$d.Model; sizeGB = [math]::Round($d.Size / 1GB, 0); type = [string]$d.MediaType; health = [string]$d.Status; tempC = $null; wear = $null; hours = $null; serial = ([string]$d.SerialNumber).Trim(); pnp = ([string]$d.PNPDeviceID) }
   }
   try {
     if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
@@ -54,6 +54,38 @@ function Get-MamHw {
         $disks[$i].health = [string]$pd.HealthStatus; $disks[$i].type = [string]$pd.MediaType
         try { $rc = $pd | Get-StorageReliabilityCounter -ErrorAction Stop
           $disks[$i].tempC = $rc.Temperature; $disks[$i].wear = $rc.Wear; $disks[$i].hours = $rc.PowerOnHours } catch { }
+      }
+    }
+  } catch { }
+  # Chỉ số S.M.A.R.T thật của ổ: Windows chỉ báo Unhealthy khi ổ gần chết, SSD mòn 63% vẫn ra Healthy và Wear = 0.
+  # Ghép theo PNPDeviceID (InstanceName của WMI = PNPDeviceID + '_0'), chắc hơn ghép theo số sê-ri.
+  try {
+    $sd = @{}; $sf = @{}
+    try { foreach ($x in @(Get-WmiObject -Namespace 'root\wmi' -Class MSStorageDriver_FailurePredictData -ErrorAction Stop)) { $sd[([string]$x.InstanceName).ToUpper()] = $x.VendorSpecific } } catch { }
+    try { foreach ($x in @(Get-WmiObject -Namespace 'root\wmi' -Class MSStorageDriver_FailurePredictStatus -ErrorAction Stop)) { $sf[([string]$x.InstanceName).ToUpper()] = [bool]$x.PredictFailure } } catch { }
+    for ($i = 0; $i -lt $disks.Count; $i++) {
+      $key = ([string]$disks[$i].pnp).ToUpper() + '_0'
+      $b = $sd[$key]
+      if ($sf.ContainsKey($key)) { $disks[$i].predictFail = $sf[$key] }
+      if (-not $b) { continue }
+      $at = @{}; $va = @{}
+      for ($j = 2; $j + 11 -lt $b.Count; $j += 12) {
+        $id = [int]$b[$j]
+        if ($id -eq 0) { continue }
+        $raw = [int64]$b[$j + 5] + [int64]$b[$j + 6] * 256 + [int64]$b[$j + 7] * 65536 + [int64]$b[$j + 8] * 16777216
+        $at[$id] = $raw; $va[$id] = [int]$b[$j + 3]
+      }
+      $disks[$i].smart = $true
+      if ($at.ContainsKey(9)) { $disks[$i].hours = [int64]$at[9] }
+      if ($at.ContainsKey(194)) { $disks[$i].tempC = [int]([int64]$at[194] -band 255) }
+      foreach ($m in @(@(5, 'realloc'), @(197, 'pending'), @(198, 'offline'), @(187, 'uncorrect'))) {
+        if ($at.ContainsKey($m[0])) { $disks[$i][$m[1]] = [int64]$at[$m[0]] }
+      }
+      # Tuổi thọ SSD còn lại: chỉ số E7 (231) hoặc B1 (177); HDD không có, để trống chứ không đoán.
+      if (([string]$disks[$i].type) -match 'SSD') {
+        foreach ($id in 231, 177) {
+          if ($va.ContainsKey($id) -and $va[$id] -ge 0 -and $va[$id] -le 100) { $disks[$i].lifeLeft = $va[$id]; break }
+        }
       }
     }
   } catch { }

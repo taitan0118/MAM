@@ -120,6 +120,7 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 		m.IP = in.IP
 	}
 	if in.Hw != nil {
+		rateDisks(in.Hw)
 		m.Hw = in.Hw
 	}
 	m.LastSeen = now

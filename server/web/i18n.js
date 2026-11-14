@@ -929,6 +929,12 @@ var EN = {
 "0 = tắt. Ví dụ 3, 5, 7 — máy không báo về quá số ngày này thì mở cảnh báo, máy bật lại thì tự đóng.": "0 = off. For example 3, 5, 7 — if a computer does not report in for longer than this, an alert opens; it closes by itself when the computer comes back.",
 "Không có lần bật nào trong kỳ (máy bật sẵn từ trước)": "No power-on in this period (the computer was already on)",
 "Chưa tắt lần nào trong kỳ": "Never turned off in this period",
+"Tốt": "Good",
+"Sắp hỏng": "Failing",
+"Healthy": "Healthy",
+"Unhealthy": "Unhealthy",
+"sức khỏe theo chỉ số S.M.A.R.T của ổ": "health from the drive’s own S.M.A.R.T data",
+"Windows báo ổ sắp hỏng": "Windows reports the drive is failing",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -2011,6 +2017,12 @@ var ZH = {
 "0 = tắt. Ví dụ 3, 5, 7 — máy không báo về quá số ngày này thì mở cảnh báo, máy bật lại thì tự đóng.": "0 = 关闭。例如 3、5、7——电脑超过这个天数没有上报就会产生告警，电脑恢复后自动关闭。",
 "Không có lần bật nào trong kỳ (máy bật sẵn từ trước)": "本期内没有开机记录（电脑此前已开着）",
 "Chưa tắt lần nào trong kỳ": "本期内从未关机",
+"Tốt": "良好",
+"Sắp hỏng": "即将损坏",
+"Healthy": "良好",
+"Unhealthy": "异常",
+"sức khỏe theo chỉ số S.M.A.R.T của ổ": "根据硬盘自身的 S.M.A.R.T 数据",
+"Windows báo ổ sắp hỏng": "Windows 报告硬盘即将损坏",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -2135,6 +2147,41 @@ var ZH = {
 "Bản quyền © 2026 Nguyễn Tấn Tài (Missing)": "版权所有 © 2026 Nguyễn Tấn Tài (Missing)",
 };
 var PAT = [
+[
+"^Tuổi thọ còn (\\d+)%$",
+"Life left $1%",
+"剩余寿命 $1%"
+],
+[
+"^còn (\\d+)%$",
+"$1% left",
+"剩余 $1%"
+],
+[
+"^(\\d+) khối chờ thay$",
+"$1 sectors pending reallocation",
+"$1 个待映射扇区"
+],
+[
+"^(\\d+) khối hỏng ngoại tuyến$",
+"$1 offline uncorrectable sectors",
+"$1 个离线无法纠正扇区"
+],
+[
+"^(\\d+) lỗi không sửa được$",
+"$1 uncorrectable errors",
+"$1 个无法纠正的错误"
+],
+[
+"^(\\d+) khối hỏng đã thay$",
+"$1 reallocated sectors",
+"$1 个已重映射扇区"
+],
+[
+"^tuổi thọ còn (\\d+)%$",
+"life left $1%",
+"剩余寿命 $1%"
+],
 [
 "^Máy không bật (\\d+) ngày \\(lần cuối (.+)\\)$",
 "Computer has not been on for $1 days (last seen $2)",
@@ -2782,11 +2829,10 @@ var PAT = [
 ]
 ]; // [regex, en, zh] cho câu có tham số do server sinh (nhật ký, cảnh báo, lỗi)
 var LANGS = [['vi', 'Tiếng Việt'], ['en', 'English'], ['zh', '简体中文']];
-var lang = 'vi';
+var lang = 'en';
 function detect() {
   try { var s = localStorage.getItem('mam-lang'); if (s === 'vi' || s === 'en' || s === 'zh') return s; } catch (e) { }
-  var n = (navigator.language || 'vi').toLowerCase();
-  return n.indexOf('zh') === 0 ? 'zh' : n.indexOf('en') === 0 ? 'en' : 'vi';
+  return 'en'; // mặc định tiếng Anh; ai muốn tiếng Việt / 中文 thì chọn ở ô ngôn ngữ, chọn rồi là nhớ
 }
 lang = detect();
 var RX = PAT.map(function (p) { return [new RegExp(p[0]), p[1], p[2]]; });

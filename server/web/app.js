@@ -105,6 +105,8 @@ function select(opts, val, onchange) {
   return s;
 }
 const infoNote = x => el('div', { class: 'note' }, el('span', { html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>' }), el('div', {}, x));
+// Màu tình trạng ổ cứng: server chấm theo S.M.A.R.T (Tốt / Cần chú ý / Sắp hỏng); ổ cũ chưa chấm thì theo chữ của Windows.
+const diskPill = h => /^(sắp hỏng|unhealthy)$/i.test(h) ? 'crit' : (/^(tốt|healthy|ok)$/i.test(h) ? 'ok' : 'warn');
 const pill = (cls, x) => el('span', { class: 'pill ' + cls }, el('span', { class: 'd' }), x);
 const card = (title, sub, body, right) => el('div', { class: 'card' }, el('div', { class: 'card-h' }, el('h3', {}, title), sub ? el('span', { class: 'sub' }, '· ' + t(sub)) : null, el('div', { style: 'flex:1' }), right), el('div', { class: 'card-b' }, body));
 const kpi = (label, color, val, sub, fill) => el('div', { class: 'kpi' }, el('div', { class: 'lbl' }, el('span', { class: 'dot', style: 'background:' + color }), label), el('div', { class: 'val', style: 'color:' + color }, val), el('div', { class: 'sub' }, sub || ''), fill != null ? el('div', { class: 'kfill' }, el('i', { style: 'width:' + Math.max(0, Math.min(100, fill)) + '%;background:' + color })) : null);
@@ -458,8 +460,9 @@ VIEWS.detail = async (v, quiet) => {
   } else if (route.tab === 'disk') {
     const ds = hw.disks || [];
     if (hw.smartFail) body.append(el('div', { style: 'margin-bottom:12px' }, infoNote('Windows báo có ổ cứng dự báo sắp hỏng (S.M.A.R.T). Hãy sao lưu dữ liệu và thay ổ sớm.')));
-    body.append(card('Ổ cứng vật lý', 'tình trạng theo Windows', table(['Ổ', 'Loại', 'Dung lượng', 'Tình trạng', 'Nhiệt độ', 'Mòn', 'Giờ chạy'], ds.map(d => el('tr', { class: 'nohover' }, el('td', {}, el('div', { style: 'font-weight:600' }, d.model), el('div', { style: 'font-size:11.5px;color:var(--faint)' }, d.serial || '')), el('td', {}, d.type || '—'), el('td', { class: 'mono' }, d.sizeGB ? d.sizeGB + ' GB' : '—'),
-      el('td', {}, /^(ok|healthy)$/i.test(d.health || '') ? pill('ok', d.health) : pill('warn', d.health || 'Không rõ')), el('td', { class: 'mono' }, d.tempC != null ? d.tempC + '°C' : '—'), el('td', { class: 'mono' }, d.wear != null ? d.wear + '%' : '—'), el('td', { class: 'mono' }, d.hours != null ? t('{0} giờ', d.hours) : '—'))), 'Agent chưa gửi thông tin ổ cứng')));
+    body.append(card('Ổ cứng vật lý', 'sức khỏe theo chỉ số S.M.A.R.T của ổ', table(['Ổ', 'Loại', 'Dung lượng', 'Tình trạng', 'Nhiệt độ', 'Mòn', 'Giờ chạy'], ds.map(d => el('tr', { class: 'nohover' }, el('td', {}, el('div', { style: 'font-weight:600' }, d.model), el('div', { style: 'font-size:11.5px;color:var(--faint)' }, d.serial || '')), el('td', {}, d.type || '—'), el('td', { class: 'mono' }, d.sizeGB ? d.sizeGB + ' GB' : '—'),
+      el('td', {}, d.health ? pill(diskPill(d.health), t(d.health)) : pill('warn', 'Không rõ'), d.note ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:2px' }, t(d.note)) : null), el('td', { class: 'mono' }, d.tempC != null ? d.tempC + '°C' : '—'),
+      el('td', { class: 'mono' }, d.wear != null ? d.wear + '%' : '—', d.lifeLeft != null ? el('div', { style: 'font-size:11.5px;color:var(--muted)' }, t('còn {0}%', Math.round(d.lifeLeft))) : null), el('td', { class: 'mono' }, d.hours != null ? t('{0} giờ', d.hours) : '—'))), 'Agent chưa gửi thông tin ổ cứng')));
     if (ctl && !off) {
       const smartBox = el('div', { style: 'margin-top:12px' });
       body.append(el('div', { style: 'margin-top:12px' }, el('button', { class: 'btn', onclick: async () => {
@@ -914,7 +917,9 @@ VIEWS.requests = async v => {
 /* ---------- Kiểm kê ---------- */
 // một ổ cứng: tên, loại (SSD/HDD), dung lượng, tình trạng theo Windows; rê chuột xem nhiệt độ, độ mòn, giờ chạy
 const diskLine = d => {
-  const ok = /^(healthy|ok)$/i.test(d.health || ''), tip = [];
+  const tip = [];
+  if (d.note) tip.push(t(d.note));
+  if (d.lifeLeft != null) tip.push(t('Tuổi thọ còn {0}%', Math.round(d.lifeLeft)));
   if (d.tempC != null) tip.push(t('Nhiệt độ {0}°C', Math.round(d.tempC)));
   if (d.wear != null) tip.push(t('Mòn {0}%', Math.round(d.wear)));
   if (d.hours != null) tip.push(t('{0} giờ chạy', d.hours));
@@ -922,7 +927,7 @@ const diskLine = d => {
   return el('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:1px 0', title: tip.join(' · ') },
     el('span', { class: 'mono', style: 'font-size:12px' }, (d.sizeGB ? d.sizeGB + ' GB' : '') + (d.type ? ' ' + d.type : '')),
     el('span', { style: 'font-size:12px;color:var(--muted)' }, d.model || ''),
-    d.health ? pill(ok ? 'ok' : 'crit', d.health) : null);
+    d.health ? pill(diskPill(d.health), t(d.health)) : null);
 };
 const IV = { group: 'all', q: '' };
 VIEWS.inventory = async v => {

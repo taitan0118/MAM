@@ -9,9 +9,9 @@ if errorlevel 1 (
 cd /d "%~dp0"
 echo.
 echo  1 = Tieng Viet   2 = English   3 = Chinese (zhongwen)
-set /p L="  Language / Ngon ngu / yuyan [1]: "
-set LANGCODE=vi
-if "%L%"=="2" set LANGCODE=en
+set /p L="  Language / Ngon ngu / yuyan [2]: "
+set LANGCODE=en
+if "%L%"=="1" set LANGCODE=vi
 if "%L%"=="3" set LANGCODE=zh
 echo.
 set /p S="  Server address, e.g. 192.168.1.10:7070 : "
