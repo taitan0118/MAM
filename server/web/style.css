@@ -350,6 +350,8 @@
 .sticky-bar{position:sticky;top:0;z-index:5}
 .pre{white-space:pre-wrap;font-family:var(--ff-mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;user-select:all}
 .row2{display:flex;gap:10px;flex-wrap:wrap}.row2>*{flex:1;min-width:140px}
+  /* nhãn dài xuống 2 dòng làm ô nhập tụt thấp hơn ô cùng hàng: chừa sẵn chỗ 2 dòng */
+  .row2.lbl2>*>.flbl{min-height:2.8em}
 .chk{display:flex;gap:7px;align-items:center;font-size:13px}
 .empty{padding:28px;text-align:center;color:var(--faint)}
 tbody tr.nohover{cursor:default}

@@ -1569,7 +1569,7 @@ VIEWS.settings = async v => {
   const key = input('Để trống = máy nào cài agent cũng tự đăng ký', 'text', settings.enrollKey || ''); if (!isSuper()) key.style.display = 'none';
   const fe = field('Nhiệt độ CPU cảnh báo (°C)', ft), fc = field('CPU cảnh báo (%) khi cao liên tục khoảng 30 giây', c), fd = field('Ổ cứng cảnh báo khi trống còn (%)', d), fo = field('Mất kết nối cảnh báo sau (phút)', o);
   const fod = field('Máy không bật cảnh báo sau (ngày)', od, '0 = tắt. Ví dụ 3, 5, 7 — máy không báo về quá số ngày này thì mở cảnh báo, máy bật lại thì tự đóng.');
-  v.append(card('Ngưỡng cảnh báo', isSuper() ? null : 'chỉ Super admin được sửa', el('div', { class: 'row2' }, fe, fc, fd, fo, fod), isSuper() ? el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => {
+  v.append(card('Ngưỡng cảnh báo', isSuper() ? null : 'chỉ Super admin được sửa', el('div', { class: 'row2 lbl2' }, fe, fc, fd, fo, fod), isSuper() ? el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => {
     try { await api('PUT', '/api/settings', { temp: +ft.value, cpu: +c.value, disk: +d.value, offline: +o.value, offlineDays: +od.value, enrollKey: key.value }); toast('Đã lưu ngưỡng cảnh báo'); settings = await api('GET', '/api/settings'); } catch (e) { fail(e); } } }, 'Lưu') : null));
   if (isSuper()) {
     const rp = (await api('GET', '/api/remote-password')).set, pwi = input(rp ? 'Nhập mật khẩu mới để đổi' : 'Ít nhất 8 ký tự', 'password');
