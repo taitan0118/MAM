@@ -446,7 +446,7 @@ VIEWS.detail = async (v, quiet) => {
     body.append(el('div', { class: 'live', style: off ? 'margin-top:12px;opacity:.6' : 'margin-top:12px' },
       liveCard('CPU', num(m.cpu), '%', 'var(--accent)', H.map(s => s.cpu)),
       liveCard('RAM', num(m.ram), '%', 'var(--good)', H.map(s => s.ram)),
-      liveCard('Nhiệt độ CPU', m.temp != null ? num(m.temp) : 'N/A', m.temp != null ? '°C' : '', 'var(--crit)', H.map(s => s.temp)),
+      liveCard('Nhiệt độ bo mạch (ACPI)', m.temp != null ? num(m.temp) : 'N/A', m.temp != null ? '°C' : '', 'var(--crit)', H.map(s => s.temp)),
       el('div', { class: 'livecard' }, el('div', { class: 'top' }, el('span', { class: 'nm' }, 'Ổ đĩa')), (m.disks || []).map(d => { const used = d.totalGB ? 100 - d.freeGB / d.totalGB * 100 : 0; return el('div', { style: 'margin-top:9px' }, el('div', { style: 'display:flex;justify-content:space-between;font-size:12.5px' }, el('b', {}, d.name), el('span', { class: 'mono' }, t('{0} / {1} GB trống', num(d.freeGB, 0), num(d.totalGB, 0)))), el('div', { class: 'bar', style: 'max-width:none;margin-top:4px' }, el('i', { style: 'width:' + used + '%;background:' + col(used, 80, 100 - (settings ? settings.disk : 10)) }))); }))));
     if (m.temp == null) body.append(el('div', { style: 'margin-top:12px' }, infoNote('Không đọc được nhiệt độ CPU qua Windows (nhiều máy không công khai cảm biến này). Các mục khác vẫn hoạt động bình thường.')));
     body.append(el('div', { style: 'margin-top:12px;font-size:12px;color:var(--faint)' }, 'Biểu đồ lấy mẫu mỗi 30 giây, giữ tối đa 4 giờ gần nhất kể từ lúc server chạy.'));
@@ -1422,7 +1422,7 @@ VIEWS.report = async v => {
     kpi('Cảnh báo trong kỳ', 'var(--crit)', r.alerts, t('{0} đang mở hiện tại', r.alertsOpen)),
     kpi('Đóng cảnh báo trung bình', 'var(--good)', r.avgCloseMin ? t('{0} phút', Math.round(r.avgCloseMin)) : '—', 'từ lúc mở đến lúc đóng'),
     kpi('Yêu cầu hỗ trợ', 'var(--warn)', r.requests, t('{0} mới · {1} đã xong', r.requestsNew, r.requestsDone))));
-  const kindLabel = { temp: 'Nhiệt độ CPU', cpu: 'CPU cao liên tục', disk: 'Ổ đĩa sắp đầy', offline: 'Mất kết nối', virus: 'Phát hiện virus', suspect: 'Nghi ngờ mã độc', patch: 'Thiếu bản vá Windows' }, kindCol = { temp: 'var(--warn)', cpu: 'var(--accent)', disk: 'var(--crit)', offline: 'var(--faint)', virus: 'var(--crit)', suspect: 'var(--warn)', patch: 'var(--warn)' };
+  const kindLabel = { temp: 'Nhiệt độ bo mạch', cpu: 'CPU cao liên tục', disk: 'Ổ đĩa sắp đầy', offline: 'Mất kết nối', virus: 'Phát hiện virus', suspect: 'Nghi ngờ mã độc', patch: 'Thiếu bản vá Windows' }, kindCol = { temp: 'var(--warn)', cpu: 'var(--accent)', disk: 'var(--crit)', offline: 'var(--faint)', virus: 'var(--crit)', suspect: 'var(--warn)', patch: 'var(--warn)' };
   const hbar = (label, n, max, color) => el('div', { class: 'hrow' }, el('div', { class: 't' }, el('b', {}, label), el('span', { style: 'color:var(--muted)' }, n)), el('div', { class: 'bar' }, el('i', { style: 'width:' + (max ? n / max * 100 : 0) + '%;background:' + color })));
   const byK = Object.entries(r.byKind || {}), maxK = Math.max(0, ...byK.map(x => x[1]));
   const byD = r.byDay || [], maxD = Math.max(1, ...byD.map(x => x.n));
@@ -1572,7 +1572,7 @@ VIEWS.settings = async v => {
   const f = k => { const i = input('', 'number', settings[k]); if (!isSuper()) i.disabled = true; return i; };
   const ft = f('temp'), c = f('cpu'), d = f('disk'), o = f('offline'), od = f('offlineDays');
   const key = input('Để trống = máy nào cài agent cũng tự đăng ký', 'text', settings.enrollKey || ''); if (!isSuper()) key.style.display = 'none';
-  const fe = field('Nhiệt độ CPU cảnh báo (°C)', ft), fc = field('CPU cảnh báo (%) khi cao liên tục khoảng 30 giây', c), fd = field('Ổ cứng cảnh báo khi trống còn (%)', d), fo = field('Mất kết nối cảnh báo sau (phút)', o);
+  const fe = field('Nhiệt độ bo mạch cảnh báo (°C)', ft, 'Số này do BIOS bo mạch khai báo (vùng nhiệt ACPI), không phải cảm biến trong lõi CPU. Nhiều máy bàn báo một con số cố định, máy nào BIOS cho số vô lý thì MAM để trống.'), fc = field('CPU cảnh báo (%) khi cao liên tục khoảng 30 giây', c), fd = field('Ổ cứng cảnh báo khi trống còn (%)', d), fo = field('Mất kết nối cảnh báo sau (phút)', o);
   const fod = field('Máy không bật cảnh báo sau (ngày)', od, '0 = tắt. Ví dụ 3, 5, 7 — máy không báo về quá số ngày này thì mở cảnh báo, máy bật lại thì tự đóng.');
   v.append(card('Ngưỡng cảnh báo', isSuper() ? null : 'chỉ Super admin được sửa', el('div', { class: 'row2 lbl2' }, fe, fc, fd, fo, fod), isSuper() ? el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => {
     try { await api('PUT', '/api/settings', { temp: +ft.value, cpu: +c.value, disk: +d.value, offline: +o.value, offlineDays: +od.value, enrollKey: key.value }); toast('Đã lưu ngưỡng cảnh báo'); settings = await api('GET', '/api/settings'); } catch (e) { fail(e); } } }, 'Lưu') : null));

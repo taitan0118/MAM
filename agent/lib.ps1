@@ -20,9 +20,10 @@ function ConvertTo-MamJson($v) {
 function Get-MamTemp {
   try {
     $t = @(Get-WmiObject -Namespace 'root\wmi' -Class MSAcpi_ThermalZoneTemperature -ErrorAction Stop)
+    # Vùng nào ra số không thể có ở máy đang chạy (dưới 20°C hoặc trên 110°C) là BIOS khai báo rác, bỏ.
     $max = $null
-    foreach ($z in $t) { $c = ($z.CurrentTemperature / 10) - 273.15; if ($max -eq $null -or $c -gt $max) { $max = $c } }
-    if ($max -ne $null -and $max -gt 0 -and $max -lt 130) { return [math]::Round($max, 1) }
+    foreach ($z in $t) { $c = ($z.CurrentTemperature / 10) - 273.15; if ($c -ge 20 -and $c -le 110 -and ($max -eq $null -or $c -gt $max)) { $max = $c } }
+    if ($max -ne $null) { return [math]::Round($max, 1) }
   } catch { }
   return $null
 }

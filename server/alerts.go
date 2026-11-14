@@ -18,7 +18,7 @@ func (s *Server) checkMachine(m *Machine, l *Live) {
 	hot := l.Temp != nil && *l.Temp >= cfg.TempC
 	tmsg := ""
 	if l.Temp != nil {
-		tmsg = fmt.Sprintf("Nhiệt độ CPU %.0f°C (ngưỡng %.0f°C)", *l.Temp, cfg.TempC)
+		tmsg = fmt.Sprintf("Nhiệt độ bo mạch %.0f°C (ngưỡng %.0f°C)", *l.Temp, cfg.TempC)
 	}
 	s.cond(m, "temp", "crit", hot, tmsg)
 	low, dmsg := false, ""

@@ -935,6 +935,10 @@ var EN = {
 "Unhealthy": "Unhealthy",
 "sức khỏe theo chỉ số S.M.A.R.T của ổ": "health from the drive’s own S.M.A.R.T data",
 "Windows báo ổ sắp hỏng": "Windows reports the drive is failing",
+"Nhiệt độ bo mạch (ACPI)": "Board temperature (ACPI)",
+"Nhiệt độ bo mạch": "Board temperature",
+"Nhiệt độ bo mạch cảnh báo (°C)": "Board temperature alert (°C)",
+"Số này do BIOS bo mạch khai báo (vùng nhiệt ACPI), không phải cảm biến trong lõi CPU. Nhiều máy bàn báo một con số cố định, máy nào BIOS cho số vô lý thì MAM để trống.": "This number comes from the motherboard BIOS (ACPI thermal zone), not from a sensor inside the CPU. Many desktops report a fixed value; where the BIOS reports an impossible value, MAM leaves it blank.",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -2023,6 +2027,10 @@ var ZH = {
 "Unhealthy": "异常",
 "sức khỏe theo chỉ số S.M.A.R.T của ổ": "根据硬盘自身的 S.M.A.R.T 数据",
 "Windows báo ổ sắp hỏng": "Windows 报告硬盘即将损坏",
+"Nhiệt độ bo mạch (ACPI)": "主板温度（ACPI）",
+"Nhiệt độ bo mạch": "主板温度",
+"Nhiệt độ bo mạch cảnh báo (°C)": "主板温度告警 (°C)",
+"Số này do BIOS bo mạch khai báo (vùng nhiệt ACPI), không phải cảm biến trong lõi CPU. Nhiều máy bàn báo một con số cố định, máy nào BIOS cho số vô lý thì MAM để trống.": "此数值来自主板 BIOS（ACPI 温度区），并非 CPU 内核传感器。许多台式机只报一个固定值；若 BIOS 给出不合理的数值，MAM 会留空。",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -2147,6 +2155,11 @@ var ZH = {
 "Bản quyền © 2026 Nguyễn Tấn Tài (Missing)": "版权所有 © 2026 Nguyễn Tấn Tài (Missing)",
 };
 var PAT = [
+[
+"^Nhiệt độ bo mạch (\\d+)°C \\(ngưỡng (\\d+)°C\\)$",
+"Board temperature $1°C (threshold $2°C)",
+"主板温度 $1°C（阈值 $2°C）"
+],
 [
 "^Tuổi thọ còn (\\d+)%$",
 "Life left $1%",
