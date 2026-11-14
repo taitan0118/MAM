@@ -205,7 +205,7 @@ const TITLES = {
   overview: ['Tổng quan', 'Toàn hệ thống · cập nhật trực tiếp'], machines: ['Máy', 'Danh sách, lọc, ra lệnh'], detail: ['Chi tiết máy', ''],
   groups: ['Nhóm máy', 'Sắp xếp máy theo khu vực hoặc phòng ban'], alerts: ['Cảnh báo', 'Nhiệt độ, CPU, ổ cứng, mất kết nối'],
   chat: ['Chat với máy', 'Nhắn hai chiều với người ngồi máy, hiện ngay trong cửa sổ MAM'], requests: ['Yêu cầu hỗ trợ', 'Người ngồi máy gửi lên từ cửa sổ MAM'], policy: ['Chính sách', 'USB, chặn web/ứng dụng, giờ dùng máy theo nhóm'],
-  inventory: ['Kiểm kê', 'Phần cứng và bản quyền phần mềm từng máy'], security: ['Bảo mật & bản vá', 'Diệt virus và Windows Update — chỉ xem'],
+  inventory: ['Kiểm kê', 'Phần cứng và ổ cứng từng máy'], security: ['Bảo mật & bản vá', 'Diệt virus và Windows Update — chỉ xem'],
   discover: ['Phát hiện máy', 'Quét mạng LAN tìm máy chưa cài agent'], net: ['Qua Internet', 'Dùng Console khi không ở trong mạng công ty'],
   report: ['Báo cáo', 'Tổng hợp theo khoảng thời gian, xuất CSV'], uptime: ['Thời gian hoạt động', 'Máy bật lúc nào, tắt lúc nào, tổng bao nhiêu giờ'],
   accounts: ['Tài khoản', 'Ai được vào Console'], audit: ['Nhật ký thao tác', 'Ai làm gì, lúc nào, từ máy nào'], settings: ['Cài đặt', 'Ngưỡng cảnh báo, thông báo, sao lưu, cách cài agent']
