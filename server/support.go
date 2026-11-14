@@ -442,7 +442,11 @@ func (s *Server) exportRows(what, group string, me *Account) ([][]string, bool) 
 			if g == "" {
 				return ""
 			}
-			return strings.TrimSpace(g + " GB " + hw(m, "ramType"))
+			out := strings.TrimSpace(g + " GB " + hw(m, "ramType"))
+			if n := hw(m, "ramSticks"); n != "" && n != "0" {
+				out += " · " + n + " thanh"
+			}
+			return out
 		}
 		// mỗi ổ: "112 GB SSD KINGSTON ... (Healthy)"
 		disks := func(m *Machine) string {

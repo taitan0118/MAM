@@ -475,7 +475,7 @@ VIEWS.detail = async (v, quiet) => {
   } else if (route.tab === 'err') {
     body.append(await errTab(m));
   } else if (route.tab === 'hw') {
-    const rows = [['Tên máy', m.name], ['Hệ điều hành', hw.os || m.os], ['Phiên bản', hw.osBuild], ['Kiến trúc', hw.arch], ['Hãng và model', hw.model], ['CPU', hw.cpu], ['Nhân / luồng', hw.cores ? hw.cores + ' / ' + (hw.threads || '—') : null], ['RAM', ramText(hw) || null], ['Card đồ họa', hw.gpu], ['Bo mạch chủ', hw.board], ['BIOS', hw.bios], ['Số serial', hw.serial], ['Địa chỉ IP', (hw.ips || [m.ip]).join(', ')], ['Địa chỉ MAC', (hw.macs || [m.mac]).join(', ')], ['Miền / nhóm làm việc', hw.domain], ['Đăng ký lúc', fmtDT(m.registered)]];
+    const rows = [['Tên máy', m.name], ['Hệ điều hành', hw.os || m.os], ['Phiên bản', hw.osBuild], ['Kiến trúc', hw.arch], ['Hãng và model', hw.model], ['CPU', hw.cpu], ['Nhân / luồng', hw.cores ? hw.cores + ' / ' + (hw.threads || '—') : null], ['RAM', ramText(hw, true) || null], ['Card đồ họa', hw.gpu], ['Bo mạch chủ', hw.board], ['BIOS', hw.bios], ['Số serial', hw.serial], ['Địa chỉ IP', (hw.ips || [m.ip]).join(', ')], ['Địa chỉ MAC', (hw.macs || [m.mac]).join(', ')], ['Miền / nhóm làm việc', hw.domain], ['Đăng ký lúc', fmtDT(m.registered)]];
     body.append(card('Thông tin máy', 'agent tự đọc, cập nhật mỗi giờ', el('div', { class: 'cols' }, [rows.slice(0, 8), rows.slice(8)].map(r => el('div', {}, r.map(x => srow(x[0], x[1])))))));
   } else if (route.tab === 'disk') {
     const ds = hw.disks || [];
@@ -938,8 +938,11 @@ VIEWS.requests = async v => {
 /* ---------- Kiểm kê ---------- */
 // một ổ cứng: tên, loại (SSD/HDD), dung lượng, tình trạng theo Windows; rê chuột xem nhiệt độ, độ mòn, giờ chạy
 // RAM: dung lượng, loại, và cắm mấy thanh trên tổng số khe. Agent cũ chưa gửi số thanh thì chỉ hiện dung lượng.
-const ramText = h => !h || !h.ramGB ? '' : h.ramGB + ' GB' + (h.ramType ? ' ' + h.ramType : '')
-  + (h.ramSticks ? ' · ' + t('{0}/{1} khe', h.ramSticks, h.ramSlots || h.ramSticks) : '');
+// Số thanh luôn đúng. Số khe thì tin BIOS, mà có bo khai dư (H310M DS2 có 2 khe, BIOS khai 4),
+// nên chỉ nói ở tab Phần cứng và ghi rõ là BIOS khai.
+const ramText = (h, full) => !h || !h.ramGB ? '' : h.ramGB + ' GB' + (h.ramType ? ' ' + h.ramType : '')
+  + (h.ramSticks ? ' · ' + t('{0} thanh', h.ramSticks) : '')
+  + (full && h.ramSlots > h.ramSticks ? ' · ' + t('BIOS khai {0} khe', h.ramSlots) : '');
 const diskLine = d => {
   const tip = [];
   if (d.note) tip.push(t(d.note));

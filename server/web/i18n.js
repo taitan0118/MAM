@@ -2162,6 +2162,16 @@ var ZH = {
 };
 var PAT = [
 [
+"^(\\d+) thanh$",
+"$1 stick(s)",
+"$1 条"
+],
+[
+"^BIOS khai (\\d+) khe$",
+"BIOS reports $1 slots",
+"BIOS 报告 $1 个插槽"
+],
+[
 "^(\\d+)/(\\d+) khe$",
 "$1/$2 slots",
 "$1/$2 插槽"
