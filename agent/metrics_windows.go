@@ -22,6 +22,7 @@ var (
 	wts          = syscall.NewLazyDLL("wtsapi32.dll")
 	pSysTimes    = k32.NewProc("GetSystemTimes")
 	pMemEx       = k32.NewProc("GlobalMemoryStatusEx")
+	pRegGetValue = adv.NewProc("RegGetValueW")
 	pDiskFree    = k32.NewProc("GetDiskFreeSpaceExW")
 	pLogical     = k32.NewProc("GetLogicalDrives")
 	pDriveType   = k32.NewProc("GetDriveTypeW")
@@ -42,9 +43,45 @@ func setupLog() {
 	}
 }
 
+// regStr đọc một chuỗi trong registry máy (HKLM). Trả về "" nếu không có.
+// Dùng RegGetValueW nên chuỗi là UTF-16, không lệ thuộc bảng mã như chạy lệnh ngoài.
+func regStr(key, val string) string {
+	k, err1 := syscall.UTF16PtrFromString(key)
+	v, err2 := syscall.UTF16PtrFromString(val)
+	if err1 != nil || err2 != nil {
+		return ""
+	}
+	buf := make([]uint16, 256)
+	n := uint32(len(buf) * 2)
+	// 0x80000002 = HKEY_LOCAL_MACHINE; 2 = chỉ nhận REG_SZ; 0x10000 = đọc nhánh 64-bit (agent 32-bit vẫn đúng)
+	r, _, _ := pRegGetValue.Call(0x80000002, uintptr(unsafe.Pointer(k)), uintptr(unsafe.Pointer(v)),
+		2|0x10000, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&n)))
+	if r != 0 {
+		return ""
+	}
+	return syscall.UTF16ToString(buf)
+}
+
+// osName: "Windows 11 Pro 23H2 (build 22631)". Windows 11 vẫn ghi ProductName là "Windows 10 ..."
+// nên phân biệt bằng số bản dựng: từ 22000 trở lên là Windows 11.
 func osName() string {
-	out, _ := hidden("cmd", "/c", "ver").Output()
-	return "Windows · " + strings.TrimSpace(string(out))
+	const k = `SOFTWARE\Microsoft\Windows NT\CurrentVersion`
+	name := strings.TrimSpace(regStr(k, "ProductName"))
+	if name == "" {
+		out, _ := hidden("cmd", "/c", "ver").Output() // máy quá cũ không có khóa này
+		return "Windows · " + strings.TrimSpace(string(out))
+	}
+	build, _ := strconv.Atoi(regStr(k, "CurrentBuildNumber"))
+	if build >= 22000 {
+		name = strings.Replace(name, "Windows 10", "Windows 11", 1)
+	}
+	if v := regStr(k, "DisplayVersion"); v != "" {
+		name += " " + v
+	}
+	if build > 0 {
+		name += " (build " + strconv.Itoa(build) + ")"
+	}
+	return name
 }
 
 func hidden(name string, args ...string) *exec.Cmd {

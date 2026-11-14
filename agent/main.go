@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.67"
+const Version = "1.1.68"
 
 //go:embed lib.ps1
 var libPS string
@@ -330,7 +330,7 @@ func runLoop() {
 		m := collectMetrics()
 		ip, _ := localAddr()
 		lastUser = m.User
-		rep := map[string]interface{}{"cpu": m.CPU, "ram": m.RAM, "temp": tNow, "uptime": m.Uptime, "disks": m.Disks, "user": m.User, "ip": ip, "ver": Version, "arch": runtime.GOARCH, "macs": wolMACs(), "host": hostName()}
+		rep := map[string]interface{}{"cpu": m.CPU, "ram": m.RAM, "temp": tNow, "uptime": m.Uptime, "disks": m.Disks, "user": m.User, "ip": ip, "ver": Version, "arch": runtime.GOARCH, "macs": wolMACs(), "host": hostName(), "os": osName()}
 		if sendHw {
 			rep["hw"] = hwNow
 		}

@@ -21,6 +21,7 @@ type reportIn struct {
 	Macs    []string               `json:"macs"`
 	Events  []SysEvent             `json:"events"`
 	Host    string                 `json:"host"`
+	OS      string                 `json:"os"`
 }
 
 func (s *Server) agentMachine(r *http.Request) *Machine {
@@ -125,6 +126,11 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 	}
 	m.LastSeen = now
 	persist := false
+	// tên Windows chỉ gửi lúc đăng ký; agent mới gửi kèm mỗi báo cáo nên máy cũ cũng được sửa lại
+	if o := cut(in.OS, 120); o != "" && o != m.OS {
+		m.OS = o
+		persist = true
+	}
 	if h := cut(in.Host, 63); h != "" && h != m.Host {
 		// đổi tên máy trong Windows (System > About > Rename) thì tên trên MAM đổi theo; lần đầu chỉ ghi nhận
 		if m.Host != "" && m.Name != h {
