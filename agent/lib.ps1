@@ -82,6 +82,13 @@ function Get-MamHw {
       foreach ($m in @(@(5, 'realloc'), @(197, 'pending'), @(198, 'offline'), @(187, 'uncorrect'))) {
         if ($at.ContainsKey($m[0])) { $disks[$i][$m[1]] = [int64]$at[$m[0]] }
       }
+      # % sức khỏe: mỗi chỉ số SMART có giá trị chuẩn hóa 100 = như mới, tụt dần khi ổ yếu.
+      # Lấy giá trị thấp nhất trong các chỉ số về lỗi và tuổi thọ; bỏ giá trị 0 hoặc >100 (ổ không hỗ trợ).
+      $hp = $null
+      foreach ($id in 5, 10, 177, 187, 196, 197, 198, 231) {
+        if ($va.ContainsKey($id) -and $va[$id] -ge 1 -and $va[$id] -le 100 -and ($hp -eq $null -or $va[$id] -lt $hp)) { $hp = $va[$id] }
+      }
+      if ($hp -ne $null) { $disks[$i].healthPct = $hp }
       # Tuổi thọ SSD còn lại: chỉ số E7 (231) hoặc B1 (177); HDD không có, để trống chứ không đoán.
       if (([string]$disks[$i].type) -match 'SSD') {
         foreach ($id in 231, 177) {

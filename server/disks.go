@@ -8,6 +8,10 @@ import "fmt"
 
 const diskLifeWarn = 40 // SSD còn dưới ngần này phần trăm tuổi thọ là cần chú ý
 
+// Ổ hỏng nặng nhất cũng chỉ vài nghìn khối hỏng. Số tới hàng triệu là agent đọc lố bảng S.M.A.R.T
+// của ổ đó (gặp thật: một ổ Seagate trả 4278255616 = 0xFF010000), bỏ qua chứ đừng báo hỏng oan.
+const diskCountMax = 1e6
+
 func num(m map[string]interface{}, k string) (float64, bool) {
 	switch v := m[k].(type) {
 	case float64:
@@ -34,11 +38,11 @@ func rateDisk(d map[string]interface{}) bool {
 		{"offline", "%.0f khối hỏng ngoại tuyến"},
 		{"uncorrect", "%.0f lỗi không sửa được"},
 	} {
-		if v, ok := num(d, c.key); ok && v > 0 {
+		if v, ok := num(d, c.key); ok && v > 0 && v < diskCountMax {
 			bad = append(bad, fmt.Sprintf(c.msg, v))
 		}
 	}
-	if v, ok := num(d, "realloc"); ok && v > 0 {
+	if v, ok := num(d, "realloc"); ok && v > 0 && v < diskCountMax {
 		warn = append(warn, fmt.Sprintf("%.0f khối hỏng đã thay", v))
 	}
 	if v, ok := num(d, "lifeLeft"); ok {

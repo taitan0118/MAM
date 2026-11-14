@@ -481,8 +481,8 @@ VIEWS.detail = async (v, quiet) => {
     const ds = hw.disks || [];
     if (hw.smartFail) body.append(el('div', { style: 'margin-bottom:12px' }, infoNote('Windows báo có ổ cứng dự báo sắp hỏng (S.M.A.R.T). Hãy sao lưu dữ liệu và thay ổ sớm.')));
     body.append(card('Ổ cứng vật lý', 'sức khỏe theo chỉ số S.M.A.R.T của ổ', table(['Ổ', 'Loại', 'Dung lượng', 'Tình trạng', 'Nhiệt độ', 'Mòn', 'Giờ chạy'], ds.map(d => el('tr', { class: 'nohover' }, el('td', {}, el('div', { style: 'font-weight:600' }, d.model), el('div', { style: 'font-size:11.5px;color:var(--faint)' }, d.serial || '')), el('td', {}, d.type || '—'), el('td', { class: 'mono' }, d.sizeGB ? d.sizeGB + ' GB' : '—'),
-      el('td', {}, d.health ? pill(diskPill(d.health), t(d.health)) : pill('warn', 'Không rõ'), d.note ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:2px' }, t(d.note)) : null), el('td', { class: 'mono' }, d.tempC != null ? d.tempC + '°C' : '—'),
-      el('td', { class: 'mono' }, d.wear != null ? d.wear + '%' : '—', d.lifeLeft != null ? el('div', { style: 'font-size:11.5px;color:var(--muted)' }, t('còn {0}%', Math.round(d.lifeLeft))) : null), el('td', { class: 'mono' }, d.hours != null ? t('{0} giờ', d.hours) : '—'))), 'Agent chưa gửi thông tin ổ cứng')));
+      el('td', {}, d.health ? pill(diskPill(d.health), t(d.health) + (d.healthPct != null ? ' ' + Math.round(d.healthPct) + '%' : '')) : pill('warn', 'Không rõ'), d.note ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:2px' }, t(d.note)) : null), el('td', { class: 'mono' }, d.tempC != null ? d.tempC + '°C' : '—'),
+      el('td', { class: 'mono' }, d.wear != null ? d.wear + '%' : '—'), el('td', { class: 'mono' }, d.hours != null ? t('{0} giờ', d.hours) : '—'))), 'Agent chưa gửi thông tin ổ cứng')));
     if (ctl && !off) {
       const smartBox = el('div', { style: 'margin-top:12px' });
       body.append(el('div', { style: 'margin-top:12px' }, el('button', { class: 'btn', onclick: async () => {
@@ -939,6 +939,7 @@ VIEWS.requests = async v => {
 const diskLine = d => {
   const tip = [];
   if (d.note) tip.push(t(d.note));
+  if (d.healthPct != null) tip.push(t('Sức khỏe {0}%', Math.round(d.healthPct)));
   if (d.lifeLeft != null) tip.push(t('Tuổi thọ còn {0}%', Math.round(d.lifeLeft)));
   if (d.tempC != null) tip.push(t('Nhiệt độ {0}°C', Math.round(d.tempC)));
   if (d.wear != null) tip.push(t('Mòn {0}%', Math.round(d.wear)));
@@ -947,7 +948,7 @@ const diskLine = d => {
   return el('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:1px 0', title: tip.join(' · ') },
     el('span', { class: 'mono', style: 'font-size:12px' }, (d.sizeGB ? d.sizeGB + ' GB' : '') + (d.type ? ' ' + d.type : '')),
     el('span', { style: 'font-size:12px;color:var(--muted)' }, d.model || ''),
-    d.health ? pill(diskPill(d.health), t(d.health)) : null);
+    d.health ? pill(diskPill(d.health), t(d.health) + (d.healthPct != null ? ' ' + Math.round(d.healthPct) + '%' : '')) : null);
 };
 const IV = { group: 'all', q: '' };
 VIEWS.inventory = async v => {

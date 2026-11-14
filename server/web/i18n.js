@@ -2162,6 +2162,11 @@ var ZH = {
 };
 var PAT = [
 [
+"^Sức khỏe (\\d+)%$",
+"Health $1%",
+"健康度 $1%"
+],
+[
 "^Nhiệt độ bo mạch (\\d+)°C \\(ngưỡng (\\d+)°C\\)$",
 "Board temperature $1°C (threshold $2°C)",
 "主板温度 $1°C（阈值 $2°C）"

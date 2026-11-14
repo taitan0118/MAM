@@ -28,6 +28,13 @@ func TestRateDisk(t *testing.T) {
 			t.Errorf("%s: wear = %v, muốn %v", c.ten, c.d["wear"], c.wear)
 		}
 	}
+	// Số khối hỏng tới hàng triệu là agent đọc lố bảng S.M.A.R.T (ổ Seagate trên VN10531 trả 0xFF010000):
+	// bỏ qua, đừng báo "Sắp hỏng" oan.
+	rac := map[string]interface{}{"smart": true, "pending": 4278255616.0, "offline": 4278255616.0, "health": "Healthy"}
+	rateDisk(rac)
+	if rac["health"] != "Tốt" || rac["note"] != "" {
+		t.Errorf("số rác vẫn bị tính: %v / %q", rac["health"], rac["note"])
+	}
 	// Ổ không đọc được S.M.A.R.T: giữ nguyên trạng thái Windows, không đoán.
 	no := map[string]interface{}{"health": "Healthy", "model": "Virtual Disk"}
 	if rateDisk(no) || no["health"] != "Healthy" {
