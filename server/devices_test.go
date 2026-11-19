@@ -451,3 +451,61 @@ func TestDeviceScanChanDauVao(t *testing.T) {
 		t.Fatal("phải trả gợi ý dải mạng")
 	}
 }
+
+func TestParseCIDRs(t *testing.T) {
+	ns, bad := parseCIDRs("172.20.20.0/24, 172.20.40.0/24\n192.168.0.0/24 10.1.2.0/24")
+	if bad != "" || len(ns) != 4 {
+		t.Fatalf("4 dải nội bộ phải nhận hết: %d dải, lỗi %q", len(ns), bad)
+	}
+	if ns, _ := parseCIDRs("172.20.20.0/24, 172.20.20.0/24"); len(ns) != 1 {
+		t.Fatalf("dải trùng phải gộp lại, nhận %d", len(ns))
+	}
+	for _, bad := range []string{"", "8.8.8.0/24", "192.168.0.0/16", "lung tung", "172.20.20.0/24, 8.8.8.0/24"} {
+		if ns, msg := parseCIDRs(bad); msg == "" || ns != nil {
+			t.Fatalf("%q phải bị từ chối", bad)
+		}
+	}
+	nhieu := make([]string, scanMaxNets+1)
+	for i := range nhieu {
+		nhieu[i] = "10.0." + itoa(i) + ".0/24"
+	}
+	if _, msg := parseCIDRs(strings.Join(nhieu, ",")); msg == "" {
+		t.Fatalf("quá %d dải phải bị từ chối", scanMaxNets)
+	}
+}
+
+// Quét chạy nền: bấm là trả lời ngay, rồi hỏi tiến độ; đang chạy thì không cho bấm lần nữa.
+func TestDeviceScanChayNen(t *testing.T) {
+	f := setup(t)
+	code, _, _ := f.tech.do("POST", "/api/devices/scan", map[string]string{"cidr": "192.168.9.0/24"}, nil)
+	expect(t, code, 403, "kỹ thuật viên không được quét")
+
+	code, m, _ := f.super.do("POST", "/api/devices/scan", map[string]string{"cidr": "192.168.231.0/24"}, nil)
+	expect(t, code, 200, "bắt đầu quét")
+	if m["started"] != true {
+		t.Fatalf("phải trả started=true: %v", m)
+	}
+	code, _, _ = f.super.do("POST", "/api/devices/scan", map[string]string{"cidr": "192.168.232.0/24"}, nil)
+	expect(t, code, 409, "đang quét thì không cho bấm lần nữa")
+
+	code, m, _ = f.super.do("GET", "/api/devices/scan", nil, nil)
+	expect(t, code, 200, "hỏi tiến độ")
+	if m["job"] == nil {
+		t.Fatal("phải trả tình trạng lượt quét")
+	}
+	if _, ok := m["suggest"]; !ok {
+		t.Fatal("phải trả gợi ý dải mạng")
+	}
+	// dải toàn địa chỉ chết nên quét xong trong vài giây
+	for i := 0; i < 120; i++ {
+		code, m, _ = f.super.do("GET", "/api/devices/scan", nil, nil)
+		if j, _ := m["job"].(map[string]interface{}); j != nil && j["running"] == false {
+			if j["scanned"].(float64) != 254 {
+				t.Fatalf("phải dò đủ 254 địa chỉ, nhận %v", j["scanned"])
+			}
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Fatal("quét một dải chết mà không xong trong 60 giây")
+}

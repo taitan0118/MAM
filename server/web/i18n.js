@@ -1025,6 +1025,19 @@ var EN = {
 "bản {0}": "version {0}",
 "Máy chưa có dòng lý do nghĩa là agent chưa chạy tới lượt cập nhật (mỗi máy thử lại tối đa một lần mỗi giờ) hoặc máy đang tắt. Để ý lại sau một tiếng; còn kẹt thì mở chi tiết máy xem nhật ký.": "A machine with no reason line has not reached its update attempt yet (each machine retries at most once an hour) or is powered off. Check again in an hour; if it is still stuck, open the machine details.",
 "File cập nhật tải về không toàn vẹn, bỏ qua": "The downloaded update was incomplete, skipped",
+"mỗi dải một dòng hoặc cách nhau bằng dấu phẩy": "one subnet per line, or separated by commas",
+"Lấy tất cả dải đang có máy": "Fill in every subnet that has machines",
+"Các dải mạng nội bộ cần quét (tối đa 20 dải, mỗi dải 256 địa chỉ)": "Private subnets to scan (up to 20 subnets, 256 addresses each)",
+"Nhận mọi dải nội bộ: 10.x, 172.16–31.x, 192.168.x. Ví dụ: 172.20.20.0/24, 172.20.40.0/24, 192.168.0.0/24": "Any private range works: 10.x, 172.16–31.x, 192.168.x. For example: 172.20.20.0/24, 172.20.40.0/24, 192.168.0.0/24",
+"Đang quét…": "Scanning…",
+"Đang quét {0} · xong {1}/{2} dải · đã dò {3} địa chỉ · thấy {4} thiết bị": "Scanning {0} · {1}/{2} subnets done · {3} addresses probed · {4} devices found",
+"Xong {0} dải, dò {1} địa chỉ, thấy {2} thiết bị có phản hồi, trong đó {3} cái chưa khai.": "Finished {0} subnets, probed {1} addresses, {2} devices answered, {3} of them not yet added.",
+"Chưa thấy thiết bị nào phản hồi": "No device has answered yet",
+"Server phải vào được VLAN đó thì mới quét được. VLAN nào bị router chặn sẽ ra 0 thiết bị dù camera vẫn sống — và thiết bị ở VLAN đó cũng không theo dõi được, phải mở đường cho máy chủ MAM trước.": "The server must be able to reach the VLAN. A VLAN the router blocks returns zero devices even when the cameras are alive — and devices there cannot be monitored either, so open the route to the MAM server first.",
+"Đang có một lượt quét chạy, chờ xong đã": "A scan is already running, wait for it to finish",
+"Nhập ít nhất một dải mạng": "Enter at least one subnet",
+"Hết thời gian, chưa quét xong": "Timed out before the scan finished",
+"đã đặt sẵn bản mới, máy sẽ chạy bản mới sau lần khởi động tới": "the new version is in place, the machine will run it after the next restart",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -2205,6 +2218,19 @@ var ZH = {
 "bản {0}": "版本 {0}",
 "Máy chưa có dòng lý do nghĩa là agent chưa chạy tới lượt cập nhật (mỗi máy thử lại tối đa một lần mỗi giờ) hoặc máy đang tắt. Để ý lại sau một tiếng; còn kẹt thì mở chi tiết máy xem nhật ký.": "没有原因说明的机器尚未轮到更新（每台机器每小时最多重试一次）或已关机。一小时后再看；若仍卡住，请打开该机器的详情。",
 "File cập nhật tải về không toàn vẹn, bỏ qua": "下载的更新文件不完整，已跳过",
+"mỗi dải một dòng hoặc cách nhau bằng dấu phẩy": "每行一个网段，或用逗号分隔",
+"Lấy tất cả dải đang có máy": "填入所有有机器的网段",
+"Các dải mạng nội bộ cần quét (tối đa 20 dải, mỗi dải 256 địa chỉ)": "要扫描的内网网段（最多 20 个网段，每个 256 个地址）",
+"Nhận mọi dải nội bộ: 10.x, 172.16–31.x, 192.168.x. Ví dụ: 172.20.20.0/24, 172.20.40.0/24, 192.168.0.0/24": "支持所有内网地址段：10.x、172.16–31.x、192.168.x。例如：172.20.20.0/24、172.20.40.0/24、192.168.0.0/24",
+"Đang quét…": "扫描中…",
+"Đang quét {0} · xong {1}/{2} dải · đã dò {3} địa chỉ · thấy {4} thiết bị": "正在扫描 {0} · 已完成 {1}/{2} 个网段 · 已探测 {3} 个地址 · 发现 {4} 台设备",
+"Xong {0} dải, dò {1} địa chỉ, thấy {2} thiết bị có phản hồi, trong đó {3} cái chưa khai.": "已完成 {0} 个网段，探测 {1} 个地址，{2} 台设备有响应，其中 {3} 台尚未添加。",
+"Chưa thấy thiết bị nào phản hồi": "暂无设备响应",
+"Server phải vào được VLAN đó thì mới quét được. VLAN nào bị router chặn sẽ ra 0 thiết bị dù camera vẫn sống — và thiết bị ở VLAN đó cũng không theo dõi được, phải mở đường cho máy chủ MAM trước.": "服务器必须能访问该 VLAN 才能扫描。被路由器阻断的 VLAN 即使摄像机正常也会返回 0 台设备，该 VLAN 中的设备同样无法监控，需先为 MAM 服务器开通访问。",
+"Đang có một lượt quét chạy, chờ xong đã": "已有扫描在进行，请等待其完成",
+"Nhập ít nhất một dải mạng": "请至少输入一个网段",
+"Hết thời gian, chưa quét xong": "超时，扫描未完成",
+"đã đặt sẵn bản mới, máy sẽ chạy bản mới sau lần khởi động tới": "新版本已就位，该机器将在下次重启后运行",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -2329,6 +2355,26 @@ var ZH = {
 "Bản quyền © 2026 Nguyễn Tấn Tài (Missing)": "版权所有 © 2026 Nguyễn Tấn Tài (Missing)",
 };
 var PAT = [
+[
+"^Không thay được agent: (.+?); thay tại chỗ cũng không được: (.+)$",
+"Could not replace the agent: $1; replacing it in place also failed: $2",
+"无法替换代理程序：$1；就地替换也失败：$2"
+],
+[
+"^Dải không hợp lệ: (.+?)\\. Chỉ quét dải nội bộ dạng (.+)$",
+"Invalid subnet: $1. Only private subnets such as $2",
+"无效网段：$1。仅支持内网网段，例如 $2"
+],
+[
+"^Dải quá lớn: (.+?)\\. Mỗi dải tối đa 256 địa chỉ \\(từ /24 trở xuống\\)$",
+"Subnet too large: $1. Each subnet is limited to 256 addresses (/24 or smaller)",
+"网段过大：$1。每个网段最多 256 个地址（/24 或更小）"
+],
+[
+"^Tối đa (\\d+) dải một lượt$",
+"Up to $1 subnets per scan",
+"每次扫描最多 $1 个网段"
+],
 [
 "^Không tải được bản mới: (.+)$",
 "Could not download the new version: $1",

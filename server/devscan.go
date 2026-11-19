@@ -3,6 +3,9 @@ package main
 // Quét dải mạng tìm thiết bị chưa khai (camera, máy chấm công, switch, router) rồi đoán sẵn loại cho
 // người dùng tick. KHÔNG tự thêm vào danh sách: để máy tự thêm thì điện thoại, laptop khách, máy in
 // cũng nhảy vào, rồi ai đó rời wifi là cảnh báo đỏ giữa đêm — danh sách theo dõi phải do người chốt.
+//
+// Quét CHẠY NỀN và Console hỏi tiến độ: server cắt mọi phản hồi dài quá 30 giây (WriteTimeout), mà
+// quét vài VLAN thì mất vài phút.
 
 import (
 	"context"
@@ -17,15 +20,33 @@ import (
 // Cổng dò khi quét: gộp cổng của thiết bị mạng với cổng máy Windows (để nhận ra máy tính mà bỏ qua).
 var scanAllPorts = []int{80, 443, 554, 4370, 8000, 37777, 22, 23, 135, 445, 3389}
 
+const (
+	scanMaxNets = 20               // tối đa bấy nhiêu dải một lượt (20 × 254 ≈ 5.000 địa chỉ)
+	scanBudget  = 20 * time.Minute // cả lượt quét không được lâu hơn mức này
+)
+
 type scanHit struct {
 	IP     string `json:"ip"`
 	MAC    string `json:"mac"`
 	Vendor string `json:"vendor"` // hãng đoán theo 3 byte đầu của MAC, rỗng nếu không biết
 	Host   string `json:"host"`   // tên từ DNS ngược
 	Ports  []int  `json:"ports"`
-	Kind   string `json:"kind"`    // camera | attend | switch | router | other | pc
-	Why    string `json:"why"`     // vì sao đoán vậy, hiện cho người dùng xem
-	Taken  string `json:"taken"`   // đã khai rồi: tên thiết bị; hoặc tên máy đã cài agent
+	Kind   string `json:"kind"`  // camera | attend | switch | router | other | pc
+	Why    string `json:"why"`   // vì sao đoán vậy, hiện cho người dùng xem
+	Taken  string `json:"taken"` // đã khai rồi: tên thiết bị; hoặc tên máy đã cài agent
+}
+
+// scanJob: tình trạng lượt quét đang chạy. Chỉ ở RAM, mất khi khởi động lại server.
+type scanJob struct {
+	Running bool      `json:"running"`
+	Nets    []string  `json:"nets"`    // các dải sẽ quét
+	Done    int       `json:"done"`    // số dải đã quét xong
+	Now     string    `json:"now"`     // dải đang quét
+	Scanned int       `json:"scanned"` // số địa chỉ đã dò
+	Found   []scanHit `json:"found"`
+	Err     string    `json:"err"`
+	By      string    `json:"by"`
+	At      time.Time `json:"at"`
 }
 
 // ouiVendor: 3 byte đầu của MAC → hãng. Bảng ngắn, chỉ các hãng hay gặp ở văn phòng Việt Nam; hãng lạ
@@ -75,13 +96,86 @@ func guessDevKind(ports []int, rtspOK, lastInSubnet bool) (string, string) {
 	return "other", "có trả lời nhưng không rõ là thiết bị gì"
 }
 
+// parseCIDRs đọc danh sách dải người dùng nhập (cách nhau bằng dấu phẩy, xuống dòng hay khoảng trắng).
+// Nhận mọi dải nội bộ: 10.x, 172.16–31.x, 192.168.x.
+func parseCIDRs(s string) ([]*net.IPNet, string) {
+	parts := strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == '\n' || r == '\r' || r == ' ' || r == '\t' })
+	out, seen := []*net.IPNet{}, map[string]bool{}
+	for _, p := range parts {
+		_, n, err := net.ParseCIDR(p)
+		ones, bits := 0, 0
+		if err == nil {
+			ones, bits = n.Mask.Size()
+		}
+		if err != nil || bits != 32 || !privateNet(n) {
+			return nil, "Dải không hợp lệ: " + clip(p, 40) + ". Chỉ quét dải nội bộ dạng 192.168.1.0/24, 10.0.0.0/24 hoặc 172.20.40.0/24"
+		}
+		if ones < 24 {
+			return nil, "Dải quá lớn: " + n.String() + ". Mỗi dải tối đa 256 địa chỉ (từ /24 trở xuống)"
+		}
+		if !seen[n.String()] {
+			seen[n.String()] = true
+			out = append(out, n)
+		}
+	}
+	if len(out) == 0 {
+		return nil, "Nhập ít nhất một dải mạng"
+	}
+	if len(out) > scanMaxNets {
+		return nil, "Tối đa " + itoa(scanMaxNets) + " dải một lượt"
+	}
+	return out, ""
+}
+
+// suggestScanCIDRs: các dải /24 đáng quét — dải của card mạng máy chủ, cộng dải của mọi máy đã cài
+// agent (máy ở VLAN nào thì thường camera cũng ở VLAN đó). Gọi khi KHÔNG giữ s.mu.
+func (s *Server) suggestScanCIDRs() []string {
+	seen := map[string]bool{}
+	add := func(ip net.IP) {
+		v := ip.To4()
+		if v == nil || !privateIP(v) {
+			return
+		}
+		seen[net.IPv4(v[0], v[1], v[2], 0).String()+"/24"] = true
+	}
+	addrs, _ := net.InterfaceAddrs()
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok {
+			add(n.IP)
+		}
+	}
+	s.mu.RLock()
+	for _, m := range s.st.Machines {
+		if !m.Revoked && m.IP != "" {
+			add(net.ParseIP(m.IP))
+		}
+	}
+	for _, d := range s.st.Devices {
+		add(net.ParseIP(d.IP))
+	}
+	s.mu.RUnlock()
+	out := []string{}
+	for c := range seen {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return ipLess(strings.Split(out[i], "/")[0], strings.Split(out[j], "/")[0]) })
+	return out
+}
+
 func (s *Server) hDeviceScan(w http.ResponseWriter, r *http.Request, me *Account) {
 	if me.Role != "super" {
 		jerr(w, 403, "Chỉ Super admin được làm việc này")
 		return
 	}
 	if r.Method == "GET" {
-		jok(w, map[string]interface{}{"suggest": suggestCIDRs()})
+		s.scanMu.Lock()
+		j := s.scan
+		s.scanMu.Unlock()
+		out := map[string]interface{}{"suggest": s.suggestScanCIDRs()}
+		if j != nil {
+			out["job"] = j
+		}
+		jok(w, out)
 		return
 	}
 	var in struct{ CIDR string }
@@ -89,29 +183,38 @@ func (s *Server) hDeviceScan(w http.ResponseWriter, r *http.Request, me *Account
 		jerr(w, 400, "Dữ liệu không hợp lệ")
 		return
 	}
-	_, n, err := net.ParseCIDR(strings.TrimSpace(in.CIDR))
-	ones, bits := 0, 0
-	if err == nil {
-		ones, bits = n.Mask.Size()
-	}
-	if err != nil || bits != 32 || !privateNet(n) {
-		jerr(w, 400, "Chỉ quét dải mạng nội bộ dạng 192.168.1.0/24, 10.0.0.0/24 hoặc 172.16.0.0/24")
+	nets, bad := parseCIDRs(in.CIDR)
+	if bad != "" {
+		jerr(w, 400, bad)
 		return
 	}
-	if ones < 24 {
-		jerr(w, 400, "Dải quá lớn: quét tối đa 256 địa chỉ (từ /24 trở xuống)")
+	s.scanMu.Lock()
+	if s.scan != nil && s.scan.Running {
+		s.scanMu.Unlock()
+		jerr(w, 409, "Đang có một lượt quét chạy, chờ xong đã")
 		return
 	}
-	base := n.IP.To4()
-	var ips []net.IP
-	for i := 0; i < 1<<(32-ones); i++ {
-		v := uint32(base[0])<<24 | uint32(base[1])<<16 | uint32(base[2])<<8 | uint32(base[3])
-		v += uint32(i)
-		ip := net.IPv4(byte(v>>24), byte(v>>16), byte(v>>8), byte(v)).To4()
-		if ip[3] != 0 && ip[3] != 255 {
-			ips = append(ips, ip)
-		}
+	names := make([]string, len(nets))
+	for i, n := range nets {
+		names[i] = n.String()
 	}
+	j := &scanJob{Running: true, Nets: names, Found: []scanHit{}, By: me.User, At: time.Now()}
+	s.scan = j
+	s.scanMu.Unlock()
+	s.auditBy(me, r, "Thiết bị mạng", "Quét "+itoa(len(names))+" dải: "+clip(strings.Join(names, ", "), 200), "—", false)
+	go s.runScan(j, nets)
+	jok(w, map[string]interface{}{"started": true, "job": j})
+}
+
+// runScan quét lần lượt từng dải, cập nhật tiến độ để Console hỏi lại.
+func (s *Server) runScan(j *scanJob, nets []*net.IPNet) {
+	ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
+	defer cancel()
+	defer func() {
+		s.scanMu.Lock()
+		j.Running, j.Now = false, ""
+		s.scanMu.Unlock()
+	}()
 
 	// IP đã khai làm thiết bị, và IP của máy đã cài agent: vẫn hiện nhưng đánh dấu để khỏi thêm trùng
 	s.mu.RLock()
@@ -128,8 +231,39 @@ func (s *Server) hDeviceScan(w http.ResponseWriter, r *http.Request, me *Account
 	}
 	s.mu.RUnlock()
 
-	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
-	defer cancel()
+	for _, n := range nets {
+		if ctx.Err() != nil {
+			s.scanMu.Lock()
+			j.Err = "Hết thời gian, chưa quét xong"
+			s.scanMu.Unlock()
+			return
+		}
+		s.scanMu.Lock()
+		j.Now = n.String()
+		s.scanMu.Unlock()
+		hits, scanned := scanSubnet(ctx, n, taken)
+		s.scanMu.Lock()
+		j.Found = append(j.Found, hits...)
+		sort.Slice(j.Found, func(a, b int) bool { return ipLess(j.Found[a].IP, j.Found[b].IP) })
+		j.Scanned += scanned
+		j.Done++
+		s.scanMu.Unlock()
+	}
+}
+
+// scanSubnet dò hết một dải /24, trả các địa chỉ có trả lời và số địa chỉ đã dò.
+func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string) ([]scanHit, int) {
+	ones, _ := n.Mask.Size()
+	base := n.IP.To4()
+	var ips []net.IP
+	for i := 0; i < 1<<(32-ones); i++ {
+		v := uint32(base[0])<<24 | uint32(base[1])<<16 | uint32(base[2])<<8 | uint32(base[3])
+		v += uint32(i)
+		ip := net.IPv4(byte(v>>24), byte(v>>16), byte(v>>8), byte(v)).To4()
+		if ip[3] != 0 && ip[3] != 255 {
+			ips = append(ips, ip)
+		}
+	}
 	var mu sync.Mutex
 	res := []scanHit{}
 	sem := make(chan struct{}, 128)
@@ -173,7 +307,5 @@ func (s *Server) hDeviceScan(w http.ResponseWriter, r *http.Request, me *Account
 		}(ip)
 	}
 	wg.Wait()
-	sort.Slice(res, func(i, j int) bool { return ipLess(res[i].IP, res[j].IP) })
-	s.auditBy(me, r, "Thiết bị mạng", "Quét dải "+n.String()+": thấy "+itoa(len(res))+" thiết bị", n.String(), false)
-	jok(w, map[string]interface{}{"cidr": n.String(), "scanned": len(ips), "found": res, "partial": ctx.Err() != nil})
+	return res, len(ips)
 }

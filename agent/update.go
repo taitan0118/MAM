@@ -4,6 +4,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +15,9 @@ import (
 	"sync"
 	"time"
 )
+
+// errDatSan không phải lỗi thật: bản mới đã nằm đúng chỗ, chỉ chờ máy khởi động lại.
+var errDatSan = errors.New("đã đặt sẵn bản mới, máy sẽ chạy bản mới sau lần khởi động tới")
 
 var lastUpdateTry time.Time
 
@@ -73,6 +77,9 @@ func checkUpdate(sha string, size int64) string {
 	}
 	log.Printf(T("Đã tải bản agent mới (%d byte), tiến hành thay thế"), n)
 	if err := swapSelf(tmp); err != nil {
+		if errors.Is(err, errDatSan) { // không thay nóng được nhưng đã đặt sẵn bản mới cho lần bật sau
+			return err.Error()
+		}
 		os.Remove(tmp)
 		return updFail("Không thay được agent: " + err.Error())
 	}

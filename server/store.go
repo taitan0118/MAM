@@ -243,6 +243,8 @@ type Server struct {
 	auditMu sync.Mutex
 	blobs   map[string]*Blob          // dữ liệu lớn của lệnh (tiến trình, S.M.A.R.T) giữ trong RAM ít phút
 	screens map[string]*ScreenSession // phiên xem/điều khiển màn hình đang diễn ra (không lưu xuống đĩa)
+	scanMu  sync.Mutex
+	scan    *scanJob // lượt quét tìm thiết bị mạng đang chạy nền, xem devscan.go
 }
 
 type failRec struct {

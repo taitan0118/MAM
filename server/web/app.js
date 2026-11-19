@@ -1204,17 +1204,24 @@ VIEWS.devices = async v => {
   v.append(el('div', { style: 'margin-top:12px' }, infoNote('Server gõ cổng TCP của thiết bị mỗi phút, không được thì ping. Camera có nhập tài khoản thì 5 phút một lần server kéo thử luồng RTSP vài giây để biết camera còn ra hình. Chỉ biết thiết bị sống hay chết: không biết đầu ghi có lưu lại hay không, cũng không biết ống kính có bị che hay không. Thiết bị phải ở dải mạng mà máy chủ vào được.')));
 };
 // Quét dải mạng tìm thiết bị chưa khai. Không tự thêm: người dùng tick cái nào mới thêm cái đó.
+// Quét chạy nền ở server (vài VLAN mất vài phút, dài hơn mức server cho phép một phản hồi), nên
+// ở đây hỏi tiến độ mỗi 2 giây.
 async function devScan(grps) {
   let sg = { suggest: [] };
   try { sg = await api('GET', '/api/devices/scan'); } catch (e) { }
-  const cidr = input('ví dụ 192.168.1.0/24', 'text', devScan.cidr || (sg.suggest || [])[0] || '');
+  const goiY = (sg.suggest || []).join(', ');
+  const cidr = el('textarea', { class: 'input', rows: '2', style: 'resize:vertical;font-family:ui-monospace,monospace;font-size:12.5px', placeholder: t('mỗi dải một dòng hoặc cách nhau bằng dấu phẩy') });
+  cidr.value = devScan.cidr || goiY;
+  const btnGoiY = el('button', { class: 'btn', style: 'padding:5px 11px;font-size:12.5px', onclick: () => { cidr.value = goiY; } }, 'Lấy tất cả dải đang có máy');
   const gr = el('input', { class: 'input', list: 'devgrps2', placeholder: t('đặt chung cho các thiết bị thêm lần này') });
   const dl = el('datalist', { id: 'devgrps2' }, (grps || []).map(g => el('option', { value: g })));
-  const box = el('div', { style: 'margin-top:12px' });
+  const tiendo = el('div', { style: 'font-size:12.5px;color:var(--muted);margin-top:8px' });
+  const box = el('div', { style: 'margin-top:8px' });
   const err = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
   const picks = new Map(); // ip -> { kind, name }
   const btnAdd = el('button', { class: 'btn primary', disabled: true }, 'Thêm các thiết bị đã chọn');
   const btnScan = el('button', { class: 'btn primary', onclick: quet }, 'Quét');
+  let timer = null, veSo = -1;
   const dem = () => { btnAdd.disabled = !picks.size; btnAdd.textContent = picks.size ? t('Thêm {0} thiết bị', picks.size) : t('Thêm các thiết bị đã chọn'); };
   btnAdd.onclick = async () => {
     btnAdd.disabled = true; err.textContent = '';
@@ -1224,43 +1231,65 @@ async function devScan(grps) {
       catch (e) { loi.push(ip + ': ' + trErr(e.message)); }
     }
     toast(t('Đã thêm {0} thiết bị', ok));
-    if (loi.length) { err.textContent = loi.join(' · '); btnAdd.disabled = false; } else { close(); render(); }
+    if (loi.length) { err.textContent = loi.join(' · '); btnAdd.disabled = false; } else { if (timer) clearInterval(timer); close(); render(); }
   };
+  // vẽ lại bảng kết quả, giữ nguyên những dòng đã tick
+  const ve = job => {
+    box.innerHTML = '';
+    const dong = f => {
+      const dungDuoc = !f.taken && f.kind !== 'pc';
+      const cu = picks.get(f.ip);
+      const ten = input('', 'text', cu ? cu.name : t(devKind(f.kind)) + ' ' + f.ip);
+      ten.style.cssText = 'padding:4px 8px;font-size:12.5px';
+      ten.oninput = () => { if (picks.has(f.ip)) picks.get(f.ip).name = ten.value; };
+      const tick = el('input', { type: 'checkbox', checked: !!cu, onchange: e => { e.target.checked ? picks.set(f.ip, { kind: f.kind, name: ten.value }) : picks.delete(f.ip); dem(); } });
+      return el('tr', { class: 'nohover' },
+        el('td', {}, dungDuoc ? tick : null),
+        el('td', { class: 'mono' }, f.ip),
+        el('td', { style: 'font-size:12.5px' }, f.vendor || el('span', { style: 'color:var(--faint)' }, f.mac || '—')),
+        el('td', { class: 'mono', style: 'font-size:12px' }, f.ports.join(', ')),
+        el('td', {}, f.taken ? pill('ok', t('Đã có: {0}', f.taken)) : f.kind === 'pc' ? pill('off', t('Máy tính')) : pill('warn', t(devKind(f.kind))),
+          el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:3px' }, t(f.why))),
+        el('td', {}, dungDuoc ? ten : null));
+    };
+    box.append(table(['', 'IP', 'Hãng / MAC', 'Cổng mở', 'Đoán là', 'Tên khi thêm'], (job.found || []).map(dong), 'Chưa thấy thiết bị nào phản hồi'));
+  };
+  const capNhat = job => {
+    if (!job) return;
+    const moiCai = (job.found || []).filter(f => !f.taken && f.kind !== 'pc').length;
+    tiendo.textContent = job.running
+      ? t('Đang quét {0} · xong {1}/{2} dải · đã dò {3} địa chỉ · thấy {4} thiết bị', job.now || '…', job.done, job.nets.length, job.scanned, (job.found || []).length)
+      : t('Xong {0} dải, dò {1} địa chỉ, thấy {2} thiết bị có phản hồi, trong đó {3} cái chưa khai.', job.done, job.scanned, (job.found || []).length, moiCai);
+    if (job.err) err.textContent = t(job.err);
+    if ((job.found || []).length !== veSo) { veSo = (job.found || []).length; ve(job); }
+    btnScan.disabled = !!job.running;
+    btnScan.textContent = job.running ? t('Đang quét…') : t('Quét');
+  };
+  async function hoi() {
+    if (!document.body.contains(box)) { clearInterval(timer); timer = null; return; } // đã đóng hộp
+    try { const r = await api('GET', '/api/devices/scan'); capNhat(r.job); if (r.job && !r.job.running) { clearInterval(timer); timer = null; } }
+    catch (e) { clearInterval(timer); timer = null; err.textContent = trErr(e.message); }
+  }
   async function quet() {
-    btnScan.disabled = true; btnScan.textContent = t('Đang quét… (tối đa 90 giây)'); box.innerHTML = ''; err.textContent = '';
-    picks.clear(); dem();
+    btnScan.disabled = true; err.textContent = ''; picks.clear(); dem(); veSo = -1;
     try {
       devScan.cidr = cidr.value;
-      const rs = await api('POST', '/api/devices/scan', { cidr: cidr.value });
-      const dong = f => {
-        const dungDuoc = !f.taken && f.kind !== 'pc';
-        const ten = input('', 'text', t(devKind(f.kind)) + ' ' + f.ip);
-        ten.style.cssText = 'padding:4px 8px;font-size:12.5px';
-        ten.oninput = () => { if (picks.has(f.ip)) picks.get(f.ip).name = ten.value; };
-        const tick = el('input', { type: 'checkbox', onchange: e => { e.target.checked ? picks.set(f.ip, { kind: f.kind, name: ten.value }) : picks.delete(f.ip); dem(); } });
-        return el('tr', { class: 'nohover' },
-          el('td', {}, dungDuoc ? tick : null),
-          el('td', { class: 'mono' }, f.ip),
-          el('td', { style: 'font-size:12.5px' }, f.vendor || el('span', { style: 'color:var(--faint)' }, f.mac || '—')),
-          el('td', { class: 'mono', style: 'font-size:12px' }, f.ports.join(', ')),
-          el('td', {}, f.taken ? pill('ok', t('Đã có: {0}', f.taken)) : f.kind === 'pc' ? pill('off', t('Máy tính')) : pill('warn', t(devKind(f.kind))),
-            el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:3px' }, t(f.why))),
-          el('td', {}, dungDuoc ? ten : null));
-      };
-      const moi = rs.found.filter(f => !f.taken && f.kind !== 'pc');
-      box.append(el('div', { style: 'font-size:12.5px;color:var(--muted);margin-bottom:8px' },
-        t('Đã quét {0} địa chỉ trong {1}, thấy {2} thiết bị có phản hồi, trong đó {3} cái chưa khai.', rs.scanned, rs.cidr, rs.found.length, moi.length) + (rs.partial ? ' ' + t('(hết thời gian, có thể chưa quét xong)') : '')));
-      box.append(table(['', 'IP', 'Hãng / MAC', 'Cổng mở', 'Đoán là', 'Tên khi thêm'], rs.found.map(dong), 'Không thấy thiết bị nào phản hồi'));
-    } catch (e) { err.textContent = trErr(e.message); }
-    finally { btnScan.disabled = false; btnScan.textContent = t('Quét'); }
+      const r = await api('POST', '/api/devices/scan', { cidr: cidr.value });
+      capNhat(r.job);
+      if (timer) clearInterval(timer);
+      timer = setInterval(hoi, 2000);
+    } catch (e) { err.textContent = trErr(e.message); btnScan.disabled = false; btnScan.textContent = t('Quét'); }
   }
   const close = modal(t('Quét mạng tìm thiết bị'), el('div', {}, dl,
-    el('div', { class: 'filters' }, field('Dải mạng nội bộ (tối đa 256 địa chỉ)', cidr), btnScan),
-    (sg.suggest || []).length ? el('div', { style: 'font-size:12px;color:var(--muted);margin-top:4px' }, t('Gợi ý theo máy server: {0}', sg.suggest.join(', '))) : null,
-    el('div', { class: 'filters', style: 'margin-top:4px' }, field('Nhóm cho các thiết bị thêm lần này', gr), btnAdd),
-    box, err,
-    infoNote('Máy tính đã cài agent và thiết bị đã khai vẫn hiện nhưng không tick được, khỏi thêm trùng. Loại chỉ là đoán theo cổng mở và hãng của card mạng — tick xong đại ca sửa lại tên và loại cho đúng.')),
-    [{ label: 'Đóng', on: c => c() }], true);
+    field('Các dải mạng nội bộ cần quét (tối đa 20 dải, mỗi dải 256 địa chỉ)', cidr, 'Nhận mọi dải nội bộ: 10.x, 172.16–31.x, 192.168.x. Ví dụ: 172.20.20.0/24, 172.20.40.0/24, 192.168.0.0/24'),
+    el('div', { class: 'filters' }, btnGoiY, el('div', { style: 'flex:1' }), btnScan),
+    el('div', { class: 'filters', style: 'margin-top:10px' }, field('Nhóm cho các thiết bị thêm lần này', gr), btnAdd),
+    tiendo, box, err,
+    infoNote('Máy tính đã cài agent và thiết bị đã khai vẫn hiện nhưng không tick được, khỏi thêm trùng. Loại chỉ là đoán theo cổng mở và hãng của card mạng — tick xong đại ca sửa lại tên và loại cho đúng.'),
+    infoNote('Server phải vào được VLAN đó thì mới quét được. VLAN nào bị router chặn sẽ ra 0 thiết bị dù camera vẫn sống — và thiết bị ở VLAN đó cũng không theo dõi được, phải mở đường cho máy chủ MAM trước.')),
+    [{ label: 'Đóng', on: c => { if (timer) clearInterval(timer); c(); } }], true);
+  // đang có lượt quét chạy dở (mở lại hộp hoặc người khác bấm) thì bám theo luôn
+  if (sg.job) { capNhat(sg.job); if (sg.job.running) timer = setInterval(hoi, 2000); }
 }
 // hộp thêm/sửa thiết bị; d = null là thêm mới
 function devAsk(d, grps) {
@@ -1813,7 +1842,7 @@ VIEWS.settings = async v => {
             pill(m.online ? 'warn' : 'off', m.online ? t('Đang bật') : t('Offline')),
             el('div', { style: 'flex:1;min-width:0' }, el('b', {}, m.name),
               el('div', { style: 'font-size:12.5px;color:var(--muted)' }, t('bản {0}', m.ver) + ' · ' + m.ip),
-              m.note ? el('div', { style: 'font-size:12.5px;color:var(--crit);margin-top:2px' }, t(m.note)) : null),
+              m.note ? el('div', { style: 'font-size:12.5px;margin-top:2px;color:' + (/đã đặt sẵn/.test(m.note) ? 'var(--muted)' : 'var(--crit)') }, t(m.note)) : null),
             el('span', { style: 'font-size:12px;color:var(--faint);white-space:nowrap' }, m.online ? '' : ago(m.lastSeen)))) ) : null,
         (au.old || []).some(m => !m.note) ? infoNote('Máy chưa có dòng lý do nghĩa là agent chưa chạy tới lượt cập nhật (mỗi máy thử lại tối đa một lần mỗi giờ) hoặc máy đang tắt. Để ý lại sau một tiếng; còn kẹt thì mở chi tiết máy xem nhật ký.') : null,
         infoNote('Cách cập nhật: chạy bộ cài MAM-Server-Setup.exe bản mới trên máy server (dữ liệu giữ nguyên). Mỗi máy sẽ tự tải bản agent mới, kiểm tra SHA-256 rồi tự thay thế và khởi động lại trong vài phút. Chỉ cập nhật khi số phiên bản mới cao hơn.')))));

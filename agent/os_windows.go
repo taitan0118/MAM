@@ -178,13 +178,31 @@ func swapSelf(newFile string) error {
 		return err
 	}
 	if out, err := hidden("schtasks", "/create", "/tn", "MAM Update", "/tr", `cmd /c "`+script+`"`, "/sc", "once", "/st", "00:00", "/ru", "SYSTEM", "/rl", "highest", "/f").CombinedOutput(); err != nil {
-		return fmt.Errorf("%v %s", err, out)
+		return thayTaiCho(exe, newFile, fmt.Errorf("%v %s", err, out))
 	}
 	if err := hidden("schtasks", "/run", "/tn", "MAM Update").Run(); err != nil {
-		return err
+		return thayTaiCho(exe, newFile, err)
 	}
 	return nil
 }
+
+// thayTaiCho: đường lui khi không tạo/chạy được tác vụ cập nhật (máy chặn schtasks, quyền hạn chế).
+// Windows cho ĐỔI TÊN file đang chạy, chỉ không cho ghi đè — nên đổi tên bản cũ rồi đưa bản mới vào
+// đúng chỗ. Tiến trình đang chạy vẫn là bản cũ, lần khởi động sau mới là bản mới; cố ý không tự khởi
+// động lại ở đây vì lỡ không bật lại được thì máy mất agent hẳn, còn cách này chắc chắn không hỏng.
+func thayTaiCho(exe, newFile string, loiTruoc error) error {
+	old := exe + ".old"
+	os.Remove(old)
+	if err := os.Rename(exe, old); err != nil {
+		return fmt.Errorf("%v; thay tại chỗ cũng không được: %v", loiTruoc, err)
+	}
+	if err := os.Rename(newFile, exe); err != nil {
+		os.Rename(old, exe) // trả lại như cũ, đừng để máy không còn agent
+		return fmt.Errorf("%v; thay tại chỗ cũng không được: %v", loiTruoc, err)
+	}
+	return errDatSan
+}
+
 
 // setURLBlock: chặn thêm bằng chính sách trình duyệt (Chrome, Edge, Cốc Cốc). Chặn cả tên miền phụ (m.facebook.com...) mà file hosts không bắt được.
 // Trình duyệt đọc lại chính sách sau ít phút hoặc khi mở lại.
