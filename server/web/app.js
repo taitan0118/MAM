@@ -1143,7 +1143,7 @@ VIEWS.discover = async v => {
 /* ---------- Thiết bị mạng (camera, máy chấm công, switch) ---------- */
 // Không cài được agent lên các thiết bị này nên chỉ kiểm IP còn sống hay không (gõ cổng TCP, không
 // được thì ping). Riêng camera có nhập tài khoản thì server đo luồng hình RTSP để biết còn ra hình.
-const DEVK = [['camera', 'Camera'], ['attend', 'Máy chấm công'], ['switch', 'Switch'], ['router', 'Router'], ['led', 'Bảng LED'], ['other', 'Khác']];
+const DEVK = [['camera', 'Camera'], ['attend', 'Máy chấm công'], ['switch', 'Switch'], ['router', 'Router'], ['wifi', 'Thiết bị WiFi'], ['led', 'Bảng LED'], ['other', 'Khác']];
 const devKind = k => ((DEVK.find(x => x[0] === k) || [0, 'Khác'])[1]);
 const DEVF = { g: 'all', k: 'all', st: 'all', sx: 'loi', q: '' };
 // Tình trạng để lọc, và cách sắp xếp. 'loi' = cái đang hỏng lên đầu.

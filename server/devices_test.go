@@ -614,3 +614,41 @@ func TestTieuDeRac(t *testing.T) {
 		}
 	}
 }
+
+func TestTheoTenKhai(t *testing.T) {
+	for _, c := range [][2]string{
+		{"UniFi AP-AC-Pro", "wifi"},
+		{"Ruckus Wireless", "wifi"},
+		{"AirOS", "wifi"},
+		{"Wireless Access Point", "wifi"},
+		{"NPort Web Console", "other"},
+		{"MoxaHttp/1.0", "other"},
+		{"Quidway", ""}, // Huawei vừa làm switch vừa làm AP: không đoán bừa
+		{"HuaWei12708", ""},
+		{"", ""},
+		{"GoAhead-Webs", ""},
+	} {
+		got, why := theoTenKhai(c[0])
+		if got != c[1] {
+			t.Fatalf("tên %q → loại %q, cần %q", c[0], got, c[1])
+		}
+		if got != "" && why == "" {
+			t.Fatalf("tên %q: đổi loại thì phải nói được vì sao", c[0])
+		}
+	}
+}
+
+func TestGuessDevKindWifi(t *testing.T) {
+	if got, _ := guessDevKind([]int{8291, 80}, false, false); got != "router" {
+		t.Fatalf("cổng Winbox 8291 phải ra router, nhận %q", got)
+	}
+	if got, _ := guessDevKind([]int{8443, 443, 22}, false, false); got != "wifi" {
+		t.Fatalf("cổng 8443 phải ra thiết bị WiFi, nhận %q", got)
+	}
+	if !devKinds["wifi"] {
+		t.Fatal("phải khai được thiết bị loại WiFi")
+	}
+	if p := devPortList(NetDev{Kind: "wifi"}); len(p) == 0 {
+		t.Fatal("thiết bị WiFi phải có cổng mặc định để kiểm")
+	}
+}

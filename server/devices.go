@@ -51,7 +51,7 @@ func devAlertID(id string) string { return "__dev-" + id }
 // devAlertAfter: chờ ngần này lượt liên tiếp mới báo, để một lần trượt mạng không làm kêu oan.
 const devAlertAfter = 2
 
-var devKinds = map[string]bool{"camera": true, "attend": true, "switch": true, "router": true, "led": true, "other": true}
+var devKinds = map[string]bool{"camera": true, "attend": true, "switch": true, "router": true, "led": true, "wifi": true, "other": true}
 
 // devPorts: cổng thử theo loại. Cổng riêng của thiết bị để trước nên ít nhầm với máy khác chiếm IP.
 var devPorts = map[string][]int{
@@ -59,6 +59,7 @@ var devPorts = map[string][]int{
 	"attend": {4370, 80, 443},
 	"switch": {80, 443, 22, 23},
 	"led":    {6000, 5005, 10001, 8899, 80},
+	"wifi":   {80, 443, 22, 8443},
 	"router": {80, 443, 22, 23}, // trùng cổng với switch: nhìn cổng không phân biệt được, nên để người dùng khai loại
 	"other":  {80, 443, 22},
 }

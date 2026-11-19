@@ -28,6 +28,7 @@ var scanAllPorts = []int{
 	554, 8000, 37777, 34567, // camera và đầu ghi
 	4370,   // máy chấm công
 	22, 23, // switch, router
+	8443, 8291, // bộ điều khiển WiFi (UniFi…) và Winbox của MikroTik
 	6000, 5005, 10001, 8899, // bảng LED và thiết bị điều khiển hay dùng mấy cổng này
 	9100, 515, 631, // máy in
 	135, 445, 3389, // máy tính Windows
@@ -135,6 +136,22 @@ func webKhai(ctx context.Context, ip string, open []int) string {
 	return ""
 }
 
+// theoTenKhai sửa lại loại khi chính thiết bị khai tên đủ rõ. Trả loại rỗng nếu tên không nói lên gì.
+// Chỉ nhận những chữ đủ đặc trưng, không đoán bừa theo tên hãng (Huawei vừa làm switch vừa làm AP).
+func theoTenKhai(ten string) (string, string) {
+	t := strings.ToLower(ten)
+	switch {
+	case t == "":
+		return "", ""
+	case strings.Contains(t, "unifi") || strings.Contains(t, "ruckus") || strings.Contains(t, "access point") ||
+		strings.Contains(t, "wireless") || strings.Contains(t, "wlan") || strings.Contains(t, "airos"):
+		return "wifi", "trang quản lý tự khai là thiết bị WiFi"
+	case strings.Contains(t, "nport") || strings.Contains(t, "moxa"):
+		return "other", "là bộ chuyển cổng COM sang mạng (Moxa), thường nối bảng LED, cân, máy đọc mã"
+	}
+	return "", ""
+}
+
 // tieuDeRac: tiêu đề trang chỉ là câu báo lỗi của web, không phải tên thiết bị.
 var reRac = regexp.MustCompile(`(?i)^\s*(\d{3}\b|not found|forbidden|unauthorized|bad request|error|index of)`)
 
@@ -166,6 +183,10 @@ func guessDevKind(ports []int, rtspOK, lastInSubnet bool) (string, string) {
 		return "camera", "mở cổng 554 (RTSP)"
 	case has[9100] || has[515] || has[631]:
 		return "printer", "là máy in mạng — không phải thứ cần theo dõi ở đây"
+	case has[8291]:
+		return "router", "mở cổng 8291 (Winbox) — thiết bị MikroTik"
+	case has[8443] && (has[80] || has[443]):
+		return "wifi", "mở cổng 8443, hay gặp ở bộ điều khiển WiFi"
 	case has[135] || has[445] || has[3389]:
 		return "pc", "là máy tính Windows — nên cài agent thay vì khai làm thiết bị mạng"
 	case has[6000] || has[5005] || has[10001] || has[8899]:
@@ -475,8 +496,14 @@ func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string, sem 
 			if hang == "" { // bảng mã hãng chỉ có ít hãng; camera tự khai tên thì tin camera
 				hang = tuKhai
 			}
-			if hang == "" && kind == "other" {
-				hang = webKhai(ctx, ip.String(), open) // chưa đoán được là gì: hỏi thẳng trang web của nó
+			// Hỏi thẳng trang quản lý xem nó tự khai là gì. Làm cho mọi thiết bị mạng (trừ camera,
+			// máy tính, máy in — mấy thứ đó chỉ trả chuỗi vô nghĩa) vì chính tên tự khai mới sửa được
+			// chỗ đoán sai: bộ chuyển cổng Moxa NPort có web + telnet nên dễ bị xếp nhầm thành switch.
+			if hang == "" && kind != "camera" && kind != "pc" && kind != "printer" {
+				hang = webKhai(ctx, ip.String(), open)
+				if k2, w2 := theoTenKhai(hang); k2 != "" {
+					kind, why = k2, w2
+				}
 			}
 			mu.Lock()
 			res = append(res, scanHit{IP: ip.String(), MAC: mac, Vendor: hang, Host: host, Ports: open, Kind: kind, Why: why, Taken: taken[ip.String()]})
