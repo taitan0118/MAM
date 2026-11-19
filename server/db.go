@@ -23,7 +23,7 @@ import (
 const dbFile = "mam.db"
 
 // Các danh sách của State được tách mỗi phần tử một dòng; mọi trường còn lại nằm chung dòng "state".
-var dbLists = []string{"accounts", "machines", "alerts", "commands", "schedules", "requests", "policies", "chat", "devices"}
+var dbLists = []string{"accounts", "machines", "alerts", "commands", "schedules", "requests", "policies", "chat", "devices", "devlog"}
 
 type rowVal struct {
 	pos  int

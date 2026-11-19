@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,27 @@ type NetDev struct {
 
 // devAlertID: cảnh báo của thiết bị mạng gắn vào một "máy" giả, giống cách cảnh báo máy chủ dùng __server.
 func devAlertID(id string) string { return "__dev-" + id }
+
+// DevEvent: một mốc đổi trạng thái của thiết bị mạng, để biết nó rớt lúc nào, sống lại lúc nào.
+// Mỗi mốc một dòng riêng trong mam.db (id không đổi) nên chỉ ghi một lần, không ghi đè mỗi phút.
+type DevEvent struct {
+	ID  string    `json:"id"` // <id thiết bị>/<thời điểm>
+	Dev string    `json:"dev"`
+	Up  bool      `json:"up"`
+	At  time.Time `json:"at"`
+}
+
+const devLogMax = 50000 // giữ chừng này mốc; đầy thì bỏ phần cũ nhất
+
+// ghiMoc ghi lại lúc thiết bị đổi trạng thái. Gọi khi đang giữ s.mu.
+func (s *Server) ghiMoc(d *NetDev, up bool, at time.Time) {
+	s.st.DevLog = append(s.st.DevLog, &DevEvent{
+		ID: d.ID + "/" + strconv.FormatInt(at.UnixNano(), 36), Dev: d.ID, Up: up, At: at,
+	})
+	if len(s.st.DevLog) > devLogMax {
+		s.st.DevLog = append([]*DevEvent{}, s.st.DevLog[len(s.st.DevLog)-devLogMax*9/10:]...)
+	}
+}
 
 // devAlertAfter: chờ ngần này lượt liên tiếp mới báo, để một lần trượt mạng không làm kêu oan.
 const devAlertAfter = 2
@@ -170,9 +192,14 @@ func (s *Server) devLoop() {
 func (s *Server) checkDevices(ctx context.Context, ids map[string]bool) {
 	s.mu.RLock()
 	var list []NetDev
+	cu, cp := s.st.Settings.CamUser, s.st.Settings.CamPass
 	for _, d := range s.st.Devices {
 		if len(ids) == 0 || ids[d.ID] {
-			list = append(list, *d)
+			x := *d
+			if x.Kind == "camera" && x.User == "" && cu != "" {
+				x.User, x.Pass = cu, cp // tài khoản camera dùng chung: khỏi khai từng cái một
+			}
+			list = append(list, x)
 		}
 	}
 	s.mu.RUnlock()
@@ -206,6 +233,10 @@ func (s *Server) checkDevices(ctx context.Context, ids map[string]bool) {
 		if !ok || d.IP != x.IP { // đại ca vừa sửa IP trong lúc đang kiểm: bỏ kết quả cũ
 			continue
 		}
+		if d.Checked.IsZero() || d.Up != x.Up { // lần kiểm đầu, hoặc vừa rớt / vừa sống lại
+			s.ghiMoc(d, x.Up, x.Checked)
+			s.save() // mốc này hiếm (chỉ khi đổi trạng thái) nên lưu ngay cho chắc
+		}
 		d.Up, d.Video, d.Kbps, d.Ports, d.Way = x.Up, x.Video, x.Kbps, x.Ports, x.Way
 		d.MACNow, d.Checked, d.Since, d.VidAt = x.MACNow, x.Checked, x.Since, x.VidAt
 		d.Miss, d.VidMiss = x.Miss, x.VidMiss
@@ -217,12 +248,18 @@ func (s *Server) checkDevices(ctx context.Context, ids map[string]bool) {
 	}
 }
 
+// doHinh: thiết bị này có đang được đo luồng hình không (là camera, và có tài khoản riêng hoặc dùng
+// tài khoản camera chung). Gọi khi đang giữ s.mu.
+func (s *Server) doHinh(d *NetDev) bool {
+	return d.Kind == "camera" && (d.User != "" || s.st.Settings.CamUser != "")
+}
+
 // devAlerts mở/đóng cảnh báo cho một thiết bị. Gọi khi đang giữ s.mu.
 func (s *Server) devAlerts(d *NetDev) {
 	m := &Machine{ID: devAlertID(d.ID), Name: d.Name}
 	s.cond(m, "devdown", "crit", d.Miss >= devAlertAfter, d.Name+" ("+d.IP+") mất kết nối")
 	// camera còn sống mà không kéo được hình: máy vẫn đó nhưng không quay, vẫn phải báo
-	noVid := d.Up && d.Kind == "camera" && d.User != "" && d.VidMiss >= devAlertAfter
+	noVid := d.Up && s.doHinh(d) && d.VidMiss >= devAlertAfter
 	s.cond(m, "devvideo", "warn", noVid, d.Name+" ("+d.IP+") còn sống nhưng không ra hình")
 }
 
@@ -233,14 +270,16 @@ func (s *Server) devAlertsClose(d *NetDev) {
 	s.cond(m, "devvideo", "warn", false, "")
 }
 
-// devView: dữ liệu trả cho Console. Không trả mật khẩu camera.
-func devView(d *NetDev) map[string]interface{} {
+// devView: dữ liệu trả cho Console. Không trả mật khẩu camera. vid = có đang đo luồng hình không.
+func (s *Server) devView(d *NetDev) map[string]interface{} {
+	vid := s.doHinh(d)
 	p := d.Ports
 	if p == nil {
 		p = []int{}
 	}
 	return map[string]interface{}{
 		"id": d.ID, "name": d.Name, "ip": d.IP, "kind": d.Kind, "group": d.Group, "port": d.Port,
+		"vid":  vid,
 		"path": d.Path, "user": d.User, "hasPass": d.Pass != "", "mac": d.MAC, "macNow": d.MACNow,
 		"up": d.Up, "video": d.Video, "kbps": d.Kbps, "ports": p, "way": d.Way,
 		"checked": d.Checked, "since": d.Since, "vidAt": d.VidAt, "done": !d.Checked.IsZero(),
@@ -254,7 +293,7 @@ func (s *Server) hDevices(w http.ResponseWriter, r *http.Request, me *Account) {
 		defer s.mu.RUnlock()
 		out := []map[string]interface{}{} // [] chứ không null, nếu không Console lỗi khi vẽ danh sách
 		for _, d := range s.st.Devices {
-			out = append(out, devView(d))
+			out = append(out, s.devView(d))
 		}
 		jok(w, out)
 	case "POST", "PUT":
@@ -334,7 +373,7 @@ func (s *Server) hDevices(w http.ResponseWriter, r *http.Request, me *Account) {
 		s.mu.Unlock()
 		s.auditBy(me, r, "Thiết bị mạng", "Thêm thiết bị "+d.Name+" ("+d.IP+")", d.Name, false)
 		go s.checkDevices(context.Background(), map[string]bool{d.ID: true})
-		jok(w, devView(d))
+		jok(w, s.devView(d))
 	case "DELETE":
 		if me.Role != "super" {
 			jerr(w, 403, "Chỉ Super admin được làm việc này")
@@ -393,8 +432,35 @@ func (s *Server) hDeviceCheck(w http.ResponseWriter, r *http.Request, me *Accoun
 	defer s.mu.RUnlock()
 	out := []map[string]interface{}{}
 	for _, d := range s.st.Devices {
-		out = append(out, devView(d))
+		out = append(out, s.devView(d))
 	}
 	jok(w, out)
 }
 
+// hDeviceLog: lịch sử rớt / sống lại của một thiết bị, mới nhất lên đầu.
+func (s *Server) hDeviceLog(w http.ResponseWriter, r *http.Request, me *Account) {
+	id := r.URL.Query().Get("id")
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var d *NetDev
+	for _, x := range s.st.Devices {
+		if x.ID == id {
+			d = x
+		}
+	}
+	if d == nil {
+		jerr(w, 404, "Không có thiết bị này")
+		return
+	}
+	out := []map[string]interface{}{}
+	for i := len(s.st.DevLog) - 1; i >= 0; i-- {
+		e := s.st.DevLog[i]
+		if e.Dev == id {
+			out = append(out, map[string]interface{}{"up": e.Up, "at": e.At})
+		}
+		if len(out) >= 500 {
+			break
+		}
+	}
+	jok(w, map[string]interface{}{"name": d.Name, "ip": d.IP, "up": d.Up, "since": d.Since, "log": out})
+}

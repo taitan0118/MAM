@@ -669,7 +669,7 @@ func (s *Server) hSettings(w http.ResponseWriter, r *http.Request, me *Account) 
 		if me.Role != "super" {
 			st.EnrollKey, st.Telegram, st.Webhook, st.SmtpUser, st.SmtpTo, st.BackupDir = "", "", "", "", "", ""
 		}
-		st.SmtpPass = "" // không trả mật khẩu SMTP về client
+		st.SmtpPass, st.CamPass = "", "" // không trả mật khẩu SMTP và camera về client
 		jok(w, st)
 		return
 	}
@@ -689,6 +689,12 @@ func (s *Server) hSettings(w http.ResponseWriter, r *http.Request, me *Account) 
 	in.BackupDir = s.st.Settings.BackupDir
 	if in.SmtpPass == "" {
 		in.SmtpPass = s.st.Settings.SmtpPass // trống = giữ mật khẩu SMTP cũ
+	}
+	in.CamUser = strings.TrimSpace(in.CamUser)
+	if in.CamUser == "" {
+		in.CamPass = "" // bỏ tài khoản chung thì bỏ luôn mật khẩu
+	} else if in.CamPass == "" {
+		in.CamPass = s.st.Settings.CamPass // trống = giữ mật khẩu camera cũ
 	}
 	s.st.Settings = in
 	s.save()

@@ -66,6 +66,10 @@ type Settings struct {
 	EnrollKey       string  `json:"enrollKey"`       // để trống = máy nào cài agent cũng tự đăng ký
 	NoAutoUpdate    bool    `json:"noAutoUpdate"`    // true: không tự cập nhật agent
 	NoMachineAvatar bool    `json:"noMachineAvatar"` // true: máy không được tự đổi ảnh đại diện
+	// Tài khoản dùng chung cho camera: công ty thường đặt cùng một mật khẩu cho cả trăm camera, khai
+	// ở đây một lần là mọi camera chưa có tài khoản riêng đều đo được luồng hình.
+	CamUser string `json:"camUser"`
+	CamPass string `json:"camPass"`
 	// Thông báo ra ngoài khi có cảnh báo mới mở
 	Telegram string `json:"telegram"` // token bot Telegram
 	TgChat   string `json:"tgChat"`   // chat id nhận tin
@@ -160,7 +164,8 @@ type State struct {
 	Requests  []*Request  `json:"requests"`
 	Policies  []*Policy   `json:"policies"`
 	// Thiết bị mạng không cài được agent (camera, máy chấm công, switch), xem devices.go.
-	Devices []*NetDev `json:"devices"`
+	Devices []*NetDev   `json:"devices"`
+	DevLog  []*DevEvent `json:"devlog"` // lịch sử rớt / sống lại của từng thiết bị mạng
 	// Loại thiết bị cho yêu cầu hỗ trợ (Super admin tạo/xóa). Rỗng = dùng danh sách mặc định.
 	DeviceTypes []string `json:"deviceTypes"`
 	// Tên ô liên hệ trong form yêu cầu hỗ trợ (vd "WeChat ID"). Rỗng = "SĐT/Zalo".

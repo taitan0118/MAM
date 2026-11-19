@@ -675,3 +675,60 @@ func TestLopMangKhac(t *testing.T) {
 		t.Fatal("172.32.x không phải dải nội bộ, phải bị từ chối")
 	}
 }
+
+// Lịch sử: ghi mốc khi đổi trạng thái, không ghi khi giữ nguyên.
+func TestLichSuThietBi(t *testing.T) {
+	f := setup(t)
+	d := &NetDev{ID: "dv9", Name: "Camera kho", IP: "192.168.77.90", Kind: "camera"}
+	f.s.mu.Lock()
+	f.s.st.Devices = append(f.s.st.Devices, d)
+	f.s.mu.Unlock()
+
+	moc := func() int {
+		f.s.mu.RLock()
+		defer f.s.mu.RUnlock()
+		n := 0
+		for _, e := range f.s.st.DevLog {
+			if e.Dev == d.ID {
+				n++
+			}
+		}
+		return n
+	}
+	ghi := func(up bool) {
+		f.s.mu.Lock()
+		f.s.ghiMoc(d, up, time.Now())
+		f.s.mu.Unlock()
+	}
+	ghi(true)
+	ghi(false)
+	ghi(true)
+	if moc() != 3 {
+		t.Fatalf("phải ghi 3 mốc, nhận %d", moc())
+	}
+
+	code, m, _ := f.super.do("GET", "/api/devices/log?id=dv9", nil, nil)
+	expect(t, code, 200, "đọc lịch sử")
+	lg, _ := m["log"].([]interface{})
+	if len(lg) != 3 {
+		t.Fatalf("API phải trả 3 mốc, nhận %d", len(lg))
+	}
+	if first, _ := lg[0].(map[string]interface{}); first["up"] != true {
+		t.Fatal("mốc mới nhất phải lên đầu")
+	}
+	code, _, _ = f.super.do("GET", "/api/devices/log?id=khongco", nil, nil)
+	expect(t, code, 404, "thiết bị không có")
+
+	// tài khoản camera chung: camera chưa khai riêng vẫn được đo hình
+	f.s.mu.Lock()
+	co := f.s.doHinh(d)
+	f.s.st.Settings.CamUser, f.s.st.Settings.CamPass = "admin", "bimat"
+	co2 := f.s.doHinh(d)
+	f.s.mu.Unlock()
+	if co {
+		t.Fatal("chưa có tài khoản nào thì không đo hình được")
+	}
+	if !co2 {
+		t.Fatal("có tài khoản camera chung thì phải đo hình")
+	}
+}
