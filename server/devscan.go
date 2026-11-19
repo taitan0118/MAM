@@ -9,8 +9,11 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"io"
 	"net"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -80,6 +83,70 @@ func vendorOf(mac string) string {
 		return ""
 	}
 	return ouiVendor[mac[:8]]
+}
+
+// cổng trang quản lý thử lần lượt; là biến để test đổi được
+var webPorts = []int{80, 8080, 443}
+
+var reTitle = regexp.MustCompile(`(?is)<title[^>]*>([^<]{1,60})`)
+
+// webKhai hỏi trang quản lý của thiết bị xem nó tự khai là gì. Chỉ gọi cho thứ chưa đoán được loại
+// (vài chục cái trong cả lượt quét) nên không làm chậm. Thiết bị mạng hay khai tên ở phần đầu
+// "Server:" — thử thật trên mạng công ty ra HUAWEI, MoxaHttp, GoAhead-Webs, Embedthis-http.
+func webKhai(ctx context.Context, ip string, open []int) string {
+	c, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	cl := &http.Client{
+		Timeout:       3 * time.Second,
+		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, DisableKeepAlives: true},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	for _, p := range webPorts {
+		if !hasPort(open, p) {
+			continue
+		}
+		u := "http://" + net.JoinHostPort(ip, itoa(p)) + "/"
+		if p == 443 {
+			u = "https://" + ip + "/"
+		}
+		req, err := http.NewRequestWithContext(c, "GET", u, nil)
+		if err != nil {
+			continue
+		}
+		resp, err := cl.Do(req)
+		if err != nil {
+			continue
+		}
+		sv := strings.TrimSpace(resp.Header.Get("Server"))
+		var body []byte
+		if sv == "" {
+			body, _ = io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+		}
+		resp.Body.Close()
+		if sv != "" {
+			return cut(sv, 40)
+		}
+		if m := reTitle.FindSubmatch(body); m != nil {
+			if ti := strings.TrimSpace(string(m[1])); ti != "" && !tieuDeRac(ti) {
+				return cut(ti, 40)
+			}
+		}
+	}
+	return ""
+}
+
+// tieuDeRac: tiêu đề trang chỉ là câu báo lỗi của web, không phải tên thiết bị.
+var reRac = regexp.MustCompile(`(?i)^\s*(\d{3}\b|not found|forbidden|unauthorized|bad request|error|index of)`)
+
+func tieuDeRac(s string) bool { return reRac.MatchString(s) }
+
+func hasPort(ps []int, p int) bool {
+	for _, x := range ps {
+		if x == p {
+			return true
+		}
+	}
+	return false
 }
 
 // guessDevKind đoán loại thiết bị từ cổng mở, có trả lời RTSP hay không, và vị trí IP trong dải.
@@ -407,6 +474,9 @@ func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string, sem 
 			hang := vendorOf(mac)
 			if hang == "" { // bảng mã hãng chỉ có ít hãng; camera tự khai tên thì tin camera
 				hang = tuKhai
+			}
+			if hang == "" && kind == "other" {
+				hang = webKhai(ctx, ip.String(), open) // chưa đoán được là gì: hỏi thẳng trang web của nó
 			}
 			mu.Lock()
 			res = append(res, scanHit{IP: ip.String(), MAC: mac, Vendor: hang, Host: host, Ports: open, Kind: kind, Why: why, Taken: taken[ip.String()]})

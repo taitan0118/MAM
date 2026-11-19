@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -568,5 +570,47 @@ func TestDevKindsCoLed(t *testing.T) {
 	}
 	if p := devPortList(NetDev{Kind: "led"}); len(p) == 0 {
 		t.Fatal("bảng LED phải có cổng mặc định để kiểm")
+	}
+}
+
+// webKhai: thiết bị tự khai tên ở phần đầu Server:, không có thì lấy <title>.
+func TestWebKhai(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Host[strings.LastIndexByte(r.Host, ':')+1:] {
+		default:
+			w.Header().Set("Server", "MoxaHttp/1.0")
+			w.Write([]byte("<html><title>Input Password</title>"))
+		}
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	_, ps, _ := net.SplitHostPort(strings.TrimPrefix(ts.URL, "http://"))
+	port := 0
+	fmt.Sscan(ps, &port)
+
+	// cổng thật của máy chủ thử nghiệm không phải 80/8080/443 nên tạm mượn danh sách cổng
+	old := webPorts
+	webPorts = []int{port}
+	t.Cleanup(func() { webPorts = old })
+
+	if got := webKhai(context.Background(), "127.0.0.1", []int{port}); got != "MoxaHttp/1.0" {
+		t.Fatalf("phải lấy được tên ở phần đầu Server:, nhận %q", got)
+	}
+	if got := webKhai(context.Background(), "127.0.0.1", []int{65000}); got != "" {
+		t.Fatalf("cổng không mở phải trả rỗng, nhận %q", got)
+	}
+}
+
+func TestTieuDeRac(t *testing.T) {
+	for _, s := range []string{"403 Forbidden", "404 Not Found", "Not Found", "Forbidden", "Error", "Index of /", "  401 Unauthorized"} {
+		if !tieuDeRac(s) {
+			t.Fatalf("%q là câu báo lỗi, không phải tên thiết bị", s)
+		}
+	}
+	for _, s := range []string{"Input Password", "DiskStation", "UPS Web/SNMP", "TL-SG1016DE", "Moxa NPort"} {
+		if tieuDeRac(s) {
+			t.Fatalf("%q là tên thiết bị, không được bỏ", s)
+		}
 	}
 }
