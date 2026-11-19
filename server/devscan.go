@@ -35,10 +35,12 @@ var scanAllPorts = []int{
 }
 
 const (
-	scanMaxNets = 256 // tối đa bấy nhiêu dải một lượt (cả một dải /16 chia thành /24)
+	// 1024 dải = 4 lớp /16, đủ cho công ty dùng nhiều lớp mạng (172.20.x, 172.24.x, 192.168.x…).
+	// Mỗi 256 dải mất khoảng 9 phút nên quét hết 1024 dải là gần nửa tiếng; chạy nền nên không sao.
+	scanMaxNets = 1024
 	scanSockets = 768 // số kết nối dò cùng lúc cho cả lượt quét
 	scanWait    = 300 * time.Millisecond
-	scanBudget  = 30 * time.Minute // cả lượt quét không được lâu hơn mức này
+	scanBudget  = 2 * time.Hour // cả lượt quét không được lâu hơn mức này
 )
 
 type scanHit struct {
@@ -297,19 +299,15 @@ func (s *Server) suggestScanCIDRs() []string {
 	return out
 }
 
-// suggestAllCIDRs: "quét hết" — cả dải /16 mà máy chủ đang nằm trong (vd 172.20.0-255.0/24), vì công
-// ty thường chia VLAN theo ô thứ ba. Trả rỗng nếu máy chủ không có IP nội bộ nào.
+// suggestAllCIDRs: "quét hết" — mọi lớp /16 mà công ty đang dùng, vì VLAN thường chia theo ô thứ ba.
+// Lấy từ card mạng máy chủ, IP của mọi agent và IP thiết bị đã khai; công ty dùng nhiều lớp (172.20.x
+// lẫn 172.24.x) thì ra đủ cả. Trả rỗng nếu không biết lớp nào.
 func (s *Server) suggestAllCIDRs() []string {
 	seen, out := map[string]bool{}, []string{}
-	addrs, _ := net.InterfaceAddrs()
-	for _, a := range addrs {
-		n, ok := a.(*net.IPNet)
-		if !ok {
-			continue
-		}
-		v := n.IP.To4()
+	add := func(ip net.IP) {
+		v := ip.To4()
 		if v == nil || !privateIP(v) {
-			continue
+			return
 		}
 		k := itoa(int(v[0])) + "." + itoa(int(v[1])) + ".0-255.0/24"
 		if !seen[k] {
@@ -317,6 +315,23 @@ func (s *Server) suggestAllCIDRs() []string {
 			out = append(out, k)
 		}
 	}
+	addrs, _ := net.InterfaceAddrs()
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok {
+			add(n.IP)
+		}
+	}
+	s.mu.RLock()
+	for _, m := range s.st.Machines {
+		if !m.Revoked && m.IP != "" {
+			add(net.ParseIP(m.IP))
+		}
+	}
+	for _, d := range s.st.Devices {
+		add(net.ParseIP(d.IP))
+	}
+	s.mu.RUnlock()
+	sort.Strings(out)
 	return out
 }
 

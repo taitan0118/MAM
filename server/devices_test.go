@@ -535,8 +535,13 @@ func TestTraiRaDaiLienTiep(t *testing.T) {
 	if ns, msg := parseCIDRs("10.0.0-255.0/24"); msg != "" || len(ns) != 256 {
 		t.Fatalf("256 dải phải nhận hết: %d dải, lỗi %q", len(ns), msg)
 	}
-	if _, msg := parseCIDRs("10.0.0-255.0/24, 10.1.0.0/24"); msg == "" {
-		t.Fatal("quá 256 dải phải bị từ chối")
+	// bốn lớp /16 là vừa đủ mức cho phép, lớp thứ năm thì quá
+	nam := []string{"10.0.0-255.0/24", "10.1.0-255.0/24", "10.2.0-255.0/24", "10.3.0-255.0/24", "10.4.0-255.0/24"}
+	if ns, msg := parseCIDRs(strings.Join(nam[:4], ",")); msg != "" || len(ns) != 1024 {
+		t.Fatalf("4 lớp /16 phải nhận hết: %d dải, lỗi %q", len(ns), msg)
+	}
+	if _, msg := parseCIDRs(strings.Join(nam, ",")); msg == "" {
+		t.Fatal("quá 1024 dải phải bị từ chối")
 	}
 }
 
@@ -650,5 +655,23 @@ func TestGuessDevKindWifi(t *testing.T) {
 	}
 	if p := devPortList(NetDev{Kind: "wifi"}); len(p) == 0 {
 		t.Fatal("thiết bị WiFi phải có cổng mặc định để kiểm")
+	}
+}
+
+// Lớp mạng khác (172.24.x) vẫn là dải nội bộ hợp lệ, và quét được cả nhiều lớp một lượt.
+func TestLopMangKhac(t *testing.T) {
+	for _, c := range []string{"172.24.0.0/24", "172.16.5.0/24", "172.31.200.0/24", "10.50.3.0/24", "192.168.77.0/24"} {
+		if ns, bad := parseCIDRs(c); bad != "" || len(ns) != 1 {
+			t.Fatalf("%s phải nhận được: %q", c, bad)
+		}
+	}
+	// hai lớp /16 trong cùng một lượt
+	ns, bad := parseCIDRs("172.20.0-255.0/24, 172.24.0-255.0/24")
+	if bad != "" || len(ns) != 512 {
+		t.Fatalf("hai lớp /16 phải ra 512 dải, nhận %d (%s)", len(ns), bad)
+	}
+	// 172.32 không còn là dải nội bộ
+	if _, bad := parseCIDRs("172.32.0.0/24"); bad == "" {
+		t.Fatal("172.32.x không phải dải nội bộ, phải bị từ chối")
 	}
 }
