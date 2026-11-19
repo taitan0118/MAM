@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.70"
+const Version = "1.1.71"
 
 //go:embed web
 var webFS embed.FS
@@ -71,6 +71,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/uptime", s.authed("", s.hUptime))
 	mux.HandleFunc("/api/policies", s.authed("", s.hPolicies))
 	mux.HandleFunc("/api/discover", s.authed("write", s.hDiscover))
+	mux.HandleFunc("/api/devices", s.authed("", s.hDevices))
+	mux.HandleFunc("/api/devices/check", s.authed("", s.hDeviceCheck))
 	mux.HandleFunc("/api/remote-install", s.authed("super", s.hRemoteInstall))
 	mux.HandleFunc("/api/inventory", s.authed("", s.hInventory))
 	mux.HandleFunc("/api/security", s.authed("", s.hSecurity))
@@ -151,6 +153,7 @@ func main() {
 	s.boot = boot
 	go s.watchdog()
 	go s.schedLoop()
+	go s.devLoop()
 	srv := &http.Server{Addr: *addr, Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second}
 	log.Printf(T("MAM Server %s · dữ liệu: %s · lắng nghe %s"), Version, *dir, *addr)
 	if *cert != "" && *key != "" {

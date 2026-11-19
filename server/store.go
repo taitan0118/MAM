@@ -155,6 +155,8 @@ type State struct {
 	Schedules []*Schedule `json:"schedules"`
 	Requests  []*Request  `json:"requests"`
 	Policies  []*Policy   `json:"policies"`
+	// Thiết bị mạng không cài được agent (camera, máy chấm công, switch), xem devices.go.
+	Devices []*NetDev `json:"devices"`
 	// Loại thiết bị cho yêu cầu hỗ trợ (Super admin tạo/xóa). Rỗng = dùng danh sách mặc định.
 	DeviceTypes []string `json:"deviceTypes"`
 	// Tên ô liên hệ trong form yêu cầu hỗ trợ (vd "WeChat ID"). Rỗng = "SĐT/Zalo".

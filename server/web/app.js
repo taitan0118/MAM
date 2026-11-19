@@ -30,6 +30,7 @@ const ICONS = {
   policy: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
   security: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   discover: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  devices: '<rect x="2" y="7" width="13" height="10" rx="2"/><path d="M15 11l6-3v8l-6-3z"/>',
   net: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/>',
   report: '<path d="M4 20V10M11 20V4M18 20v-7"/>',
   uptime: '<path d="M12 3v8"/><path d="M7 6.3a8 8 0 1010 0"/>',
@@ -202,13 +203,13 @@ function forceChange() {
 }
 
 /* ---------- khung ứng dụng ---------- */
-const NAV = [['overview', 'Tổng quan'], ['alerts', 'Cảnh báo'], ['requests', 'Yêu cầu hỗ trợ'], ['chat', 'Chat với máy'], ['machines', 'Máy'], ['groups', 'Nhóm máy'], ['policy', 'Chính sách'], ['security', 'Bảo mật & bản vá'], ['discover', 'Phát hiện máy'], ['net', 'Qua Internet'], ['inventory', 'Kiểm kê'], ['report', 'Báo cáo'], ['uptime', 'Thời gian hoạt động'], ['accounts', 'Tài khoản'], ['audit', 'Nhật ký thao tác'], ['settings', 'Cài đặt']];
+const NAV = [['overview', 'Tổng quan'], ['alerts', 'Cảnh báo'], ['requests', 'Yêu cầu hỗ trợ'], ['chat', 'Chat với máy'], ['machines', 'Máy'], ['groups', 'Nhóm máy'], ['policy', 'Chính sách'], ['security', 'Bảo mật & bản vá'], ['discover', 'Phát hiện máy'], ['devices', 'Thiết bị mạng'], ['net', 'Qua Internet'], ['inventory', 'Kiểm kê'], ['report', 'Báo cáo'], ['uptime', 'Thời gian hoạt động'], ['accounts', 'Tài khoản'], ['audit', 'Nhật ký thao tác'], ['settings', 'Cài đặt']];
 const TITLES = {
   overview: ['Tổng quan', 'Toàn hệ thống · cập nhật trực tiếp'], machines: ['Máy', 'Danh sách, lọc, ra lệnh'], detail: ['Chi tiết máy', ''],
   groups: ['Nhóm máy', 'Sắp xếp máy theo khu vực hoặc phòng ban'], alerts: ['Cảnh báo', 'Nhiệt độ, CPU, ổ cứng, mất kết nối'],
   chat: ['Chat với máy', 'Nhắn hai chiều với người ngồi máy, hiện ngay trong cửa sổ MAM'], requests: ['Yêu cầu hỗ trợ', 'Người ngồi máy gửi lên từ cửa sổ MAM'], policy: ['Chính sách', 'USB, chặn web/ứng dụng, giờ dùng máy theo nhóm'],
   inventory: ['Kiểm kê', 'Phần cứng và ổ cứng từng máy'], security: ['Bảo mật & bản vá', 'Diệt virus và Windows Update — chỉ xem'],
-  discover: ['Phát hiện máy', 'Quét mạng LAN tìm máy chưa cài agent'], net: ['Qua Internet', 'Dùng Console khi không ở trong mạng công ty'],
+  discover: ['Phát hiện máy', 'Quét mạng LAN tìm máy chưa cài agent'], devices: ['Thiết bị mạng', 'Camera, máy chấm công, switch — thiết bị không cài được agent'], net: ['Qua Internet', 'Dùng Console khi không ở trong mạng công ty'],
   report: ['Báo cáo', 'Tổng hợp theo khoảng thời gian, xuất CSV'], uptime: ['Thời gian hoạt động', 'Máy bật lúc nào, tắt lúc nào, tổng bao nhiêu giờ'],
   accounts: ['Tài khoản', 'Ai được vào Console'], audit: ['Nhật ký thao tác', 'Ai làm gì, lúc nào, từ máy nào'], settings: ['Cài đặt', 'Ngưỡng cảnh báo, thông báo, sao lưu, cách cài agent']
 };
@@ -274,7 +275,7 @@ const VIEWS = {};
 const OVF = { f: 'all', r: 'all' };
 VIEWS.overview = async v => {
   const noChat = me.role === 'view';
-  const [o, ml, rq, ch] = await Promise.all([api('GET', '/api/overview'), api('GET', '/api/machines'), api('GET', '/api/requests?status='), noChat ? { convs: [], unread: 0 } : api('GET', '/api/chat')]);
+  const [o, ml, rq, ch, dv] = await Promise.all([api('GET', '/api/overview'), api('GET', '/api/machines'), api('GET', '/api/requests?status='), noChat ? { convs: [], unread: 0 } : api('GET', '/api/chat'), api('GET', '/api/devices')]);
   const lim = { t: settings ? settings.temp : 85, d: settings ? settings.disk : 10 };
   const level = m => { const hot = m.online && m.temp != null && m.temp >= lim.t, low = m.diskFree != null && m.diskFree <= lim.d;
     return !m.online ? 'off' : (hot && m.temp >= lim.t + 5) || low ? 'crit' : hot || (m.cpu != null && m.cpu >= 90) ? 'warn' : 'ok'; };
@@ -297,7 +298,7 @@ VIEWS.overview = async v => {
     el('div', { class: 'card-b' }, el('div', { class: 'tiles scrollbox' }, tiles.length ? tiles : el('div', { class: 'empty' }, ml.length ? 'Không có máy nào ở mức này' : 'Chưa có máy')),
       ''));
   const rowCss = 'display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--border);cursor:pointer';
-  const alerts = card('Cảnh báo gần đây', null, el('div', { class: 'scrollbox short' }, (o.recent || []).length ? o.recent.map(a => el('div', { style: rowCss, onclick: () => a.machine === '__server' ? go('settings') : go('detail', a.machine) },
+  const alerts = card('Cảnh báo gần đây', null, el('div', { class: 'scrollbox short' }, (o.recent || []).length ? o.recent.map(a => el('div', { style: rowCss, onclick: () => a.machine === '__server' ? go('settings') : a.machine.startsWith('__dev-') ? go('devices') : go('detail', a.machine) },
     pill(a.sev === 'crit' ? 'crit' : 'warn', a.sev === 'crit' ? 'Nghiêm trọng' : 'Cảnh báo'), el('div', { style: 'flex:1;min-width:0' }, el('b', {}, a.name), el('div', { style: 'font-size:12.5px;color:var(--muted)' }, a.msg)), el('span', { style: 'font-size:12px;color:var(--faint)' }, ago(a.opened)))) : el('div', { class: 'empty' }, 'Không có cảnh báo đang mở')),
     el('button', { class: 'btn', style: 'padding:2px 9px;font-size:12px', onclick: () => go('alerts') }, 'Xem tất cả'));
   const cnt = s => rq.filter(q => q.status === s).length;
@@ -315,8 +316,17 @@ VIEWS.overview = async v => {
   const gr = Object.entries(o.groups || {}).sort((a, b) => a[0].localeCompare(b[0]));
   const groupsCard = card('Máy online theo nhóm', null, el('div', { class: 'scrollbox short', style: 'display:flex;flex-direction:column;gap:10px' }, gr.length ? gr.map(([nm, s]) => el('div', { style: 'display:flex;align-items:center;gap:10px;cursor:pointer', onclick: () => { MF.group = nm === 'Chưa phân nhóm' ? '__none' : nm; go('machines'); } },
     el('div', { style: 'width:130px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, nm), el('div', { class: 'bar', style: 'max-width:none' }, el('i', { style: 'width:' + (s.Total ? s.Online / s.Total * 100 : 0) + '%;background:' + (s.Online === s.Total ? 'var(--good)' : s.Online / s.Total >= 0.6 ? 'var(--warn)' : 'var(--crit)') })), el('span', { class: 'mono', style: 'font-size:12.5px;min-width:56px;text-align:right' }, s.Online + '/' + s.Total))) : el('div', { class: 'empty' }, 'Chưa có dữ liệu')));
+  // Thiết bị mạng (camera, máy chấm công, switch): cái nào rớt đưa lên đầu. Chưa khai cái nào thì giấu thẻ đi.
+  const dvBad = dv.filter(d => d.done && (!d.up || (d.kind === 'camera' && d.user && !d.video)));
+  const devCard = !dv.length ? null : card('Thiết bị mạng', null, el('div', { class: 'scrollbox short' }, dvBad.length
+    ? dvBad.sort((a, b) => (a.up ? 1 : 0) - (b.up ? 1 : 0)).map(d => { const [cls, lbl, sub] = devState(d);
+      return el('div', { style: rowCss, onclick: () => go('devices') }, pill(cls, t(lbl)),
+        el('div', { style: 'flex:1;min-width:0' }, el('b', {}, d.name), el('div', { style: 'font-size:12.5px;color:var(--muted)' }, d.ip + (d.group ? ' · ' + d.group : ''))),
+        el('span', { style: 'font-size:12px;color:var(--faint);white-space:nowrap' }, d.since ? ago(d.since) : '')); })
+    : el('div', { class: 'empty' }, t('Tất cả {0} thiết bị đang hoạt động', dv.length))),
+    el('button', { class: 'btn', style: 'padding:2px 9px;font-size:12px', onclick: () => go('devices') }, 'Xem tất cả'));
   // một trang: không cuộn cả trang, mỗi thẻ tự cuộn bên trong
-  v.append(el('div', { class: 'ov' }, kpiRow, emptyNote, el('div', { class: 'ovmain' }, health, el('div', { class: 'ovside' }, reqCard, chatCard))));
+  v.append(el('div', { class: 'ov' }, kpiRow, emptyNote, el('div', { class: 'ovmain' }, health, el('div', { class: 'ovside' }, devCard, reqCard, chatCard))));
 };
 
 /* ---------- Máy ---------- */
@@ -783,9 +793,18 @@ VIEWS.alerts = async v => {
   a = a.filter(x => (AF.sev === 'all' || x.sev === AF.sev) && hit(AF.q, x.name, x.msg)).sort((p, q) => (q.sev === 'crit') - (p.sev === 'crit') || String(q.opened).localeCompare(String(p.opened)));
   v.append(el('div', { class: 'filters' }, el('div', { class: 'seg' }, [['open', 'Đang mở'], ['closed', 'Đã đóng']].map(([k, l]) => el('button', { class: AF.st === k ? 'on' : '', onclick: () => { AF.st = k; render(); } }, l))), el('span', { style: 'color:var(--muted);font-size:12.5px' }, t('{0} cảnh báo', a.length))));
   v.append(el('div', { class: 'filters', style: 'margin-top:10px' }, segBar([['all', 'Mọi mức'], ['crit', 'Nghiêm trọng'], ['warn', 'Cảnh báo']], AF.sev, k => { AF.sev = k; render(); }), searchBox('afq', AF.q, x => AF.q = x, t('Tìm máy hoặc nội dung…'))));
-  v.append(el('div', { class: 'card', style: 'margin-top:12px' }, el('div', { class: 'card-b', style: 'padding:0 16px 8px' }, table(['Mức', 'Máy', 'Nội dung', 'Mở lúc', AF.st === 'closed' ? 'Đóng bởi' : '', ''], a.map(x => el('tr', { onclick: () => x.machine === '__server' ? go('settings') : go('detail', x.machine) }, el('td', {}, pill(x.sev === 'crit' ? 'crit' : 'warn', x.sev === 'crit' ? 'Nghiêm trọng' : 'Cảnh báo')), el('td', { style: 'font-weight:600' }, x.name), el('td', {}, x.msg), el('td', {}, fmtDT(x.opened)), el('td', {}, AF.st === 'closed' ? (x.by || '—') + ' · ' + fmtDT(x.closed) : ''),
-    el('td', { style: 'text-align:right' }, AF.st === 'open' && canWrite() ? el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: async e => { e.stopPropagation(); try { await api('POST', '/api/alerts/' + x.id + '/close', {}); render(); } catch (er) { fail(er); } } }, 'Đóng') : ''))), AF.st === 'open' ? 'Không có cảnh báo đang mở' : 'Chưa có cảnh báo nào đã đóng'))));
+  // hai bảng riêng: cảnh báo máy chủ (__server) tính là thiết bị IT
+  const laMang = x => x.machine.startsWith('__dev-');
+  const dong = x => el('tr', { onclick: () => x.machine === '__server' ? go('settings') : laMang(x) ? go('devices') : go('detail', x.machine) },
+    el('td', {}, pill(x.sev === 'crit' ? 'crit' : 'warn', x.sev === 'crit' ? 'Nghiêm trọng' : 'Cảnh báo')), el('td', { style: 'font-weight:600' }, x.name), el('td', {}, x.msg), el('td', {}, fmtDT(x.opened)), el('td', {}, AF.st === 'closed' ? (x.by || '—') + ' · ' + fmtDT(x.closed) : ''),
+    el('td', { style: 'text-align:right' }, AF.st === 'open' && canWrite() ? el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: async e => { e.stopPropagation(); try { await api('POST', '/api/alerts/' + x.id + '/close', {}); render(); } catch (er) { fail(er); } } }, 'Đóng') : ''));
+  const bang = (ds, trong) => el('div', { style: 'padding:0 16px 8px' }, table(['Mức', 'Máy', 'Nội dung', 'Mở lúc', AF.st === 'closed' ? 'Đóng bởi' : '', ''], ds.map(dong), trong));
+  const trong = AF.st === 'open' ? 'Không có cảnh báo đang mở' : 'Chưa có cảnh báo nào đã đóng';
+  const it = a.filter(x => !laMang(x)), mang = a.filter(laMang);
+  v.append(el('div', { style: 'margin-top:12px' }, card(t('Cảnh báo thiết bị IT') + ' (' + it.length + ')', 'máy tính, máy chủ', bang(it, trong))));
+  v.append(el('div', { style: 'margin-top:12px' }, card(t('Cảnh báo thiết bị mạng') + ' (' + mang.length + ')', 'camera, máy chấm công, switch', bang(mang, trong))));
   v.append(el('div', { style: 'margin-top:12px' }, infoNote('Cảnh báo tự mở khi máy vượt ngưỡng (chỉnh ở mục Cài đặt) và tự đóng khi hết vượt ngưỡng. Mất kết nối quá số phút đã đặt cũng tạo cảnh báo.')));
+  v.append(el('div', { style: 'margin-top:8px' }, infoNote('Thiết bị mạng bị báo khi không trả lời 2 lượt kiểm liên tiếp (khoảng 2 phút), và khi camera còn sống mà không kéo được hình. Tự đóng khi thiết bị trả lời lại.')));
 };
 
 /* ---------- Yêu cầu hỗ trợ ---------- */
@@ -1120,6 +1139,95 @@ VIEWS.discover = async v => {
     if (running && document.body.contains(Object.values(ri.cells)[0] || document.body)) ri.timer = setTimeout(() => { ri.timer = null; riPoll(); }, 2000);
   }
 };
+
+/* ---------- Thiết bị mạng (camera, máy chấm công, switch) ---------- */
+// Không cài được agent lên các thiết bị này nên chỉ kiểm IP còn sống hay không (gõ cổng TCP, không
+// được thì ping). Riêng camera có nhập tài khoản thì server đo luồng hình RTSP để biết còn ra hình.
+const DEVK = [['camera', 'Camera'], ['attend', 'Máy chấm công'], ['switch', 'Switch'], ['router', 'Router'], ['other', 'Khác']];
+const devKind = k => ((DEVK.find(x => x[0] === k) || [0, 'Khác'])[1]);
+const DEVF = { g: 'all', k: 'all' };
+// Trạng thái một thiết bị: [màu, chữ, chi tiết]
+function devState(d) {
+  if (!d.done) return ['off', 'Chưa kiểm', ''];
+  if (!d.up) return ['crit', 'Mất kết nối', d.since ? t('từ {0}', fmtDT(d.since)) : ''];
+  const openPorts = d.ports && d.ports.length ? t('mở cổng {0}', d.ports.join(', ')) : d.way === 'ping' ? t('trả lời ping') : '';
+  if (d.kind === 'camera' && d.user) return d.video ? ['ok', 'Có hình', t('{0} kbps', d.kbps)] : ['warn', 'Sống nhưng không ra hình', openPorts];
+  return ['ok', 'Hoạt động', openPorts];
+}
+VIEWS.devices = async v => {
+  let list = await api('GET', '/api/devices');
+  const grps = [...new Set(list.map(d => d.group).filter(Boolean))].sort();
+  if (DEVF.g !== 'all' && DEVF.g !== '__none' && grps.indexOf(DEVF.g) < 0) DEVF.g = 'all';
+  const shown = list.filter(d => (DEVF.g === 'all' || (DEVF.g === '__none' ? !d.group : d.group === DEVF.g)) && (DEVF.k === 'all' || d.kind === DEVF.k))
+    .sort((a, b) => (a.group || '\uffff').localeCompare(b.group || '\uffff') || a.name.localeCompare(b.name));
+  const noVid = list.filter(d => d.done && d.up && d.kind === 'camera' && d.user && !d.video).length;
+  v.append(el('div', { class: 'kpis' },
+    kpi(t('Tổng thiết bị'), 'var(--accent)', String(list.length), t('{0} nhóm', grps.length)),
+    kpi(t('Đang hoạt động'), 'var(--good)', String(list.filter(d => d.done && d.up).length), ''),
+    kpi(t('Mất kết nối'), 'var(--crit)', String(list.filter(d => d.done && !d.up).length), ''),
+    kpi(t('Camera không ra hình'), 'var(--warn)', String(noVid), t('cổng mở nhưng không có luồng hình'))));
+  const recheck = el('button', { class: 'btn', onclick: async () => {
+    recheck.disabled = true; recheck.textContent = t('Đang kiểm…');
+    try { await api('POST', '/api/devices/check'); toast(t('Đã kiểm lại')); render(); } catch (e) { fail(e); recheck.disabled = false; recheck.textContent = t('Kiểm lại tất cả'); }
+  } }, 'Kiểm lại tất cả');
+  const dem = f => ' (' + list.filter(f).length + ')'; // số lượng hiện ngay trong ô lọc, khỏi phải chọn mới biết
+  v.append(el('div', { class: 'filters', style: 'margin-top:12px' },
+    field('Nhóm', select([['all', t('Tất cả nhóm') + dem(() => true)], ...grps.map(g => [g, g + dem(d => d.group === g)]), ['__none', t('Chưa phân nhóm') + dem(d => !d.group)]], DEVF.g, x => { DEVF.g = x; render(); })),
+    field('Loại', select([['all', t('Tất cả loại') + dem(() => true)], ...DEVK.map(([k, l]) => [k, t(l) + dem(d => d.kind === k)])], DEVF.k, x => { DEVF.k = x; render(); })),
+    el('div', { style: 'flex:1' }),
+    canWrite() ? recheck : null,
+    isSuper() ? el('button', { class: 'btn primary', onclick: () => devAsk(null, grps) }, 'Thêm thiết bị') : null));
+  const row = d => {
+    const [cls, lbl, sub] = devState(d);
+    const macBad = d.mac && d.macNow && d.mac !== d.macNow;
+    return el('tr', {},
+      el('td', {}, pill(cls, t(lbl)), sub ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:3px' }, sub) : null),
+      el('td', {}, el('b', {}, d.name), macBad ? el('div', { style: 'font-size:11.5px;color:var(--crit);margin-top:3px' }, t('IP này đang là thiết bị khác (MAC đổi)')) : null),
+      el('td', {}, d.group || el('span', { style: 'color:var(--faint)' }, t('Chưa phân nhóm'))),
+      el('td', {}, t(devKind(d.kind))),
+      el('td', { class: 'mono' }, d.ip + (d.port ? ':' + d.port : '')),
+      el('td', { style: 'font-size:12.5px;color:var(--muted)' }, d.done ? ago(d.checked) : '—'),
+      canWrite() ? el('td', { style: 'white-space:nowrap' },
+        el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: async e => {
+          e.target.disabled = true;
+          try { await api('POST', '/api/devices/check?id=' + encodeURIComponent(d.id)); render(); } catch (x) { fail(x); e.target.disabled = false; }
+        } }, 'Kiểm lại'),
+        isSuper() ? el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px;margin-left:6px', onclick: () => devAsk(d, grps) }, 'Sửa') : null,
+        isSuper() ? el('button', { class: 'btn danger', style: 'padding:4px 10px;font-size:12px;margin-left:6px', onclick: () => confirmBox(t('Xóa thiết bị'), t('Xóa {0} khỏi danh sách theo dõi?', d.name), t('Xóa'), true, async () => {
+          try { await api('DELETE', '/api/devices?id=' + encodeURIComponent(d.id)); toast(t('Đã xóa')); render(); } catch (x) { fail(x); }
+        }) }, 'Xóa') : null) : null);
+  };
+  v.append(el('div', { style: 'margin-top:12px' }, card('Danh sách', null,
+    table(['Trạng thái', 'Tên', 'Nhóm', 'Loại', 'IP', 'Kiểm lúc', ...(canWrite() ? [''] : [])], shown.map(row),
+      list.length ? 'Không có thiết bị nào khớp bộ lọc' : 'Chưa khai thiết bị nào. Bấm Thêm thiết bị để theo dõi camera, máy chấm công, switch.'))));
+  v.append(el('div', { style: 'margin-top:12px' }, infoNote('Server gõ cổng TCP của thiết bị mỗi phút, không được thì ping. Camera có nhập tài khoản thì 5 phút một lần server kéo thử luồng RTSP vài giây để biết camera còn ra hình. Chỉ biết thiết bị sống hay chết: không biết đầu ghi có lưu lại hay không, cũng không biết ống kính có bị che hay không. Thiết bị phải ở dải mạng mà máy chủ vào được.')));
+};
+// hộp thêm/sửa thiết bị; d = null là thêm mới
+function devAsk(d, grps) {
+  d = d || {};
+  const nm = input('ví dụ Camera cổng trước', 'text', d.name || '');
+  const ip = input('192.168.1.50', 'text', d.ip || '');
+  const kd = select(DEVK.map(([k, l]) => [k, t(l)]), d.kind || 'camera', () => toggle());
+  const gr = el('input', { class: 'input', list: 'devgrps', placeholder: t('ví dụ Camera tầng 1'), value: d.group || '' });
+  const dl = el('datalist', { id: 'devgrps' }, (grps || []).map(g => el('option', { value: g })));
+  const pt = input('', 'number', d.port ? String(d.port) : '');
+  const pa = input('/Streaming/Channels/102', 'text', d.path || '');
+  const us = input('admin', 'text', d.user || '');
+  const pw = input(d.hasPass ? t('(giữ mật khẩu đang lưu)') : '', 'password', '');
+  const cam = el('div', {}, field('Đường RTSP', pa, 'Hikvision: /Streaming/Channels/102 · Dahua: /cam/realmonitor?channel=1&subtype=1. Nên dùng luồng phụ cho nhẹ mạng.'),
+    field('Tài khoản camera', us, 'Để trống thì chỉ kiểm sống/chết, không đo luồng hình'), field('Mật khẩu camera', pw));
+  const toggle = () => { cam.hidden = kd.value !== 'camera'; };
+  toggle();
+  const err = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
+  modal(t(d.id ? 'Sửa thiết bị' : 'Thêm thiết bị'), el('div', {}, dl,
+    field('Tên thiết bị', nm), field('Địa chỉ IP', ip, 'Phải là IP nội bộ. Nên đặt IP tĩnh cho thiết bị, nếu không IP đổi là mất dấu.'),
+    field('Loại', kd), field('Nhóm', gr, 'Nhóm riêng của thiết bị mạng, không liên quan Nhóm máy'),
+    field('Cổng', pt, 'Để trống là tự thử các cổng thường gặp của loại thiết bị. Với camera đây là cổng RTSP (mặc định 554).'), cam, err),
+    [{ label: 'Hủy', on: c => c() }, { label: d.id ? 'Lưu' : 'Thêm', cls: 'primary', on: async c => {
+      const body = { id: d.id, name: nm.value, ip: ip.value, kind: kd.value, group: gr.value, port: Number(pt.value) || 0, path: pa.value, user: us.value, pass: pw.value };
+      try { await api(d.id ? 'PUT' : 'POST', '/api/devices', body); c(); toast(t(d.id ? 'Đã lưu' : 'Đã thêm thiết bị')); render(); } catch (x) { err.textContent = trErr(x.message); }
+    } }]);
+}
 
 /* ---------- Báo cáo ---------- */
 const hesc = x => String(x == null ? '' : x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

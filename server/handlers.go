@@ -41,6 +41,9 @@ func (s *Server) alertVisible(me *Account, a *Alert) bool {
 	if me.Role == "super" || len(me.Scope) == 0 {
 		return true
 	}
+	if strings.HasPrefix(a.Machine, "__dev-") {
+		return true // thiết bị mạng không thuộc nhóm máy nào; ai thấy tab Thiết bị mạng cũng cần biết nó rớt
+	}
 	m := s.machineByID(a.Machine)
 	return m != nil && canSee(me, m)
 }
