@@ -1143,7 +1143,7 @@ VIEWS.discover = async v => {
 /* ---------- Thiết bị mạng (camera, máy chấm công, switch) ---------- */
 // Không cài được agent lên các thiết bị này nên chỉ kiểm IP còn sống hay không (gõ cổng TCP, không
 // được thì ping). Riêng camera có nhập tài khoản thì server đo luồng hình RTSP để biết còn ra hình.
-const DEVK = [['camera', 'Camera'], ['attend', 'Máy chấm công'], ['switch', 'Switch'], ['router', 'Router'], ['other', 'Khác']];
+const DEVK = [['camera', 'Camera'], ['attend', 'Máy chấm công'], ['switch', 'Switch'], ['router', 'Router'], ['led', 'Bảng LED'], ['other', 'Khác']];
 const devKind = k => ((DEVK.find(x => x[0] === k) || [0, 'Khác'])[1]);
 const DEVF = { g: 'all', k: 'all', st: 'all', sx: 'loi', q: '' };
 // Tình trạng để lọc, và cách sắp xếp. 'loi' = cái đang hỏng lên đầu.
@@ -1232,6 +1232,7 @@ async function devScan(grps) {
   const cidr = el('textarea', { class: 'input', rows: '2', style: 'resize:vertical;font-family:ui-monospace,monospace;font-size:12.5px', placeholder: t('mỗi dải một dòng hoặc cách nhau bằng dấu phẩy') });
   cidr.value = devScan.cidr || goiY;
   const btnGoiY = el('button', { class: 'btn', style: 'padding:5px 11px;font-size:12.5px', onclick: () => { cidr.value = goiY; } }, 'Lấy tất cả dải đang có máy');
+  const btnHet = !(sg.all || []).length ? null : el('button', { class: 'btn', style: 'padding:5px 11px;font-size:12.5px', onclick: () => { cidr.value = sg.all.join(', '); } }, 'Quét hết mạng công ty');
   const gr = el('input', { class: 'input', list: 'devgrps2', placeholder: t('đặt chung cho các thiết bị thêm lần này') });
   const dl = el('datalist', { id: 'devgrps2' }, (grps || []).map(g => el('option', { value: g })));
   const tiendo = el('div', { style: 'font-size:12.5px;color:var(--muted);margin-top:8px' });
@@ -1241,7 +1242,14 @@ async function devScan(grps) {
   const btnAdd = el('button', { class: 'btn primary', disabled: true }, 'Thêm các thiết bị đã chọn');
   const btnScan = el('button', { class: 'btn primary', onclick: quet }, 'Quét');
   let timer = null, veSo = -1, ketQua = [];
+  // Máy tính và máy in không phải thứ theo dõi ở đây nên giấu đi cho gọn; vẫn xem được nếu cần.
+  const boQua = f => f.kind === 'pc' || f.kind === 'printer';
+  const cbHet = el('input', { type: 'checkbox', onchange: () => { ve(); } });
+  const cbTatCa = el('input', { type: 'checkbox', onchange: e => { chonTatCa(e.target.checked); } });
   const dem = () => { btnAdd.disabled = !picks.size; btnAdd.textContent = picks.size ? t('Thêm {0} thiết bị', picks.size) : t('Thêm các thiết bị đã chọn'); };
+  const chonTatCa = on => {
+    box.querySelectorAll('tbody input[type=checkbox]').forEach(c => { if (c.checked !== on) { c.checked = on; c.dispatchEvent(new Event('change')); } });
+  };
   btnAdd.onclick = async () => {
     btnAdd.disabled = true; err.textContent = '';
     let ok = 0, loi = [];
@@ -1256,7 +1264,7 @@ async function devScan(grps) {
   const ve = job => {
     box.innerHTML = '';
     const dong = f => {
-      const dungDuoc = !f.taken && f.kind !== 'pc';
+      const dungDuoc = !f.taken && !boQua(f);
       const cu = picks.get(f.ip);
       const ten = input('', 'text', cu ? cu.name : t(devKind(f.kind)) + ' ' + f.ip);
       ten.style.cssText = 'padding:4px 8px;font-size:12.5px';
@@ -1267,18 +1275,18 @@ async function devScan(grps) {
         el('td', { class: 'mono' }, f.ip),
         el('td', { style: 'font-size:12.5px' }, f.vendor || el('span', { style: 'color:var(--faint)' }, f.mac || '—')),
         el('td', { class: 'mono', style: 'font-size:12px' }, f.ports.join(', ')),
-        el('td', {}, f.taken ? pill('ok', t('Đã có: {0}', f.taken)) : f.kind === 'pc' ? pill('off', t('Máy tính')) : pill('warn', t(devKind(f.kind))),
+        el('td', {}, f.taken ? pill('ok', t('Đã có: {0}', f.taken)) : f.kind === 'pc' ? pill('off', t('Máy tính')) : f.kind === 'printer' ? pill('off', t('Máy in')) : pill('warn', t(devKind(f.kind))),
           el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:3px' }, t(f.why))),
         el('td', {}, dungDuoc ? ten : null));
     };
     const soIP = x => x.ip.split('.').reduce((a, b) => a * 256 + (+b), 0);
-    const ds = ketQua.slice().sort((a, b) => soIP(a) - soIP(b));
-    box.append(table(['', 'IP', 'Hãng / MAC', 'Cổng mở', 'Đoán là', 'Tên khi thêm'], ds.map(dong), 'Chưa thấy thiết bị nào phản hồi'));
+    const ds = ketQua.filter(f => cbHet.checked || !boQua(f)).sort((a, b) => soIP(a) - soIP(b));
+    box.append(table([{ t: cbTatCa }, 'IP', 'Hãng / MAC', 'Cổng mở', 'Đoán là', 'Tên khi thêm'], ds.map(dong), 'Chưa thấy thiết bị nào phản hồi'));
   };
   const capNhat = job => {
     if (!job) return;
     ketQua = ketQua.concat(job.found || []); // server chỉ gửi phần mới từ vị trí đã nhận
-    const moiCai = ketQua.filter(f => !f.taken && f.kind !== 'pc').length;
+    const moiCai = ketQua.filter(f => !f.taken && !boQua(f)).length;
     tiendo.textContent = job.running
       ? t('Đang quét {0} · xong {1}/{2} dải · đã dò {3} địa chỉ · thấy {4} thiết bị', job.now || '…', job.done, job.nets.length, job.scanned, ketQua.length)
       : t('Xong {0} dải, dò {1} địa chỉ, thấy {2} thiết bị có phản hồi, trong đó {3} cái chưa khai.', job.done, job.scanned, ketQua.length, moiCai);
@@ -1304,8 +1312,9 @@ async function devScan(grps) {
   }
   const close = modal(t('Quét mạng tìm thiết bị'), el('div', {}, dl,
     field('Các dải mạng nội bộ cần quét (tối đa 200 dải, mỗi dải 256 địa chỉ)', cidr, 'Nhận mọi dải nội bộ: 10.x, 172.16–31.x, 192.168.x. Gõ nhiều dải liền nhau bằng dấu gạch: 172.20.5-200.0/24 là quét từ 172.20.5.x tới 172.20.200.x. Quét cả trăm dải mất vài phút và làm mạng bận, nên chỉ quét dải thật sự có thiết bị.'),
-    el('div', { class: 'filters' }, btnGoiY, el('div', { style: 'flex:1' }), btnScan),
-    el('div', { class: 'filters', style: 'margin-top:10px' }, field('Nhóm cho các thiết bị thêm lần này', gr), btnAdd),
+    el('div', { class: 'filters' }, btnGoiY, btnHet, el('div', { style: 'flex:1' }), btnScan),
+    el('div', { class: 'filters', style: 'margin-top:10px' }, field('Nhóm cho các thiết bị thêm lần này', gr), btnAdd,
+      el('label', { style: 'display:flex;gap:7px;align-items:center;font-size:12.5px;color:var(--muted)' }, cbHet, t('Hiện cả máy tính và máy in'))),
     tiendo, box, err,
     infoNote('Máy tính đã cài agent và thiết bị đã khai vẫn hiện nhưng không tick được, khỏi thêm trùng. Loại chỉ là đoán theo cổng mở và hãng của card mạng — tick xong đại ca sửa lại tên và loại cho đúng.'),
     infoNote('Server phải vào được VLAN đó thì mới quét được. VLAN nào bị router chặn sẽ ra 0 thiết bị dù camera vẫn sống — và thiết bị ở VLAN đó cũng không theo dõi được, phải mở đường cho máy chủ MAM trước.')),

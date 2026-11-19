@@ -51,19 +51,21 @@ func devAlertID(id string) string { return "__dev-" + id }
 // devAlertAfter: chờ ngần này lượt liên tiếp mới báo, để một lần trượt mạng không làm kêu oan.
 const devAlertAfter = 2
 
-var devKinds = map[string]bool{"camera": true, "attend": true, "switch": true, "router": true, "other": true}
+var devKinds = map[string]bool{"camera": true, "attend": true, "switch": true, "router": true, "led": true, "other": true}
 
 // devPorts: cổng thử theo loại. Cổng riêng của thiết bị để trước nên ít nhầm với máy khác chiếm IP.
 var devPorts = map[string][]int{
 	"camera": {554, 80, 8000, 37777},
 	"attend": {4370, 80, 443},
 	"switch": {80, 443, 22, 23},
+	"led":    {6000, 5005, 10001, 8899, 80},
 	"router": {80, 443, 22, 23}, // trùng cổng với switch: nhìn cổng không phân biệt được, nên để người dùng khai loại
 	"other":  {80, 443, 22},
 }
 
 const (
-	devMax      = 500
+	// Mạng công ty thật có thể tới cả nghìn camera: quét mạng của đại ca ra 677 thiết bị đáng theo dõi.
+	devMax      = 5000
 	devEvery    = 60 * time.Second // kiểm sống/chết
 	devVidEvery = 5 * time.Minute  // đo luồng hình: thưa hơn cho đỡ tốn băng thông
 )
@@ -177,7 +179,8 @@ func (s *Server) checkDevices(ctx context.Context, ids map[string]bool) {
 		return
 	}
 	res := make([]NetDev, len(list))
-	sem := make(chan struct{}, 16)
+	// vài trăm thiết bị mà kiểm 16 cái một lúc thì một lượt lâu hơn cả chu kỳ 60 giây
+	sem := make(chan struct{}, 128)
 	var wg sync.WaitGroup
 	now := time.Now()
 	for i, d := range list {
@@ -321,7 +324,7 @@ func (s *Server) hDevices(w http.ResponseWriter, r *http.Request, me *Account) {
 		}
 		if len(s.st.Devices) >= devMax {
 			s.mu.Unlock()
-			jerr(w, 400, "Tối đa 500 thiết bị mạng")
+			jerr(w, 400, "Tối đa 5000 thiết bị mạng")
 			return
 		}
 		d := &NetDev{ID: rid(5), Name: in.Name, IP: in.IP, Kind: in.Kind, Group: in.Group, Port: in.Port, Path: in.Path, User: in.User, Pass: in.Pass}

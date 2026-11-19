@@ -529,8 +529,44 @@ func TestTraiRaDaiLienTiep(t *testing.T) {
 			t.Fatalf("%q phải bị từ chối", bad)
 		}
 	}
-	// quá số dải cho phép
-	if _, msg := parseCIDRs("10.0.0-255.0/24"); msg == "" {
-		t.Fatal("256 dải phải bị từ chối vì quá mức cho phép")
+	// cả một dải /16 (256 dải con) thì vẫn nhận, vì "quét hết mạng công ty" cần đúng chừng đó
+	if ns, msg := parseCIDRs("10.0.0-255.0/24"); msg != "" || len(ns) != 256 {
+		t.Fatalf("256 dải phải nhận hết: %d dải, lỗi %q", len(ns), msg)
+	}
+	if _, msg := parseCIDRs("10.0.0-255.0/24, 10.1.0.0/24"); msg == "" {
+		t.Fatal("quá 256 dải phải bị từ chối")
+	}
+}
+
+func TestGuessDevKindLoaiMoi(t *testing.T) {
+	for _, c := range []struct {
+		ports []int
+		muon  string
+	}{
+		{[]int{9100}, "printer"},      // máy in mạng
+		{[]int{515, 80}, "printer"},   // máy in có cả trang web
+		{[]int{9100, 445}, "printer"}, // máy in gắn máy tính: vẫn là máy in
+		{[]int{6000, 80}, "led"},      // bảng LED
+		{[]int{10001}, "led"},         // bộ điều khiển
+		{[]int{34567}, "camera"},      // đầu ghi đời khác
+		{[]int{8080, 23}, "switch"},   // trang quản lý ở cổng 8080
+		{[]int{8080}, "other"},        // chỉ có web ở 8080
+	} {
+		if got, _ := guessDevKind(c.ports, false, false); got != c.muon {
+			t.Fatalf("cổng %v → %q, cần %q", c.ports, got, c.muon)
+		}
+	}
+	// thiết bị mạng thật vẫn phải thắng cổng máy tính/máy in
+	if got, _ := guessDevKind([]int{554, 445, 9100}, true, false); got != "camera" {
+		t.Fatalf("trả lời RTSP thì phải là camera, nhận %q", got)
+	}
+}
+
+func TestDevKindsCoLed(t *testing.T) {
+	if !devKinds["led"] {
+		t.Fatal("phải khai được thiết bị loại bảng LED")
+	}
+	if p := devPortList(NetDev{Kind: "led"}); len(p) == 0 {
+		t.Fatal("bảng LED phải có cổng mặc định để kiểm")
 	}
 }

@@ -18,30 +18,22 @@ import (
 	"time"
 )
 
-// Cổng dò khi quét: gộp cổng của thiết bị mạng với cổng máy Windows (để nhận ra máy tính mà bỏ qua).
-var scanAllPorts = []int{80, 443, 554, 4370, 8000, 37777, 22, 23, 135, 445, 3389}
-
-// Bước dò nhanh: địa chỉ nào không trả lời một trong mấy cổng này thì coi như trống, khỏi dò tiếp.
-// Gồm cổng web, RTSP của camera, 4370 của máy chấm công và 445 của máy Windows.
-var scanFirstPorts = []int{80, 445, 554, 443, 4370}
-
-// goCua gõ lần lượt mấy cổng, trúng cổng nào là dừng.
-func goCua(ctx context.Context, ip net.IP, ports []int, wait time.Duration) bool {
-	for _, p := range ports {
-		if ctx.Err() != nil {
-			return false
-		}
-		if c, err := (&net.Dialer{Timeout: wait}).DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), itoa(p))); err == nil {
-			c.Close()
-			return true
-		}
-	}
-	return false
+// Cổng dò khi quét. Gồm cổng của thiết bị mạng, cổng máy in và cổng máy Windows — hai loại sau dò để
+// NHẬN RA mà loại bỏ, chứ không phải để theo dõi.
+var scanAllPorts = []int{
+	80, 443, 8080, // trang quản lý
+	554, 8000, 37777, 34567, // camera và đầu ghi
+	4370,   // máy chấm công
+	22, 23, // switch, router
+	6000, 5005, 10001, 8899, // bảng LED và thiết bị điều khiển hay dùng mấy cổng này
+	9100, 515, 631, // máy in
+	135, 445, 3389, // máy tính Windows
 }
 
 const (
-	scanMaxNets = 200              // tối đa bấy nhiêu dải một lượt (200 × 254 ≈ 50.000 địa chỉ)
-	scanSockets = 512              // số kết nối dò cùng lúc cho cả lượt quét
+	scanMaxNets = 256 // tối đa bấy nhiêu dải một lượt (cả một dải /16 chia thành /24)
+	scanSockets = 768 // số kết nối dò cùng lúc cho cả lượt quét
+	scanWait    = 300 * time.Millisecond
 	scanBudget  = 30 * time.Minute // cả lượt quét không được lâu hơn mức này
 )
 
@@ -101,17 +93,21 @@ func guessDevKind(ports []int, rtspOK, lastInSubnet bool) (string, string) {
 		return "camera", "trả lời đúng giao thức RTSP ở cổng 554"
 	case has[4370]:
 		return "attend", "mở cổng 4370, cổng riêng của máy chấm công"
-	case has[37777] || has[8000]:
+	case has[37777] || has[8000] || has[34567]:
 		return "camera", "mở cổng riêng của camera/đầu ghi"
 	case has[554]:
 		return "camera", "mở cổng 554 (RTSP)"
+	case has[9100] || has[515] || has[631]:
+		return "printer", "là máy in mạng — không phải thứ cần theo dõi ở đây"
 	case has[135] || has[445] || has[3389]:
 		return "pc", "là máy tính Windows — nên cài agent thay vì khai làm thiết bị mạng"
+	case has[6000] || has[5005] || has[10001] || has[8899]:
+		return "led", "mở cổng hay gặp ở bảng LED và bộ điều khiển"
 	case lastInSubnet && (has[80] || has[443]):
 		return "router", "ở địa chỉ cuối dải, thường là router"
-	case (has[23] || has[22]) && (has[80] || has[443]):
+	case (has[23] || has[22]) && (has[80] || has[443] || has[8080]):
 		return "switch", "có trang quản lý và cổng telnet/SSH"
-	case has[80] || has[443]:
+	case has[80] || has[443] || has[8080]:
 		return "other", "chỉ có trang web quản lý, chưa đoán được là gì"
 	}
 	return "other", "có trả lời nhưng không rõ là thiết bị gì"
@@ -213,6 +209,29 @@ func (s *Server) suggestScanCIDRs() []string {
 	return out
 }
 
+// suggestAllCIDRs: "quét hết" — cả dải /16 mà máy chủ đang nằm trong (vd 172.20.0-255.0/24), vì công
+// ty thường chia VLAN theo ô thứ ba. Trả rỗng nếu máy chủ không có IP nội bộ nào.
+func (s *Server) suggestAllCIDRs() []string {
+	seen, out := map[string]bool{}, []string{}
+	addrs, _ := net.InterfaceAddrs()
+	for _, a := range addrs {
+		n, ok := a.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		v := n.IP.To4()
+		if v == nil || !privateIP(v) {
+			continue
+		}
+		k := itoa(int(v[0])) + "." + itoa(int(v[1])) + ".0-255.0/24"
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
 func (s *Server) hDeviceScan(w http.ResponseWriter, r *http.Request, me *Account) {
 	if me.Role != "super" {
 		jerr(w, 403, "Chỉ Super admin được làm việc này")
@@ -234,7 +253,7 @@ func (s *Server) hDeviceScan(w http.ResponseWriter, r *http.Request, me *Account
 			view = &c
 		}
 		s.scanMu.Unlock()
-		out := map[string]interface{}{"suggest": s.suggestScanCIDRs()}
+		out := map[string]interface{}{"suggest": s.suggestScanCIDRs(), "all": s.suggestAllCIDRs()}
 		if view != nil {
 			out["job"] = view
 		}
@@ -350,17 +369,15 @@ func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string, sem 
 		go func(ip net.IP) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			// Hai bước: gõ vài cổng hay gặp nhất cho nhanh, im lặng thì bỏ qua luôn. Hầu hết địa chỉ
-			// trong một dải là trống, nên bước này cắt phần lớn công việc.
-			if !goCua(ctx, ip, scanFirstPorts, 200*time.Millisecond) {
-				return
-			}
+			// Dò đủ mọi cổng cho từng địa chỉ. Đã thử cách nhanh hơn là gõ vài cổng hay gặp trước, im
+			// lặng thì bỏ qua — nhưng thiết bị chỉ mở cổng lạ (đầu ghi 37777, bảng LED, switch chỉ có
+			// telnet) bị sót hẳn. Thà chậm thêm vài phút còn hơn đếm thiếu.
 			var open []int
 			for _, p := range scanAllPorts {
 				if ctx.Err() != nil {
 					return
 				}
-				c, err := (&net.Dialer{Timeout: 350 * time.Millisecond}).DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), itoa(p)))
+				c, err := (&net.Dialer{Timeout: scanWait}).DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), itoa(p)))
 				if err == nil {
 					c.Close()
 					open = append(open, p)
