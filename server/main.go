@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.79"
+const Version = "1.1.80"
 
 //go:embed web
 var webFS embed.FS
@@ -75,6 +75,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/devices/check", s.authed("", s.hDeviceCheck))
 	mux.HandleFunc("/api/devices/scan", s.authed("super", s.hDeviceScan))
 	mux.HandleFunc("/api/devices/log", s.authed("", s.hDeviceLog))
+	mux.HandleFunc("/api/devices/bulk", s.authed("super", s.hDeviceBulk))
 	mux.HandleFunc("/api/remote-install", s.authed("super", s.hRemoteInstall))
 	mux.HandleFunc("/api/inventory", s.authed("", s.hInventory))
 	mux.HandleFunc("/api/security", s.authed("", s.hSecurity))

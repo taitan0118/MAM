@@ -732,3 +732,50 @@ func TestLichSuThietBi(t *testing.T) {
 		t.Fatal("có tài khoản camera chung thì phải đo hình")
 	}
 }
+
+// Làm hàng loạt: xóa nhiều thiết bị, hoặc xếp cả lô vào một nhóm.
+func TestDeviceBulk(t *testing.T) {
+	f := setup(t)
+	them := func(name, ip string) string {
+		code, m, _ := f.super.do("POST", "/api/devices", map[string]interface{}{"name": name, "ip": ip, "kind": "camera"}, nil)
+		expect(t, code, 200, "thêm "+name)
+		return m["id"].(string)
+	}
+	a, b, c := them("C1", "192.168.88.1"), them("C2", "192.168.88.2"), them("C3", "192.168.88.3")
+
+	code, _, _ := f.tech.do("POST", "/api/devices/bulk", map[string]interface{}{"ids": []string{a}, "action": "delete"}, nil)
+	expect(t, code, 403, "kỹ thuật viên không được làm hàng loạt")
+	code, _, _ = f.super.do("POST", "/api/devices/bulk", map[string]interface{}{"ids": []string{}, "action": "delete"}, nil)
+	expect(t, code, 400, "không chọn thiết bị nào")
+	code, _, _ = f.super.do("POST", "/api/devices/bulk", map[string]interface{}{"ids": []string{a}, "action": "lung-tung"}, nil)
+	expect(t, code, 400, "việc lạ")
+
+	// xếp nhóm cho hai cái
+	code, m, _ := f.super.do("POST", "/api/devices/bulk", map[string]interface{}{"ids": []string{a, b}, "action": "group", "group": "Camera kho"}, nil)
+	expect(t, code, 200, "xếp nhóm hàng loạt")
+	if m["n"].(float64) != 2 {
+		t.Fatalf("phải xếp 2 thiết bị, nhận %v", m["n"])
+	}
+	f.s.mu.RLock()
+	nhom := map[string]string{}
+	for _, d := range f.s.st.Devices {
+		nhom[d.ID] = d.Group
+	}
+	f.s.mu.RUnlock()
+	if nhom[a] != "Camera kho" || nhom[b] != "Camera kho" || nhom[c] != "" {
+		t.Fatalf("xếp nhóm sai: %v", nhom)
+	}
+
+	// xóa hai cái, còn lại một
+	code, m, _ = f.super.do("POST", "/api/devices/bulk", map[string]interface{}{"ids": []string{a, c}, "action": "delete"}, nil)
+	expect(t, code, 200, "xóa hàng loạt")
+	if m["n"].(float64) != 2 {
+		t.Fatalf("phải xóa 2 thiết bị, nhận %v", m["n"])
+	}
+	code, _, raw := f.super.do("GET", "/api/devices", nil, nil)
+	expect(t, code, 200, "danh sách sau khi xóa")
+	var list []map[string]interface{}
+	if json.Unmarshal(raw, &list); len(list) != 1 || list[0]["id"] != b {
+		t.Fatalf("phải còn đúng C2: %s", raw)
+	}
+}

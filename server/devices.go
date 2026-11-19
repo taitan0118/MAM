@@ -464,3 +464,62 @@ func (s *Server) hDeviceLog(w http.ResponseWriter, r *http.Request, me *Account)
 	}
 	jok(w, map[string]interface{}{"name": d.Name, "ip": d.IP, "up": d.Up, "since": d.Since, "log": out})
 }
+
+// hDeviceBulk: làm một việc cho nhiều thiết bị đã chọn — xóa, hoặc xếp vào một nhóm.
+// Có cái này vì quét xong thêm cả trăm thiết bị thì sửa từng cái là không xong.
+func (s *Server) hDeviceBulk(w http.ResponseWriter, r *http.Request, me *Account) {
+	if me.Role != "super" {
+		jerr(w, 403, "Chỉ Super admin được làm việc này")
+		return
+	}
+	var in struct {
+		IDs    []string
+		Action string
+		Group  string
+	}
+	if r.Method != "POST" || readJSON(r, &in) != nil || len(in.IDs) == 0 {
+		jerr(w, 400, "Dữ liệu không hợp lệ")
+		return
+	}
+	if in.Action != "delete" && in.Action != "group" {
+		jerr(w, 400, "Dữ liệu không hợp lệ")
+		return
+	}
+	in.Group = strings.TrimSpace(clip(in.Group, 40))
+	chon := map[string]bool{}
+	for _, id := range in.IDs {
+		chon[id] = true
+	}
+	s.mu.Lock()
+	n, giu := 0, []*NetDev{}
+	for _, d := range s.st.Devices {
+		if !chon[d.ID] {
+			giu = append(giu, d)
+			continue
+		}
+		n++
+		if in.Action == "delete" {
+			s.devAlertsClose(d)
+			continue // không giữ lại
+		}
+		d.Group = in.Group
+		giu = append(giu, d)
+	}
+	s.st.Devices = giu
+	s.save()
+	s.mu.Unlock()
+	if in.Action == "delete" {
+		s.auditBy(me, r, "Thiết bị mạng", "Xóa "+itoa(n)+" thiết bị", "—", false)
+	} else {
+		s.auditBy(me, r, "Thiết bị mạng", "Xếp "+itoa(n)+" thiết bị vào nhóm "+tenNhom(in.Group), "—", false)
+	}
+	jok(w, map[string]interface{}{"ok": true, "n": n})
+}
+
+// tenNhom: tên nhóm để ghi nhật ký, rỗng thì ghi rõ là chưa phân nhóm.
+func tenNhom(s string) string {
+	if s == "" {
+		return "(chưa phân nhóm)"
+	}
+	return s
+}

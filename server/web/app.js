@@ -1145,7 +1145,7 @@ VIEWS.discover = async v => {
 // được thì ping). Riêng camera có nhập tài khoản thì server đo luồng hình RTSP để biết còn ra hình.
 const DEVK = [['camera', 'Camera'], ['attend', 'Máy chấm công'], ['switch', 'Switch'], ['router', 'Router'], ['wifi', 'Thiết bị WiFi'], ['led', 'Bảng LED'], ['other', 'Khác']];
 const devKind = k => ((DEVK.find(x => x[0] === k) || [0, 'Khác'])[1]);
-const DEVF = { g: 'all', k: 'all', st: 'all', sx: 'loi', q: '' };
+const DEVF = { g: 'all', k: 'all', st: 'all', sx: 'loi', q: '', chon: new Set() };
 // Tình trạng để lọc, và cách sắp xếp. 'loi' = cái đang hỏng lên đầu.
 const DEVST = [['all', 'Mọi tình trạng'], ['up', 'Đang hoạt động'], ['down', 'Mất kết nối'], ['novideo', 'Camera không ra hình'], ['new', 'Chưa kiểm']];
 const DEVSX = [['loi', 'Đang hỏng lên đầu'], ['name', 'Tên A→Z'], ['ip', 'Địa chỉ IP'], ['group', 'Nhóm'], ['kind', 'Loại'], ['checked', 'Kiểm gần nhất']];
@@ -1202,6 +1202,7 @@ VIEWS.devices = async v => {
     const [cls, lbl, sub] = devState(d);
     const macBad = d.mac && d.macNow && d.mac !== d.macNow;
     return el('tr', {},
+      isSuper() ? el('td', {}, el('input', { type: 'checkbox', checked: DEVF.chon.has(d.id), onchange: e => { e.target.checked ? DEVF.chon.add(d.id) : DEVF.chon.delete(d.id); render(); } })) : null,
       el('td', {}, pill(cls, t(lbl)), sub ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:3px' }, sub) : null),
       el('td', {}, el('b', {}, d.name), macBad ? el('div', { style: 'font-size:11.5px;color:var(--crit);margin-top:3px' }, t('IP này đang là thiết bị khác (MAC đổi)')) : null),
       el('td', {}, d.group || el('span', { style: 'color:var(--faint)' }, t('Chưa phân nhóm'))),
@@ -1219,8 +1220,32 @@ VIEWS.devices = async v => {
           try { await api('DELETE', '/api/devices?id=' + encodeURIComponent(d.id)); toast(t('Đã xóa')); render(); } catch (x) { fail(x); }
         }) }, 'Xóa') : null) : null);
   };
+  // bỏ khỏi tập đã chọn những thiết bị không còn trong danh sách (vừa xóa, hoặc bị lọc mất)
+  const hienCo = new Set(shown.map(d => d.id));
+  [...DEVF.chon].forEach(id => { if (!hienCo.has(id)) DEVF.chon.delete(id); });
+  const soChon = () => DEVF.chon.size;
+  const cbTatCaDS = el('input', { type: 'checkbox', title: 'Chọn tất cả', onchange: e => {
+    shown.forEach(d => e.target.checked ? DEVF.chon.add(d.id) : DEVF.chon.delete(d.id));
+    render();
+  } });
+  cbTatCaDS.checked = shown.length > 0 && soChon() === shown.length;
+  const lamHangLoat = async (hanhDong, nhom) => {
+    try {
+      const r2 = await api('POST', '/api/devices/bulk', { ids: [...DEVF.chon], action: hanhDong, group: nhom || '' });
+      DEVF.chon.clear();
+      toast(hanhDong === 'delete' ? t('Đã xóa {0} thiết bị', r2.n) : t('Đã xếp {0} thiết bị vào nhóm', r2.n));
+      render();
+    } catch (e) { fail(e); }
+  };
+  if (isSuper() && soChon()) v.append(el('div', { class: 'filters', style: 'margin-top:12px' },
+    el('b', { style: 'font-size:13px' }, t('Đã chọn {0} thiết bị', soChon())),
+    el('button', { class: 'btn', style: 'padding:5px 11px;font-size:12.5px', onclick: () => { DEVF.chon.clear(); render(); } }, 'Bỏ chọn'),
+    el('div', { style: 'flex:1' }),
+    el('button', { class: 'btn', style: 'padding:5px 11px;font-size:12.5px', onclick: () => xepNhomHangLoat(grps, lamHangLoat) }, 'Xếp vào nhóm'),
+    el('button', { class: 'btn danger', style: 'padding:5px 11px;font-size:12.5px', onclick: () => confirmBox(t('Xóa thiết bị'),
+      t('Xóa {0} thiết bị khỏi danh sách theo dõi? Chỉ bỏ theo dõi, không đụng gì tới thiết bị thật.', soChon()), t('Xóa'), true, () => lamHangLoat('delete')) }, 'Xóa các thiết bị đã chọn')));
   v.append(el('div', { style: 'margin-top:12px' }, card(t('Danh sách') + ' (' + shown.length + (shown.length !== list.length ? '/' + list.length : '') + ')', null,
-    table(['Trạng thái', 'Tên', 'Nhóm', 'Loại', 'IP', 'Kiểm lúc', ...(canWrite() ? [''] : [])], shown.map(row),
+    table([...(isSuper() ? [{ t: cbTatCaDS }] : []), 'Trạng thái', 'Tên', 'Nhóm', 'Loại', 'IP', 'Kiểm lúc', ...(canWrite() ? [''] : [])], shown.map(row),
       list.length ? 'Không có thiết bị nào khớp bộ lọc' : 'Chưa khai thiết bị nào. Bấm Thêm thiết bị để theo dõi camera, máy chấm công, switch.'))));
   v.append(el('div', { style: 'margin-top:12px' }, infoNote('Server gõ cổng TCP của thiết bị mỗi phút, không được thì ping. Camera có nhập tài khoản thì 5 phút một lần server kéo thử luồng RTSP vài giây để biết camera còn ra hình. Chỉ biết thiết bị sống hay chết: không biết đầu ghi có lưu lại hay không, cũng không biết ống kính có bị che hay không. Thiết bị phải ở dải mạng mà máy chủ vào được.')));
 };
@@ -1245,6 +1270,15 @@ async function camChung() {
      { label: 'Lưu', cls: 'primary', on: async c => {
        try { await api('PUT', '/api/settings', Object.assign({}, st, { camUser: us.value.trim(), camPass: pw.value })); toast(t('Đã lưu')); c(); render(); } catch (e) { err.textContent = trErr(e.message); }
      } }]);
+}
+// Xếp cả lô thiết bị đã chọn vào một nhóm.
+function xepNhomHangLoat(grps, lam) {
+  const gr = el('input', { class: 'input', list: 'devgrps3', placeholder: t('ví dụ Camera tầng 1') });
+  const dl = el('datalist', { id: 'devgrps3' }, (grps || []).map(g => el('option', { value: g })));
+  modal(t('Xếp vào nhóm'), el('div', {}, dl,
+    field('Nhóm', gr, 'Để trống là bỏ nhóm, đưa về Chưa phân nhóm'),
+    infoNote('Áp cho tất cả thiết bị đang chọn. Nhóm cũ của chúng bị thay.')),
+    [{ label: 'Hủy', on: c => c() }, { label: 'Xếp nhóm', cls: 'primary', on: c => { c(); lam('group', gr.value); } }]);
 }
 // Lịch sử rớt / sống lại của một thiết bị. Server ghi lại mỗi lần đổi trạng thái nên xem được
 // đúng ngày giờ phút giây, giống phần mềm quản lý camera.
