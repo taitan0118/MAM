@@ -509,3 +509,28 @@ func TestDeviceScanChayNen(t *testing.T) {
 	}
 	t.Fatal("quét một dải chết mà không xong trong 60 giây")
 }
+
+func TestTraiRaDaiLienTiep(t *testing.T) {
+	ns, bad := parseCIDRs("172.20.5-8.0/24")
+	if bad != "" || len(ns) != 4 {
+		t.Fatalf("172.20.5-8.0/24 phải ra 4 dải, nhận %d (%s)", len(ns), bad)
+	}
+	if ns[0].String() != "172.20.5.0/24" || ns[3].String() != "172.20.8.0/24" {
+		t.Fatalf("trải sai: %v … %v", ns[0], ns[3])
+	}
+	if ns, _ := parseCIDRs("172.20.5-5.0/24"); len(ns) != 1 {
+		t.Fatalf("dải một phần tử phải ra 1, nhận %d", len(ns))
+	}
+	if ns, _ := parseCIDRs("172.20.5-200.0/24"); len(ns) != 196 {
+		t.Fatalf("172.20.5-200.0/24 phải ra 196 dải, nhận %d", len(ns))
+	}
+	for _, bad := range []string{"172.20.200-5.0/24", "172.20.5-999.0/24", "172.20.a-b.0/24"} {
+		if _, msg := parseCIDRs(bad); msg == "" {
+			t.Fatalf("%q phải bị từ chối", bad)
+		}
+	}
+	// quá số dải cho phép
+	if _, msg := parseCIDRs("10.0.0-255.0/24"); msg == "" {
+		t.Fatal("256 dải phải bị từ chối vì quá mức cho phép")
+	}
+}

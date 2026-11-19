@@ -37,18 +37,22 @@ type rtspConn struct {
 }
 
 // rtspAlive hỏi một câu OPTIONS xem đầu kia có thật là camera không. Cổng 554 mở chưa chắc là camera,
-// nhưng trả lời đúng RTSP thì gần như chắc. Không cần tài khoản.
-func rtspAlive(ctx context.Context, ip string, port int) bool {
+// nhưng trả lời đúng RTSP thì gần như chắc. Không cần tài khoản. Trả thêm chữ camera tự khai ở phần
+// đầu "Server:" (vd "Hikvision-Webs") — đây là camera tự nói, đáng tin hơn đoán theo mã hãng của MAC.
+func rtspAlive(ctx context.Context, ip string, port int) (bool, string) {
 	c, err := (&net.Dialer{Timeout: 1500 * time.Millisecond}).DialContext(ctx, "tcp", net.JoinHostPort(ip, itoa(port)))
 	if err != nil {
-		return false
+		return false, ""
 	}
 	defer c.Close()
 	c.SetDeadline(time.Now().Add(3 * time.Second))
 	r := &rtspConn{c: c, br: bufio.NewReader(c)}
-	code, _, _, err := r.send("OPTIONS", "rtsp://"+net.JoinHostPort(ip, itoa(port)), nil)
+	code, hdr, _, err := r.send("OPTIONS", "rtsp://"+net.JoinHostPort(ip, itoa(port)), nil)
 	// 401 (đòi mật khẩu) cũng là camera, miễn là nó nói được tiếng RTSP
-	return err == nil && code > 0
+	if err != nil || code <= 0 {
+		return false, ""
+	}
+	return true, cut(strings.TrimSpace(hdr["server"]), 40)
 }
 
 // rtspKbps trả tốc độ bit của luồng hình (kbps). 0 kèm lỗi = không lấy được hình.

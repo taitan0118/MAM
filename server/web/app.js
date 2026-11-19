@@ -1145,7 +1145,14 @@ VIEWS.discover = async v => {
 // được thì ping). Riêng camera có nhập tài khoản thì server đo luồng hình RTSP để biết còn ra hình.
 const DEVK = [['camera', 'Camera'], ['attend', 'Máy chấm công'], ['switch', 'Switch'], ['router', 'Router'], ['other', 'Khác']];
 const devKind = k => ((DEVK.find(x => x[0] === k) || [0, 'Khác'])[1]);
-const DEVF = { g: 'all', k: 'all' };
+const DEVF = { g: 'all', k: 'all', st: 'all', sx: 'loi', q: '' };
+// Tình trạng để lọc, và cách sắp xếp. 'loi' = cái đang hỏng lên đầu.
+const DEVST = [['all', 'Mọi tình trạng'], ['up', 'Đang hoạt động'], ['down', 'Mất kết nối'], ['novideo', 'Camera không ra hình'], ['new', 'Chưa kiểm']];
+const DEVSX = [['loi', 'Đang hỏng lên đầu'], ['name', 'Tên A→Z'], ['ip', 'Địa chỉ IP'], ['group', 'Nhóm'], ['kind', 'Loại'], ['checked', 'Kiểm gần nhất']];
+const devHop = (d, st) => st === 'all' || (st === 'up' ? d.done && d.up : st === 'down' ? d.done && !d.up : st === 'new' ? !d.done : d.done && d.up && d.kind === 'camera' && d.user && !d.video);
+// điểm xấu: càng hỏng càng nhỏ, để xếp lên đầu
+const devXau = d => !d.done ? 3 : !d.up ? 0 : (d.kind === 'camera' && d.user && !d.video) ? 1 : 2;
+const devSoIP = d => String(d.ip).split('.').reduce((a, b) => a * 256 + (+b || 0), 0);
 // Trạng thái một thiết bị: [màu, chữ, chi tiết]
 function devState(d) {
   if (!d.done) return ['off', 'Chưa kiểm', ''];
@@ -1158,8 +1165,17 @@ VIEWS.devices = async v => {
   let list = await api('GET', '/api/devices');
   const grps = [...new Set(list.map(d => d.group).filter(Boolean))].sort();
   if (DEVF.g !== 'all' && DEVF.g !== '__none' && grps.indexOf(DEVF.g) < 0) DEVF.g = 'all';
-  const shown = list.filter(d => (DEVF.g === 'all' || (DEVF.g === '__none' ? !d.group : d.group === DEVF.g)) && (DEVF.k === 'all' || d.kind === DEVF.k))
-    .sort((a, b) => (a.group || '\uffff').localeCompare(b.group || '\uffff') || a.name.localeCompare(b.name));
+  const xep = {
+    loi: (a, b) => devXau(a) - devXau(b) || a.name.localeCompare(b.name),
+    name: (a, b) => a.name.localeCompare(b.name),
+    ip: (a, b) => devSoIP(a) - devSoIP(b),
+    group: (a, b) => (a.group || '\uffff').localeCompare(b.group || '\uffff') || a.name.localeCompare(b.name),
+    kind: (a, b) => t(devKind(a.kind)).localeCompare(t(devKind(b.kind))) || a.name.localeCompare(b.name),
+    checked: (a, b) => String(b.checked).localeCompare(String(a.checked)),
+  };
+  const shown = list.filter(d => (DEVF.g === 'all' || (DEVF.g === '__none' ? !d.group : d.group === DEVF.g))
+    && (DEVF.k === 'all' || d.kind === DEVF.k) && devHop(d, DEVF.st) && hit(DEVF.q, d.name, d.ip, d.group))
+    .sort(xep[DEVF.sx] || xep.loi);
   const noVid = list.filter(d => d.done && d.up && d.kind === 'camera' && d.user && !d.video).length;
   v.append(el('div', { class: 'kpis' },
     kpi(t('Tổng thiết bị'), 'var(--accent)', String(list.length), t('{0} nhóm', grps.length)),
@@ -1174,6 +1190,9 @@ VIEWS.devices = async v => {
   v.append(el('div', { class: 'filters', style: 'margin-top:12px' },
     field('Nhóm', select([['all', t('Tất cả nhóm') + dem(() => true)], ...grps.map(g => [g, g + dem(d => d.group === g)]), ['__none', t('Chưa phân nhóm') + dem(d => !d.group)]], DEVF.g, x => { DEVF.g = x; render(); })),
     field('Loại', select([['all', t('Tất cả loại') + dem(() => true)], ...DEVK.map(([k, l]) => [k, t(l) + dem(d => d.kind === k)])], DEVF.k, x => { DEVF.k = x; render(); })),
+    field('Tình trạng', select(DEVST.map(([k, l]) => [k, t(l) + (k === 'all' ? dem(() => true) : dem(d => devHop(d, k)))]), DEVF.st, x => { DEVF.st = x; render(); })),
+    field('Sắp xếp', select(DEVSX.map(([k, l]) => [k, t(l)]), DEVF.sx, x => { DEVF.sx = x; render(); })),
+    field('Tìm', searchBox('dvq', DEVF.q, x => DEVF.q = x, t('Tìm tên, IP, nhóm…'))),
     el('div', { style: 'flex:1' }),
     canWrite() ? recheck : null,
     isSuper() ? el('button', { class: 'btn', onclick: () => devScan(grps) }, 'Quét mạng') : null,
@@ -1198,7 +1217,7 @@ VIEWS.devices = async v => {
           try { await api('DELETE', '/api/devices?id=' + encodeURIComponent(d.id)); toast(t('Đã xóa')); render(); } catch (x) { fail(x); }
         }) }, 'Xóa') : null) : null);
   };
-  v.append(el('div', { style: 'margin-top:12px' }, card('Danh sách', null,
+  v.append(el('div', { style: 'margin-top:12px' }, card(t('Danh sách') + ' (' + shown.length + (shown.length !== list.length ? '/' + list.length : '') + ')', null,
     table(['Trạng thái', 'Tên', 'Nhóm', 'Loại', 'IP', 'Kiểm lúc', ...(canWrite() ? [''] : [])], shown.map(row),
       list.length ? 'Không có thiết bị nào khớp bộ lọc' : 'Chưa khai thiết bị nào. Bấm Thêm thiết bị để theo dõi camera, máy chấm công, switch.'))));
   v.append(el('div', { style: 'margin-top:12px' }, infoNote('Server gõ cổng TCP của thiết bị mỗi phút, không được thì ping. Camera có nhập tài khoản thì 5 phút một lần server kéo thử luồng RTSP vài giây để biết camera còn ra hình. Chỉ biết thiết bị sống hay chết: không biết đầu ghi có lưu lại hay không, cũng không biết ống kính có bị che hay không. Thiết bị phải ở dải mạng mà máy chủ vào được.')));
@@ -1221,7 +1240,7 @@ async function devScan(grps) {
   const picks = new Map(); // ip -> { kind, name }
   const btnAdd = el('button', { class: 'btn primary', disabled: true }, 'Thêm các thiết bị đã chọn');
   const btnScan = el('button', { class: 'btn primary', onclick: quet }, 'Quét');
-  let timer = null, veSo = -1;
+  let timer = null, veSo = -1, ketQua = [];
   const dem = () => { btnAdd.disabled = !picks.size; btnAdd.textContent = picks.size ? t('Thêm {0} thiết bị', picks.size) : t('Thêm các thiết bị đã chọn'); };
   btnAdd.onclick = async () => {
     btnAdd.disabled = true; err.textContent = '';
@@ -1252,26 +1271,29 @@ async function devScan(grps) {
           el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:3px' }, t(f.why))),
         el('td', {}, dungDuoc ? ten : null));
     };
-    box.append(table(['', 'IP', 'Hãng / MAC', 'Cổng mở', 'Đoán là', 'Tên khi thêm'], (job.found || []).map(dong), 'Chưa thấy thiết bị nào phản hồi'));
+    const soIP = x => x.ip.split('.').reduce((a, b) => a * 256 + (+b), 0);
+    const ds = ketQua.slice().sort((a, b) => soIP(a) - soIP(b));
+    box.append(table(['', 'IP', 'Hãng / MAC', 'Cổng mở', 'Đoán là', 'Tên khi thêm'], ds.map(dong), 'Chưa thấy thiết bị nào phản hồi'));
   };
   const capNhat = job => {
     if (!job) return;
-    const moiCai = (job.found || []).filter(f => !f.taken && f.kind !== 'pc').length;
+    ketQua = ketQua.concat(job.found || []); // server chỉ gửi phần mới từ vị trí đã nhận
+    const moiCai = ketQua.filter(f => !f.taken && f.kind !== 'pc').length;
     tiendo.textContent = job.running
-      ? t('Đang quét {0} · xong {1}/{2} dải · đã dò {3} địa chỉ · thấy {4} thiết bị', job.now || '…', job.done, job.nets.length, job.scanned, (job.found || []).length)
-      : t('Xong {0} dải, dò {1} địa chỉ, thấy {2} thiết bị có phản hồi, trong đó {3} cái chưa khai.', job.done, job.scanned, (job.found || []).length, moiCai);
+      ? t('Đang quét {0} · xong {1}/{2} dải · đã dò {3} địa chỉ · thấy {4} thiết bị', job.now || '…', job.done, job.nets.length, job.scanned, ketQua.length)
+      : t('Xong {0} dải, dò {1} địa chỉ, thấy {2} thiết bị có phản hồi, trong đó {3} cái chưa khai.', job.done, job.scanned, ketQua.length, moiCai);
     if (job.err) err.textContent = t(job.err);
-    if ((job.found || []).length !== veSo) { veSo = (job.found || []).length; ve(job); }
+    if (ketQua.length !== veSo) { veSo = ketQua.length; ve(job); }
     btnScan.disabled = !!job.running;
     btnScan.textContent = job.running ? t('Đang quét…') : t('Quét');
   };
   async function hoi() {
     if (!document.body.contains(box)) { clearInterval(timer); timer = null; return; } // đã đóng hộp
-    try { const r = await api('GET', '/api/devices/scan'); capNhat(r.job); if (r.job && !r.job.running) { clearInterval(timer); timer = null; } }
+    try { const r = await api('GET', '/api/devices/scan?since=' + ketQua.length); capNhat(r.job); if (r.job && !r.job.running) { clearInterval(timer); timer = null; } }
     catch (e) { clearInterval(timer); timer = null; err.textContent = trErr(e.message); }
   }
   async function quet() {
-    btnScan.disabled = true; err.textContent = ''; picks.clear(); dem(); veSo = -1;
+    btnScan.disabled = true; err.textContent = ''; picks.clear(); dem(); veSo = -1; ketQua = [];
     try {
       devScan.cidr = cidr.value;
       const r = await api('POST', '/api/devices/scan', { cidr: cidr.value });
@@ -1281,7 +1303,7 @@ async function devScan(grps) {
     } catch (e) { err.textContent = trErr(e.message); btnScan.disabled = false; btnScan.textContent = t('Quét'); }
   }
   const close = modal(t('Quét mạng tìm thiết bị'), el('div', {}, dl,
-    field('Các dải mạng nội bộ cần quét (tối đa 20 dải, mỗi dải 256 địa chỉ)', cidr, 'Nhận mọi dải nội bộ: 10.x, 172.16–31.x, 192.168.x. Ví dụ: 172.20.20.0/24, 172.20.40.0/24, 192.168.0.0/24'),
+    field('Các dải mạng nội bộ cần quét (tối đa 200 dải, mỗi dải 256 địa chỉ)', cidr, 'Nhận mọi dải nội bộ: 10.x, 172.16–31.x, 192.168.x. Gõ nhiều dải liền nhau bằng dấu gạch: 172.20.5-200.0/24 là quét từ 172.20.5.x tới 172.20.200.x. Quét cả trăm dải mất vài phút và làm mạng bận, nên chỉ quét dải thật sự có thiết bị.'),
     el('div', { class: 'filters' }, btnGoiY, el('div', { style: 'flex:1' }), btnScan),
     el('div', { class: 'filters', style: 'margin-top:10px' }, field('Nhóm cho các thiết bị thêm lần này', gr), btnAdd),
     tiendo, box, err,

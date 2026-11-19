@@ -1038,6 +1038,15 @@ var EN = {
 "Nhập ít nhất một dải mạng": "Enter at least one subnet",
 "Hết thời gian, chưa quét xong": "Timed out before the scan finished",
 "đã đặt sẵn bản mới, máy sẽ chạy bản mới sau lần khởi động tới": "the new version is in place, the machine will run it after the next restart",
+"Các dải mạng nội bộ cần quét (tối đa 200 dải, mỗi dải 256 địa chỉ)": "Private subnets to scan (up to 200 subnets, 256 addresses each)",
+"Nhận mọi dải nội bộ: 10.x, 172.16–31.x, 192.168.x. Gõ nhiều dải liền nhau bằng dấu gạch: 172.20.5-200.0/24 là quét từ 172.20.5.x tới 172.20.200.x. Quét cả trăm dải mất vài phút và làm mạng bận, nên chỉ quét dải thật sự có thiết bị.": "Any private range works: 10.x, 172.16–31.x, 192.168.x. Use a dash for a run of subnets: 172.20.5-200.0/24 scans 172.20.5.x through 172.20.200.x. Scanning hundreds of subnets takes several minutes and loads the network, so scan only the subnets that really hold devices.",
+"Mọi tình trạng": "Any status",
+"Sắp xếp": "Sort by",
+"Đang hỏng lên đầu": "Problems first",
+"Tên A→Z": "Name A→Z",
+"Kiểm gần nhất": "Last checked",
+"Tìm": "Search",
+"Tìm tên, IP, nhóm…": "Search name, IP, group…",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -2231,6 +2240,15 @@ var ZH = {
 "Nhập ít nhất một dải mạng": "请至少输入一个网段",
 "Hết thời gian, chưa quét xong": "超时，扫描未完成",
 "đã đặt sẵn bản mới, máy sẽ chạy bản mới sau lần khởi động tới": "新版本已就位，该机器将在下次重启后运行",
+"Các dải mạng nội bộ cần quét (tối đa 200 dải, mỗi dải 256 địa chỉ)": "要扫描的内网网段（最多 200 个网段，每个 256 个地址）",
+"Nhận mọi dải nội bộ: 10.x, 172.16–31.x, 192.168.x. Gõ nhiều dải liền nhau bằng dấu gạch: 172.20.5-200.0/24 là quét từ 172.20.5.x tới 172.20.200.x. Quét cả trăm dải mất vài phút và làm mạng bận, nên chỉ quét dải thật sự có thiết bị.": "支持所有内网地址段：10.x、172.16–31.x、192.168.x。用连字符表示连续网段：172.20.5-200.0/24 表示扫描 172.20.5.x 至 172.20.200.x。扫描数百个网段需要几分钟并会占用网络，请只扫描确实有设备的网段。",
+"Mọi tình trạng": "所有状态",
+"Sắp xếp": "排序",
+"Đang hỏng lên đầu": "故障优先",
+"Tên A→Z": "名称 A→Z",
+"Kiểm gần nhất": "最近检测",
+"Tìm": "搜索",
+"Tìm tên, IP, nhóm…": "搜索名称、IP、分组…",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -2355,6 +2373,11 @@ var ZH = {
 "Bản quyền © 2026 Nguyễn Tấn Tài (Missing)": "版权所有 © 2026 Nguyễn Tấn Tài (Missing)",
 };
 var PAT = [
+[
+"^Dải liên tiếp không hợp lệ: (.+?)\\. Viết kiểu 172\\.20\\.5-200\\.0/24$",
+"Invalid subnet run: $1. Write it like 172.20.5-200.0/24",
+"连续网段无效：$1。请写成 172.20.5-200.0/24 的形式"
+],
 [
 "^Không thay được agent: (.+?); thay tại chỗ cũng không được: (.+)$",
 "Could not replace the agent: $1; replacing it in place also failed: $2",

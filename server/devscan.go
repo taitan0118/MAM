@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,9 +21,28 @@ import (
 // Cổng dò khi quét: gộp cổng của thiết bị mạng với cổng máy Windows (để nhận ra máy tính mà bỏ qua).
 var scanAllPorts = []int{80, 443, 554, 4370, 8000, 37777, 22, 23, 135, 445, 3389}
 
+// Bước dò nhanh: địa chỉ nào không trả lời một trong mấy cổng này thì coi như trống, khỏi dò tiếp.
+// Gồm cổng web, RTSP của camera, 4370 của máy chấm công và 445 của máy Windows.
+var scanFirstPorts = []int{80, 445, 554, 443, 4370}
+
+// goCua gõ lần lượt mấy cổng, trúng cổng nào là dừng.
+func goCua(ctx context.Context, ip net.IP, ports []int, wait time.Duration) bool {
+	for _, p := range ports {
+		if ctx.Err() != nil {
+			return false
+		}
+		if c, err := (&net.Dialer{Timeout: wait}).DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), itoa(p))); err == nil {
+			c.Close()
+			return true
+		}
+	}
+	return false
+}
+
 const (
-	scanMaxNets = 20               // tối đa bấy nhiêu dải một lượt (20 × 254 ≈ 5.000 địa chỉ)
-	scanBudget  = 20 * time.Minute // cả lượt quét không được lâu hơn mức này
+	scanMaxNets = 200              // tối đa bấy nhiêu dải một lượt (200 × 254 ≈ 50.000 địa chỉ)
+	scanSockets = 512              // số kết nối dò cùng lúc cho cả lượt quét
+	scanBudget  = 30 * time.Minute // cả lượt quét không được lâu hơn mức này
 )
 
 type scanHit struct {
@@ -44,6 +64,7 @@ type scanJob struct {
 	Now     string    `json:"now"`     // dải đang quét
 	Scanned int       `json:"scanned"` // số địa chỉ đã dò
 	Found   []scanHit `json:"found"`
+	Total   int       `json:"total"` // tổng số đã thấy (Found có thể chỉ là phần mới, xem ?since=)
 	Err     string    `json:"err"`
 	By      string    `json:"by"`
 	At      time.Time `json:"at"`
@@ -101,28 +122,58 @@ func guessDevKind(ports []int, rtspOK, lastInSubnet bool) (string, string) {
 func parseCIDRs(s string) ([]*net.IPNet, string) {
 	parts := strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == '\n' || r == '\r' || r == ' ' || r == '\t' })
 	out, seen := []*net.IPNet{}, map[string]bool{}
-	for _, p := range parts {
-		_, n, err := net.ParseCIDR(p)
-		ones, bits := 0, 0
-		if err == nil {
-			ones, bits = n.Mask.Size()
+	for _, p0 := range parts {
+		dai, bad := traiRa(p0)
+		if bad != "" {
+			return nil, bad
 		}
-		if err != nil || bits != 32 || !privateNet(n) {
-			return nil, "Dải không hợp lệ: " + clip(p, 40) + ". Chỉ quét dải nội bộ dạng 192.168.1.0/24, 10.0.0.0/24 hoặc 172.20.40.0/24"
-		}
-		if ones < 24 {
-			return nil, "Dải quá lớn: " + n.String() + ". Mỗi dải tối đa 256 địa chỉ (từ /24 trở xuống)"
-		}
-		if !seen[n.String()] {
-			seen[n.String()] = true
-			out = append(out, n)
+		for _, p := range dai {
+			_, n, err := net.ParseCIDR(p)
+			ones, bits := 0, 0
+			if err == nil {
+				ones, bits = n.Mask.Size()
+			}
+			if err != nil || bits != 32 || !privateNet(n) {
+				return nil, "Dải không hợp lệ: " + clip(p, 40) + ". Chỉ quét dải nội bộ dạng 192.168.1.0/24, 10.0.0.0/24 hoặc 172.20.40.0/24"
+			}
+			if ones < 24 {
+				return nil, "Dải quá lớn: " + n.String() + ". Mỗi dải tối đa 256 địa chỉ (từ /24 trở xuống)"
+			}
+			if !seen[n.String()] {
+				seen[n.String()] = true
+				out = append(out, n)
+			}
+			if len(out) > scanMaxNets {
+				return nil, "Tối đa " + itoa(scanMaxNets) + " dải một lượt"
+			}
 		}
 	}
 	if len(out) == 0 {
 		return nil, "Nhập ít nhất một dải mạng"
 	}
-	if len(out) > scanMaxNets {
-		return nil, "Tối đa " + itoa(scanMaxNets) + " dải một lượt"
+	return out, ""
+}
+
+// traiRa mở cú pháp dải liên tiếp "172.20.5-200.0/24" thành từng dải một, để khỏi phải gõ 196 dòng.
+// Chuỗi không có dấu gạch ở ô thứ ba thì trả lại nguyên.
+func traiRa(p string) ([]string, string) {
+	i := strings.IndexByte(p, '/')
+	if i < 0 {
+		return []string{p}, ""
+	}
+	o := strings.Split(p[:i], ".")
+	if len(o) != 4 || !strings.Contains(o[2], "-") {
+		return []string{p}, ""
+	}
+	hai := strings.SplitN(o[2], "-", 2)
+	tu, err1 := strconv.Atoi(hai[0])
+	den, err2 := strconv.Atoi(hai[1])
+	if err1 != nil || err2 != nil || tu < 0 || den > 255 || tu > den {
+		return nil, "Dải liên tiếp không hợp lệ: " + clip(p, 40) + ". Viết kiểu 172.20.5-200.0/24"
+	}
+	out := make([]string, 0, den-tu+1)
+	for v := tu; v <= den; v++ {
+		out = append(out, o[0]+"."+o[1]+"."+itoa(v)+"."+o[3]+p[i:])
 	}
 	return out, ""
 }
@@ -168,12 +219,24 @@ func (s *Server) hDeviceScan(w http.ResponseWriter, r *http.Request, me *Account
 		return
 	}
 	if r.Method == "GET" {
+		// ?since=N: chỉ lấy phần mới từ vị trí N, khỏi gửi lại cả nghìn dòng mỗi 2 giây
+		from, _ := strconv.Atoi(r.URL.Query().Get("since"))
 		s.scanMu.Lock()
-		j := s.scan
+		var view *scanJob
+		if s.scan != nil {
+			c := *s.scan
+			c.Total = len(s.scan.Found)
+			if from > 0 && from <= c.Total {
+				c.Found = append([]scanHit{}, s.scan.Found[from:]...)
+			} else {
+				c.Found = append([]scanHit{}, s.scan.Found...)
+			}
+			view = &c
+		}
 		s.scanMu.Unlock()
 		out := map[string]interface{}{"suggest": s.suggestScanCIDRs()}
-		if j != nil {
-			out["job"] = j
+		if view != nil {
+			out["job"] = view
 		}
 		jok(w, out)
 		return
@@ -231,28 +294,42 @@ func (s *Server) runScan(j *scanJob, nets []*net.IPNet) {
 	}
 	s.mu.RUnlock()
 
+	// Quét vài dải cùng lúc, dùng chung một hạn mức socket: quét từng dải một thì 196 dải mất hàng giờ.
+	sem := make(chan struct{}, scanSockets)
+	netSem := make(chan struct{}, 8)
+	var wg sync.WaitGroup
 	for _, n := range nets {
 		if ctx.Err() != nil {
-			s.scanMu.Lock()
-			j.Err = "Hết thời gian, chưa quét xong"
-			s.scanMu.Unlock()
-			return
+			break
 		}
+		wg.Add(1)
+		netSem <- struct{}{}
 		s.scanMu.Lock()
 		j.Now = n.String()
 		s.scanMu.Unlock()
-		hits, scanned := scanSubnet(ctx, n, taken)
+		go func(n *net.IPNet) {
+			defer wg.Done()
+			defer func() { <-netSem }()
+			hits, scanned := scanSubnet(ctx, n, taken, sem)
+			s.scanMu.Lock()
+			// chỉ nối thêm, không sắp lại: Console lấy kết quả theo vị trí (?since=) nên thứ tự phải
+			// giữ nguyên; sắp xếp để Console tự làm lúc vẽ.
+			j.Found = append(j.Found, hits...)
+			j.Scanned += scanned
+			j.Done++
+			s.scanMu.Unlock()
+		}(n)
+	}
+	wg.Wait()
+	if ctx.Err() != nil {
 		s.scanMu.Lock()
-		j.Found = append(j.Found, hits...)
-		sort.Slice(j.Found, func(a, b int) bool { return ipLess(j.Found[a].IP, j.Found[b].IP) })
-		j.Scanned += scanned
-		j.Done++
+		j.Err = "Hết thời gian, chưa quét xong"
 		s.scanMu.Unlock()
 	}
 }
 
 // scanSubnet dò hết một dải /24, trả các địa chỉ có trả lời và số địa chỉ đã dò.
-func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string) ([]scanHit, int) {
+func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string, sem chan struct{}) ([]scanHit, int) {
 	ones, _ := n.Mask.Size()
 	base := n.IP.To4()
 	var ips []net.IP
@@ -266,7 +343,6 @@ func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string) ([]s
 	}
 	var mu sync.Mutex
 	res := []scanHit{}
-	sem := make(chan struct{}, 128)
 	var wg sync.WaitGroup
 	for _, ip := range ips {
 		wg.Add(1)
@@ -274,6 +350,11 @@ func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string) ([]s
 		go func(ip net.IP) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			// Hai bước: gõ vài cổng hay gặp nhất cho nhanh, im lặng thì bỏ qua luôn. Hầu hết địa chỉ
+			// trong một dải là trống, nên bước này cắt phần lớn công việc.
+			if !goCua(ctx, ip, scanFirstPorts, 200*time.Millisecond) {
+				return
+			}
 			var open []int
 			for _, p := range scanAllPorts {
 				if ctx.Err() != nil {
@@ -289,20 +370,29 @@ func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string) ([]s
 				return
 			}
 			// cổng 554 mở chưa chắc là camera; hỏi một câu RTSP là biết chắc
-			rtspOK := false
+			rtspOK, tuKhai := false, ""
 			for _, p := range open {
 				if p == 554 {
-					rtspOK = rtspAlive(ctx, ip.String(), 554)
+					rtspOK, tuKhai = rtspAlive(ctx, ip.String(), 554)
 				}
 			}
+			dctx, dcancel := context.WithTimeout(ctx, time.Second) // mạng không có DNS thì đừng ngồi đợi
 			host := ""
-			if names, err := (&net.Resolver{}).LookupAddr(ctx, ip.String()); err == nil && len(names) > 0 {
+			if names, err := (&net.Resolver{}).LookupAddr(dctx, ip.String()); err == nil && len(names) > 0 {
 				host = strings.TrimSuffix(names[0], ".")
 			}
-			mac := arpMAC(ctx, ip.String())
+			dcancel()
 			kind, why := guessDevKind(open, rtspOK, ip[3] == 1 || ip[3] == 254)
+			mac := ""
+			if kind != "pc" { // chỉ cần MAC cho thứ có thể thêm vào; đọc ARP là chạy một tiến trình, đắt
+				mac = arpMAC(ctx, ip.String())
+			}
+			hang := vendorOf(mac)
+			if hang == "" { // bảng mã hãng chỉ có ít hãng; camera tự khai tên thì tin camera
+				hang = tuKhai
+			}
 			mu.Lock()
-			res = append(res, scanHit{IP: ip.String(), MAC: mac, Vendor: vendorOf(mac), Host: host, Ports: open, Kind: kind, Why: why, Taken: taken[ip.String()]})
+			res = append(res, scanHit{IP: ip.String(), MAC: mac, Vendor: hang, Host: host, Ports: open, Kind: kind, Why: why, Taken: taken[ip.String()]})
 			mu.Unlock()
 		}(ip)
 	}
