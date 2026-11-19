@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.71"
+const Version = "1.1.72"
 
 //go:embed lib.ps1
 var libPS string
@@ -334,6 +334,9 @@ func runLoop() {
 		if sendHw {
 			rep["hw"] = hwNow
 		}
+		if u := takeUpdMsg(); u != "" {
+			rep["updNote"] = u
+		}
 		if th := currentThreats(); len(th) > 0 {
 			rep["threats"] = th
 		}
@@ -416,6 +419,7 @@ func runLoop() {
 				go func(sha string, size int64) {
 					if msg := checkUpdate(sha, size); msg != "" {
 						log.Print(msg)
+						setUpdMsg(msg) // gửi kèm báo cáo sau để Console biết vì sao máy này chưa lên bản mới
 					}
 				}(out.Update.Sha, out.Update.Size)
 			}

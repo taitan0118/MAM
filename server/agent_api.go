@@ -22,6 +22,7 @@ type reportIn struct {
 	Events  []SysEvent             `json:"events"`
 	Host    string                 `json:"host"`
 	OS      string                 `json:"os"`
+	UpdNote string                 `json:"updNote"` // kết quả lượt tự cập nhật gần nhất của agent
 }
 
 func (s *Server) agentMachine(r *http.Request) *Machine {
@@ -126,6 +127,12 @@ func (s *Server) hReport(w http.ResponseWriter, r *http.Request) {
 	}
 	m.LastSeen = now
 	persist := false
+	// vì sao máy này chưa lên bản mới; lên đúng bản rồi thì xóa ghi chú đi
+	if n := cut(in.UpdNote, 300); n != "" {
+		m.UpdNote, m.UpdAt, persist = n, now, true
+	} else if m.UpdNote != "" && !s.agentOutdated(in.Ver) {
+		m.UpdNote, m.UpdAt, persist = "", time.Time{}, true
+	}
 	// tên Windows chỉ gửi lúc đăng ký; agent mới gửi kèm mỗi báo cáo nên máy cũ cũng được sửa lại
 	if o := cut(in.OS, 120); o != "" && o != m.OS {
 		m.OS = o

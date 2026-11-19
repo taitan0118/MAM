@@ -135,9 +135,9 @@ func TestVideoURI(t *testing.T) {
 		{"m=video 0 RTP/AVP 96\na=control:track1", base + "/track1"},
 		{"m=video 0 RTP/AVP 96\na=control:rtsp://1.2.3.4:554/khac", "rtsp://1.2.3.4:554/khac"},
 		{"m=audio 0 RTP/AVP 97\na=control:a1\nm=video 0 RTP/AVP 96\na=control:v1", base + "/v1"},
-		{"m=video 0 RTP/AVP 96", base},  // không khai control
-		{"m=audio 0 RTP/AVP 97", base},  // chỉ có tiếng
-		{"", base},                      // SDP rỗng
+		{"m=video 0 RTP/AVP 96", base}, // không khai control
+		{"m=audio 0 RTP/AVP 97", base}, // chỉ có tiếng
+		{"", base},                     // SDP rỗng
 		{"m=video 0 x\na=control:*", base},
 	} {
 		if got := videoURI(base, tc[0]); got != tc[1] {
@@ -307,7 +307,6 @@ func TestDevicesLuuVaoDB(t *testing.T) {
 	}
 }
 
-
 func TestDeviceLoaiRouter(t *testing.T) {
 	f := setup(t)
 	code, m, _ := f.super.do("POST", "/api/devices", map[string]interface{}{"name": "Router phòng máy", "ip": "192.168.77.254", "kind": "router", "group": "Mạng"}, nil)
@@ -390,5 +389,65 @@ func TestCanhBaoThietBiRot(t *testing.T) {
 	f.s.mu.Unlock()
 	if open("devdown") != nil {
 		t.Fatal("xóa thiết bị phải đóng cảnh báo của nó")
+	}
+}
+
+func TestGuessDevKind(t *testing.T) {
+	for _, c := range []struct {
+		ports []int
+		rtsp  bool
+		cuoi  bool
+		muon  string
+	}{
+		{[]int{554, 80}, true, false, "camera"},         // trả lời RTSP thật
+		{[]int{554, 80}, false, false, "camera"},        // cổng 554 thôi cũng đoán camera
+		{[]int{4370, 80}, false, false, "attend"},       // cổng riêng máy chấm công
+		{[]int{37777}, false, false, "camera"},          // đầu ghi Dahua
+		{[]int{135, 445, 3389}, false, false, "pc"},     // máy Windows, không phải thiết bị mạng
+		{[]int{80, 443, 23}, false, false, "switch"},    // có telnet + trang quản lý
+		{[]int{80, 443}, false, true, "router"},         // địa chỉ cuối dải
+		{[]int{80}, false, false, "other"},              // chỉ có web
+		{[]int{9999}, false, false, "other"},            // cổng lạ
+		{[]int{4370, 135, 445}, false, false, "attend"}, // cổng riêng thắng cổng Windows
+	} {
+		got, why := guessDevKind(c.ports, c.rtsp, c.cuoi)
+		if got != c.muon {
+			t.Fatalf("cổng %v (rtsp=%v cuối dải=%v) → %q, cần %q", c.ports, c.rtsp, c.cuoi, got, c.muon)
+		}
+		if why == "" {
+			t.Fatalf("cổng %v: phải nói được vì sao đoán vậy", c.ports)
+		}
+	}
+}
+
+func TestVendorOf(t *testing.T) {
+	if v := vendorOf("44:19:B6:11:22:33"); v != "Hikvision" {
+		t.Fatalf("MAC Hikvision → %q", v)
+	}
+	if v := vendorOf("00:17:61:AA:BB:CC"); v != "ZKTeco" {
+		t.Fatalf("MAC ZKTeco → %q", v)
+	}
+	if v := vendorOf("DE:AD:BE:EF:00:01"); v != "" {
+		t.Fatalf("hãng lạ phải trả rỗng, nhận %q", v)
+	}
+	if v := vendorOf(""); v != "" {
+		t.Fatalf("không có MAC phải trả rỗng, nhận %q", v)
+	}
+}
+
+// Quét: chỉ Super admin, chỉ dải nội bộ, tối đa /24.
+func TestDeviceScanChanDauVao(t *testing.T) {
+	f := setup(t)
+	code, _, _ := f.tech.do("POST", "/api/devices/scan", map[string]string{"cidr": "192.168.9.0/24"}, nil)
+	expect(t, code, 403, "kỹ thuật viên không được quét")
+	for _, bad := range []string{"8.8.8.0/24", "192.168.0.0/16", "khong-phai-dai", ""} {
+		if code, _, _ = f.super.do("POST", "/api/devices/scan", map[string]string{"cidr": bad}, nil); code != 400 {
+			t.Fatalf("dải %q phải bị từ chối, nhận %d", bad, code)
+		}
+	}
+	code, m, _ := f.super.do("GET", "/api/devices/scan", nil, nil)
+	expect(t, code, 200, "lấy gợi ý dải mạng")
+	if _, ok := m["suggest"]; !ok {
+		t.Fatal("phải trả gợi ý dải mạng")
 	}
 }

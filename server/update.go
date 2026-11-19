@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -91,6 +92,12 @@ func (s *Server) updateFor(cur, arch string) map[string]interface{} {
 	return map[string]interface{}{"ver": b.ver, "sha": b.sha, "size": b.size}
 }
 
+// agentOutdated: bản agent máy đang chạy có cũ hơn bản server đang giữ không.
+func (s *Server) agentOutdated(ver string) bool {
+	b := s.agentBinary("amd64")
+	return ver != "" && b != nil && verNum(ver) < verNum(b.ver)
+}
+
 func (s *Server) hAgentUpdate(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	m := s.agentMachine(r)
@@ -134,13 +141,20 @@ func (s *Server) hAgentUpdateInfo(w http.ResponseWriter, r *http.Request, me *Ac
 	out := map[string]interface{}{"auto": !s.st.Settings.NoAutoUpdate, "serverVer": Version, "agentVer": "", "outdated": 0}
 	if b != nil {
 		out["agentVer"] = b.ver
-		n := 0
+		// liệt kê hẳn máy nào chưa lên bản và vì sao: trước đây chỉ có con số nên không biết máy nào kẹt
+		old := []map[string]interface{}{}
 		for _, m := range s.st.Machines {
-			if l := s.live[m.ID]; !m.Revoked && l != nil && l.Ver != "" && verNum(l.Ver) < verNum(b.ver) {
-				n++
+			l := s.live[m.ID]
+			if m.Revoked || l == nil || l.Ver == "" || verNum(l.Ver) >= verNum(b.ver) {
+				continue
 			}
+			old = append(old, map[string]interface{}{
+				"id": m.ID, "name": m.Name, "ver": l.Ver, "ip": m.IP,
+				"online": s.isOnline(m), "lastSeen": m.LastSeen, "note": m.UpdNote, "noteAt": m.UpdAt,
+			})
 		}
-		out["outdated"] = n
+		sort.Slice(old, func(i, j int) bool { return old[i]["name"].(string) < old[j]["name"].(string) })
+		out["outdated"], out["old"] = len(old), old
 	}
 	jok(w, out)
 }

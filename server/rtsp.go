@@ -36,6 +36,21 @@ type rtspConn struct {
 	session              string
 }
 
+// rtspAlive hỏi một câu OPTIONS xem đầu kia có thật là camera không. Cổng 554 mở chưa chắc là camera,
+// nhưng trả lời đúng RTSP thì gần như chắc. Không cần tài khoản.
+func rtspAlive(ctx context.Context, ip string, port int) bool {
+	c, err := (&net.Dialer{Timeout: 1500 * time.Millisecond}).DialContext(ctx, "tcp", net.JoinHostPort(ip, itoa(port)))
+	if err != nil {
+		return false
+	}
+	defer c.Close()
+	c.SetDeadline(time.Now().Add(3 * time.Second))
+	r := &rtspConn{c: c, br: bufio.NewReader(c)}
+	code, _, _, err := r.send("OPTIONS", "rtsp://"+net.JoinHostPort(ip, itoa(port)), nil)
+	// 401 (đòi mật khẩu) cũng là camera, miễn là nó nói được tiếng RTSP
+	return err == nil && code > 0
+}
+
 // rtspKbps trả tốc độ bit của luồng hình (kbps). 0 kèm lỗi = không lấy được hình.
 func rtspKbps(ctx context.Context, ip string, port int, path, user, pass string) (int, error) {
 	if port <= 0 {

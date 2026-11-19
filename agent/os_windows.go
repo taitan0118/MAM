@@ -165,9 +165,15 @@ func archName() string { return runtime.GOARCH }
 
 func swapSelf(newFile string) error {
 	dir := exeDir()
-	exe := filepath.Join(dir, "mam-agent.exe")
+	// Phải thay đúng file đang chạy: máy 32-bit chạy mam-agent-x86.exe, ghi đè lên mam-agent.exe thì
+	// tác vụ vẫn mở bản cũ nên máy đó không bao giờ lên được bản mới.
+	exe, err := os.Executable()
+	if err != nil {
+		exe = filepath.Join(dir, "mam-agent.exe")
+	}
+	name := filepath.Base(exe)
 	script := filepath.Join(dir, "update.cmd")
-	body := fmt.Sprintf("@echo off\r\nping 127.0.0.1 -n 3 >nul\r\ntaskkill /f /im mam-agent.exe >nul 2>&1\r\nping 127.0.0.1 -n 2 >nul\r\nmove /y \"%s\" \"%s\" >nul\r\nschtasks /run /tn \"MAM Agent\" >nul 2>&1\r\nschtasks /run /tn \"MAM Client\" >nul 2>&1\r\nschtasks /delete /tn \"MAM Update\" /f >nul 2>&1\r\ndel \"%%~f0\"\r\n", newFile, exe)
+	body := fmt.Sprintf("@echo off\r\nping 127.0.0.1 -n 3 >nul\r\ntaskkill /f /im \"%s\" >nul 2>&1\r\nping 127.0.0.1 -n 2 >nul\r\nmove /y \"%s\" \"%s\" >nul\r\nschtasks /run /tn \"MAM Agent\" >nul 2>&1\r\nschtasks /run /tn \"MAM Client\" >nul 2>&1\r\nschtasks /delete /tn \"MAM Update\" /f >nul 2>&1\r\ndel \"%%~f0\"\r\n", name, newFile, exe)
 	if err := os.WriteFile(script, []byte(body), 0o600); err != nil {
 		return err
 	}

@@ -49,6 +49,10 @@ type Machine struct {
 	LastSeen    time.Time              `json:"lastSeen"`
 	Revoked     bool                   `json:"revoked"`
 	ThreatSeen  []string               `json:"threatSeen,omitempty"` // ID các phát hiện virus đã báo, để không báo lại
+	// Vì sao máy này chưa lên bản agent mới (agent gửi lên sau mỗi lượt tự cập nhật hỏng). Xóa khi máy
+	// đã lên đúng bản, để Console chỉ hiện lý do của máy đang thật sự kẹt.
+	UpdNote     string                 `json:"updNote,omitempty"`
+	UpdAt       time.Time              `json:"updAt,omitempty"`
 	RemoteNote  string                 `json:"remoteNote"`           // ID TeamViewer/AnyDesk hoặc địa chỉ RDP, admin tự ghi để tiện mở phần mềm remote desktop ngoài
 	LicenseNote string                 `json:"licenseNote"`          // bản quyền Windows/Office/phần mềm máy này, admin tự ghi
 }
