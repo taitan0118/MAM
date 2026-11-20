@@ -148,6 +148,10 @@
   .seg button.on{background:var(--accent-soft);color:var(--accent)}
 
   .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  /* tiêu đề cột bấm được để sắp xếp */
+  .thsort{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-transform:inherit;letter-spacing:inherit}
+  .thsort:hover{color:var(--accent)}
+  .thsort.on{color:var(--accent);font-weight:700}
   .filters .grow{flex:1;min-width:140px}
 
   /* detail */

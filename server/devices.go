@@ -22,8 +22,10 @@ import (
 type NetDev struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	IP   string `json:"ip"`
-	Kind string `json:"kind"` // camera | attend | switch | other
+	// Tên tiếng Trung lấy nguyên từ file gốc; Console để tiếng Trung thì hiện tên này.
+	NameZH string `json:"nameZh,omitempty"`
+	IP     string `json:"ip"`
+	Kind   string `json:"kind"` // camera | attend | switch | other
 	// Một thiết bị có thể thuộc NHIỀU nhóm: camera khu Hải Quan vừa nằm trong danh sách Hải Quan
 	// vừa nằm trong danh sách chung của công ty, phải đếm được ở cả hai chỗ.
 	Groups []string `json:"groups"`
@@ -298,18 +300,72 @@ func (s *Server) doHinh(d *NetDev) bool {
 
 // devAlerts mở/đóng cảnh báo cho một thiết bị. Gọi khi đang giữ s.mu.
 func (s *Server) devAlerts(d *NetDev) {
-	m := &Machine{ID: devAlertID(d.ID), Name: d.Name}
-	s.cond(m, "devdown", "crit", d.Miss >= devAlertAfter, d.Name+" ("+d.IP+") mất kết nối")
+	s.mocCanhBao(d, "devdown", "crit", d.Miss >= devAlertAfter, "mất kết nối")
 	// camera còn sống mà không kéo được hình: máy vẫn đó nhưng không quay, vẫn phải báo
 	noVid := d.Up && s.doHinh(d) && d.VidMiss >= devAlertAfter
-	s.cond(m, "devvideo", "warn", noVid, d.Name+" ("+d.IP+") còn sống nhưng không ra hình")
+	s.mocCanhBao(d, "devvideo", "warn", noVid, "không ra hình")
+}
+
+// Chữ đánh dấu cảnh báo đã hết hỏng nhưng còn chờ người xác nhận.
+const daCoLai = " · đã có lại lúc "
+
+// mocCanhBao mở cảnh báo khi thiết bị hỏng, và KHÔNG tự đóng khi nó tốt lại — chỉ ghi thêm giờ phục
+// hồi rồi để đó chờ bấm "Đã xử lý". Thiết bị rớt lúc nửa đêm rồi tự lên lại thì sáng ra vẫn thấy.
+// Gọi khi đang giữ s.mu.
+func (s *Server) mocCanhBao(d *NetDev, kind, sev string, hong bool, viec string) {
+	var mo *Alert
+	id := devAlertID(d.ID)
+	for i := len(s.st.Alerts) - 1; i >= 0; i-- {
+		if a := s.st.Alerts[i]; a.Machine == id && a.Kind == kind && a.Status == "open" {
+			mo = a
+			break
+		}
+	}
+	gio := time.Now().Format("15:04:05 02/01")
+	switch {
+	case hong && mo == nil:
+		s.st.Alerts = append(s.st.Alerts, &Alert{ID: rid(5), Machine: id, Name: d.Name, Kind: kind, Sev: sev,
+			Msg: d.Name + " (" + d.IP + ") " + viec + " lúc " + gio, Opened: time.Now(), Status: "open"})
+		if len(s.st.Alerts) > 2000 {
+			s.st.Alerts = s.st.Alerts[len(s.st.Alerts)-1500:]
+		}
+		s.notify(s.st.Settings, "Cảnh báo: "+d.Name, d.Name+" ("+d.IP+") "+viec+" lúc "+gio)
+	case hong && mo != nil && strings.Contains(mo.Msg, daCoLai):
+		// hỏng lại sau khi đã phục hồi: mở cảnh báo mới cho khỏi lẫn lần trước
+		mo.Status, mo.Closed, mo.By = "closed", time.Now(), "tự động (hỏng lại)"
+		s.mocCanhBao(d, kind, sev, true, viec)
+	case !hong && mo != nil && !strings.Contains(mo.Msg, daCoLai):
+		mo.Msg += daCoLai + gio
+		s.notify(s.st.Settings, "Đã có lại: "+d.Name, mo.Msg)
+	}
+}
+
+// devAck đóng mọi cảnh báo đang mở của một thiết bị ("Đã xử lý"). Gọi khi đang giữ s.mu.
+func (s *Server) devAck(d *NetDev, ai string) int {
+	n, id := 0, devAlertID(d.ID)
+	for _, a := range s.st.Alerts {
+		if a.Machine == id && a.Status == "open" {
+			a.Status, a.Closed, a.By = "closed", time.Now(), ai
+			n++
+		}
+	}
+	return n
+}
+
+// soCanhBao: số cảnh báo đang mở của thiết bị. Gọi khi đang giữ s.mu.
+func (s *Server) soCanhBao(d *NetDev) int {
+	n, id := 0, devAlertID(d.ID)
+	for _, a := range s.st.Alerts {
+		if a.Machine == id && a.Status == "open" {
+			n++
+		}
+	}
+	return n
 }
 
 // devAlertsClose đóng mọi cảnh báo của một thiết bị (lúc xóa thiết bị). Gọi khi đang giữ s.mu.
 func (s *Server) devAlertsClose(d *NetDev) {
-	m := &Machine{ID: devAlertID(d.ID), Name: d.Name}
-	s.cond(m, "devdown", "crit", false, "")
-	s.cond(m, "devvideo", "warn", false, "")
+	s.devAck(d, "tự động (xóa thiết bị)")
 }
 
 // devView: dữ liệu trả cho Console. Không trả mật khẩu camera. vid = có đang đo luồng hình không.
@@ -320,10 +376,10 @@ func (s *Server) devView(d *NetDev) map[string]interface{} {
 		p = []int{}
 	}
 	return map[string]interface{}{
-		"id": d.ID, "name": d.Name, "ip": d.IP, "kind": d.Kind, "groups": nhomCua(d), "port": d.Port,
+		"id": d.ID, "name": d.Name, "nameZh": d.NameZH, "ip": d.IP, "kind": d.Kind, "groups": nhomCua(d), "port": d.Port,
 		"vid":  vid,
 		"path": d.Path, "user": d.User, "hasPass": d.Pass != "", "mac": d.MAC, "macNow": d.MACNow,
-		"up": d.Up, "video": d.Video, "kbps": d.Kbps, "ports": p, "way": d.Way,
+		"up": d.Up, "video": d.Video, "kbps": d.Kbps, "ports": p, "way": d.Way, "canhBao": s.soCanhBao(d),
 		"checked": d.Checked, "since": d.Since, "vidAt": d.VidAt, "done": !d.Checked.IsZero(),
 	}
 }
@@ -601,4 +657,34 @@ func gioPhut(t time.Time) string {
 		return ""
 	}
 	return t.Format("02/01/2006 15:04:05")
+}
+
+// hDeviceAck: bấm "Đã xử lý" — đóng mọi cảnh báo đang mở của một thiết bị.
+func (s *Server) hDeviceAck(w http.ResponseWriter, r *http.Request, me *Account) {
+	if r.Method != "POST" {
+		jerr(w, 405, "Phương thức không hỗ trợ")
+		return
+	}
+	if me.Role == "view" {
+		jerr(w, 403, "Tài khoản Chỉ xem không có quyền thao tác")
+		return
+	}
+	id := r.URL.Query().Get("id")
+	s.mu.Lock()
+	var d *NetDev
+	for _, x := range s.st.Devices {
+		if x.ID == id {
+			d = x
+		}
+	}
+	if d == nil {
+		s.mu.Unlock()
+		jerr(w, 404, "Không có thiết bị này")
+		return
+	}
+	n := s.devAck(d, me.User)
+	s.save()
+	s.mu.Unlock()
+	s.auditBy(me, r, "Thiết bị mạng", "Đã xử lý "+itoa(n)+" cảnh báo của "+d.Name, d.Name, false)
+	jok(w, map[string]interface{}{"ok": true, "n": n})
 }

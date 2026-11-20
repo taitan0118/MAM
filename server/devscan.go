@@ -562,7 +562,7 @@ func (s *Server) hDeviceImport(w http.ResponseWriter, r *http.Request, me *Accou
 	var in struct {
 		// Group của từng dòng: file công ty có cột vị trí (Hành Chính, Nhuộm 2, Dệt 1…), lấy luôn làm
 		// nhóm con; nhóm chung của cả lượt nhập vẫn áp cho mọi dòng.
-		Devices []struct{ Name, IP, Group string }
+		Devices []struct{ Name, IP, Group, NameZh string }
 		Kind    string
 		Group   string
 		Groups  []string
@@ -603,7 +603,7 @@ func (s *Server) hDeviceImport(w http.ResponseWriter, r *http.Request, me *Accou
 		if len(s.st.Devices)+len(moi) >= devMax {
 			break
 		}
-		d := &NetDev{ID: rid(5), Name: ten, IP: v, Kind: in.Kind, Groups: donNhom(append(append([]string{}, in.Groups...), x.Group))}
+		d := &NetDev{ID: rid(5), Name: ten, NameZH: clip(x.NameZh, 60), IP: v, Kind: in.Kind, Groups: donNhom(append(append([]string{}, in.Groups...), x.Group))}
 		daCo[v] = d
 		moi = append(moi, d)
 		them++

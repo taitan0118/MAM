@@ -1149,6 +1149,8 @@ const DEVF = { g: 'all', k: 'all', st: 'all', sx: 'loi', q: '', chon: new Set() 
 // Một thiết bị thuộc nhiều nhóm: camera khu Hải Quan vừa nằm trong nhóm Hải Quan để xem riêng,
 // vừa nằm trong nhóm chung của công ty để đếm chung.
 const nhomCua = d => (d && d.groups) || [];
+// Tên thiết bị: bản tiếng Việt là chính, Console để tiếng Trung thì hiện tên gốc trong file công ty.
+const tenTB = d => (MAMI.lang() === 'zh' && d && d.nameZh) ? d.nameZh : ((d && d.name) || '');
 const coNhom = (d, g) => nhomCua(d).indexOf(g) >= 0;
 // Tình trạng để lọc, và cách sắp xếp. 'loi' = cái đang hỏng lên đầu.
 const DEVST = [['all', 'Mọi tình trạng'], ['up', 'Đang hoạt động'], ['down', 'Mất kết nối'], ['novideo', 'Camera không ra hình'], ['new', 'Chưa kiểm']];
@@ -1170,15 +1172,15 @@ VIEWS.devices = async v => {
   const grps = [...new Set(list.flatMap(nhomCua))].sort();
   if (DEVF.g !== 'all' && DEVF.g !== '__none' && grps.indexOf(DEVF.g) < 0) DEVF.g = 'all';
   const xep = {
-    loi: (a, b) => devXau(a) - devXau(b) || a.name.localeCompare(b.name),
-    name: (a, b) => a.name.localeCompare(b.name),
+    loi: (a, b) => devXau(a) - devXau(b) || tenTB(a).localeCompare(tenTB(b)),
+    name: (a, b) => tenTB(a).localeCompare(tenTB(b)),
     ip: (a, b) => devSoIP(a) - devSoIP(b),
-    group: (a, b) => (nhomCua(a)[0] || '\uffff').localeCompare(nhomCua(b)[0] || '\uffff') || a.name.localeCompare(b.name),
-    kind: (a, b) => t(devKind(a.kind)).localeCompare(t(devKind(b.kind))) || a.name.localeCompare(b.name),
+    group: (a, b) => (nhomCua(a)[0] || '\uffff').localeCompare(nhomCua(b)[0] || '\uffff') || tenTB(a).localeCompare(tenTB(b)),
+    kind: (a, b) => t(devKind(a.kind)).localeCompare(t(devKind(b.kind))) || tenTB(a).localeCompare(tenTB(b)),
     checked: (a, b) => String(b.checked).localeCompare(String(a.checked)),
   };
   const shown = list.filter(d => (DEVF.g === 'all' || (DEVF.g === '__none' ? !nhomCua(d).length : coNhom(d, DEVF.g)))
-    && (DEVF.k === 'all' || d.kind === DEVF.k) && devHop(d, DEVF.st) && hit(DEVF.q, d.name, d.ip, nhomCua(d).join(' ')))
+    && (DEVF.k === 'all' || d.kind === DEVF.k) && devHop(d, DEVF.st) && hit(DEVF.q, d.name, d.nameZh, d.ip, nhomCua(d).join(' ')))
     .sort(xep[DEVF.sx] || xep.loi);
   const noVid = list.filter(d => d.done && d.up && d.vid && !d.video).length;
   v.append(el('div', { class: 'kpis' },
@@ -1213,10 +1215,12 @@ VIEWS.devices = async v => {
   const row = d => {
     const [cls, lbl, sub] = devState(d);
     const macBad = d.mac && d.macNow && d.mac !== d.macNow;
-    return el('tr', {},
+    return el('tr', { onclick: e => { if (!e.target.closest('button,input')) devChiTiet(d); } },
       isSuper() ? el('td', {}, el('input', { type: 'checkbox', checked: DEVF.chon.has(d.id), onchange: e => { e.target.checked ? DEVF.chon.add(d.id) : DEVF.chon.delete(d.id); render(); } })) : null,
       el('td', {}, pill(cls, t(lbl)), sub ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:3px' }, sub) : null),
-      el('td', {}, el('b', {}, d.name), macBad ? el('div', { style: 'font-size:11.5px;color:var(--crit);margin-top:3px' }, t('IP này đang là thiết bị khác (MAC đổi)')) : null),
+      el('td', { style: 'cursor:pointer' }, el('b', {}, tenTB(d)),
+        d.canhBao ? el('span', { class: 'count badge-red', style: 'margin-left:7px' }, String(d.canhBao)) : null,
+        macBad ? el('div', { style: 'font-size:11.5px;color:var(--crit);margin-top:3px' }, t('IP này đang là thiết bị khác (MAC đổi)')) : null),
       el('td', {}, nhomCua(d).length ? nhomCua(d).join(', ') : el('span', { style: 'color:var(--faint)' }, t('Chưa phân nhóm'))),
       el('td', {}, t(devKind(d.kind))),
       el('td', { class: 'mono' }, d.ip + (d.port ? ':' + d.port : '')),
@@ -1226,7 +1230,11 @@ VIEWS.devices = async v => {
           e.target.disabled = true;
           try { await api('POST', '/api/devices/check?id=' + encodeURIComponent(d.id)); render(); } catch (x) { fail(x); e.target.disabled = false; }
         } }, 'Kiểm lại'),
-        el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px;margin-left:6px', onclick: () => devLichSu(d) }, 'Lịch sử'),
+        el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px;margin-left:6px', onclick: () => devChiTiet(d) }, 'Chi tiết'),
+        d.canhBao ? el('button', { class: 'btn primary', style: 'padding:4px 10px;font-size:12px;margin-left:6px', onclick: async e => {
+          e.target.disabled = true;
+          try { const r2 = await api('POST', '/api/devices/ack?id=' + encodeURIComponent(d.id)); toast(t('Đã đóng {0} cảnh báo', r2.n)); render(); } catch (x) { fail(x); e.target.disabled = false; }
+        } }, 'Đã xử lý') : null,
         isSuper() ? el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px;margin-left:6px', onclick: () => devAsk(d, grps) }, 'Sửa') : null,
         isSuper() ? el('button', { class: 'btn danger', style: 'padding:4px 10px;font-size:12px;margin-left:6px', onclick: () => confirmBox(t('Xóa thiết bị'), t('Xóa {0} khỏi danh sách theo dõi?', d.name), t('Xóa'), true, async () => {
           try { await api('DELETE', '/api/devices?id=' + encodeURIComponent(d.id)); toast(t('Đã xóa')); render(); } catch (x) { fail(x); }
@@ -1257,7 +1265,9 @@ VIEWS.devices = async v => {
     el('button', { class: 'btn danger', style: 'padding:5px 11px;font-size:12.5px', onclick: () => confirmBox(t('Xóa thiết bị'),
       t('Xóa {0} thiết bị khỏi danh sách theo dõi? Chỉ bỏ theo dõi, không đụng gì tới thiết bị thật.', soChon()), t('Xóa'), true, () => lamHangLoat('delete')) }, 'Xóa các thiết bị đã chọn')));
   v.append(el('div', { style: 'margin-top:12px' }, card(t('Danh sách') + ' (' + shown.length + (shown.length !== list.length ? '/' + list.length : '') + ')', null,
-    table([...(isSuper() ? [{ t: cbTatCaDS }] : []), 'Trạng thái', 'Tên', 'Nhóm', 'Loại', 'IP', 'Kiểm lúc', ...(canWrite() ? [''] : [])], shown.map(row),
+    table([...(isSuper() ? [{ t: cbTatCaDS }] : []), ...[['Trạng thái', 'loi'], ['Tên', 'name'], ['Nhóm', 'group'], ['Loại', 'kind'], ['IP', 'ip'], ['Kiểm lúc', 'checked']]
+      .map(([nhan, khoa]) => ({ t: el('button', { class: 'thsort' + (DEVF.sx === khoa ? ' on' : ''), title: 'Bấm để sắp xếp theo cột này', onclick: () => { DEVF.sx = khoa; render(); } }, t(nhan), DEVF.sx === khoa ? ' ▾' : '') })),
+      ...(canWrite() ? [''] : [])], shown.map(row),
       list.length ? 'Không có thiết bị nào khớp bộ lọc' : 'Chưa khai thiết bị nào. Bấm Thêm thiết bị để theo dõi camera, máy chấm công, switch.'))));
   v.append(el('div', { style: 'margin-top:12px' }, infoNote('Server gõ cổng TCP của thiết bị mỗi phút, không được thì ping. Camera có nhập tài khoản thì 5 phút một lần server kéo thử luồng RTSP vài giây để biết camera còn ra hình. Chỉ biết thiết bị sống hay chết: không biết đầu ghi có lưu lại hay không, cũng không biết ống kính có bị che hay không. Thiết bị phải ở dải mạng mà máy chủ vào được.')));
 };
@@ -1400,7 +1410,7 @@ function khoang(ms) {
   ra.push(t('{0} giây', s));
   return ra.join(' ');
 }
-async function devLichSu(d) {
+async function devChiTiet(d) {
   let r;
   try { r = await api('GET', '/api/devices/log?id=' + encodeURIComponent(d.id)); } catch (e) { fail(e); return; }
   const lg = r.log || [];
@@ -1414,14 +1424,31 @@ async function devLichSu(d) {
     el('td', { class: 'mono', style: 'font-size:12.5px' }, x.den ? gioDayDu(x.den) : el('span', { style: 'color:var(--muted)' }, t('tới bây giờ'))),
     el('td', { style: 'font-size:12.5px' }, khoang((x.den ? new Date(x.den) : new Date()) - new Date(x.tu))))),
     'Chưa có mốc nào — server mới bắt đầu theo dõi thiết bị này');
-  modal(t('Lịch sử') + ' · ' + d.name, el('div', {},
+  const dong = (nhan, giaTri) => el('div', { style: 'display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--border);font-size:13px' },
+    el('div', { style: 'width:150px;color:var(--muted);flex:none' }, t(nhan)), el('div', { style: 'flex:1;min-width:0' }, giaTri));
+  const [cls2, lbl2, sub2] = devState(d);
+  modal(t('Chi tiết thiết bị') + ' · ' + tenTB(d), el('div', {},
     el('div', { class: 'kpis', style: 'grid-template-columns:repeat(3,1fr)' },
       kpi(t('Đang'), r.up ? 'var(--good)' : 'var(--crit)', t(r.up ? 'Hoạt động' : 'Mất kết nối'), r.since ? t('từ {0}', gioDayDu(r.since)) : ''),
       kpi(t('Số lần rớt'), 'var(--warn)', String(rot.length), t('trong {0} mốc đã ghi', lg.length)),
       kpi(t('Tổng thời gian rớt'), 'var(--crit)', khoang(tong), d.ip)),
-    el('div', { style: 'margin-top:12px' }, bang),
+    el('div', { style: 'margin-top:12px' },
+      dong('Tên thiết bị', tenTB(d)),
+      d.nameZh && d.nameZh !== d.name ? dong('Tên trong file gốc', d.nameZh) : null,
+      dong('Địa chỉ IP', el('span', { class: 'mono' }, d.ip + (d.port ? ':' + d.port : ''))),
+      dong('Loại', t(devKind(d.kind))),
+      dong('Nhóm', nhomCua(d).join(', ') || t('Chưa phân nhóm')),
+      dong('Trạng thái', el('span', {}, pill(cls2, t(lbl2)), sub2 ? ' ' + sub2 : '')),
+      d.mac ? dong('Địa chỉ MAC', el('span', { class: 'mono' }, d.mac)) : null,
+      d.path ? dong('Đường RTSP', d.path) : null,
+      dong('Kiểm lần cuối', d.done ? gioDayDu(d.checked) : t('Chưa kiểm'))),
+    el('div', { style: 'margin-top:14px;font-size:13px' }, el('b', {}, t('Lịch sử hoạt động'))),
+    el('div', { style: 'margin-top:6px' }, bang),
     el('div', { style: 'margin-top:10px' }, infoNote('Server kiểm thiết bị mỗi phút nên mốc ghi lại có thể lệch tối đa một phút so với lúc thiết bị rớt thật. Giữ 500 mốc gần nhất cho mỗi thiết bị.'))),
-    [{ label: 'Đóng', on: c => c() }], true);
+    [{ label: 'Đóng', on: c => c() },
+     ...(d.canhBao ? [{ label: 'Đã xử lý', cls: 'primary', on: async c => {
+       try { const r2 = await api('POST', '/api/devices/ack?id=' + encodeURIComponent(d.id)); c(); toast(t('Đã đóng {0} cảnh báo', r2.n)); render(); } catch (x) { fail(x); }
+     } }] : [])], true);
 }
 // Quét dải mạng tìm thiết bị chưa khai. Không tự thêm: người dùng tick cái nào mới thêm cái đó.
 // Quét chạy nền ở server (vài VLAN mất vài phút, dài hơn mức server cho phép một phản hồi), nên

@@ -372,9 +372,26 @@ func TestCanhBaoThietBiRot(t *testing.T) {
 		t.Fatalf("tài khoản có phạm vi nhóm vẫn phải thấy cảnh báo thiết bị mạng: %s", raw)
 	}
 
+	// sống lại thì cảnh báo VẪN MỞ, chỉ ghi thêm giờ có lại — chờ người trực bấm "Đã xử lý"
 	set(func() { d.Up, d.Miss = true, 0 })
-	if open("devdown") != nil {
-		t.Fatal("thiết bị sống lại phải tự đóng cảnh báo")
+	a2 := open("devdown")
+	if a2 == nil {
+		t.Fatal("thiết bị sống lại vẫn phải giữ cảnh báo để người trực còn thấy")
+	}
+	if !strings.Contains(a2.Msg, "đã có lại lúc") {
+		t.Fatalf("phải ghi thêm giờ có lại: %q", a2.Msg)
+	}
+	truoc := a2.Msg
+	set(func() { d.Up, d.Miss = true, 0 }) // kiểm thêm lần nữa thì không ghi lặp
+	if open("devdown").Msg != truoc {
+		t.Fatalf("không được ghi lặp giờ có lại: %q", open("devdown").Msg)
+	}
+	// bấm "Đã xử lý" mới đóng
+	f.s.mu.Lock()
+	n := f.s.devAck(d, "admin")
+	f.s.mu.Unlock()
+	if n != 1 || open("devdown") != nil {
+		t.Fatalf("Đã xử lý phải đóng cảnh báo, đóng %d cái", n)
 	}
 
 	// camera còn sống nhưng không ra hình: cảnh báo riêng, mức nhẹ hơn
@@ -383,9 +400,12 @@ func TestCanhBaoThietBiRot(t *testing.T) {
 		t.Fatalf("camera không ra hình phải mở cảnh báo mức warn, nhận %+v", v)
 	}
 	set(func() { d.Video, d.VidMiss = true, 0 })
-	if open("devvideo") != nil {
-		t.Fatal("camera ra hình lại phải đóng cảnh báo")
+	if v := open("devvideo"); v == nil || !strings.Contains(v.Msg, "đã có lại lúc") {
+		t.Fatalf("camera ra hình lại thì cảnh báo vẫn mở kèm giờ có lại: %+v", v)
 	}
+	f.s.mu.Lock()
+	f.s.devAck(d, "admin")
+	f.s.mu.Unlock()
 
 	// xóa thiết bị thì đóng hết cảnh báo của nó
 	set(func() { d.Up, d.Miss = false, 9 })

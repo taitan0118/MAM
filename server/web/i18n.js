@@ -1120,6 +1120,13 @@ var EN = {
 "Thay nhóm": "Replace groups",
 "Thêm vào nhóm": "Add to group",
 "Chi tiết": "Details",
+"Chi tiết thiết bị": "Device details",
+"Lịch sử hoạt động": "Activity history",
+"Tên trong file gốc": "Name in the original file",
+"Kiểm lần cuối": "Last checked",
+"Đã xử lý": "Acknowledge",
+"Đã đóng {0} cảnh báo": "Closed {0} alerts",
+"Bấm để sắp xếp theo cột này": "Click to sort by this column",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -2395,6 +2402,13 @@ var ZH = {
 "Thay nhóm": "替换分组",
 "Thêm vào nhóm": "加入分组",
 "Chi tiết": "详情",
+"Chi tiết thiết bị": "设备详情",
+"Lịch sử hoạt động": "活动历史",
+"Tên trong file gốc": "原文件中的名称",
+"Kiểm lần cuối": "最近检测",
+"Đã xử lý": "已处理",
+"Đã đóng {0} cảnh báo": "已关闭 {0} 条告警",
+"Bấm để sắp xếp theo cột này": "点击按此列排序",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -2519,6 +2533,16 @@ var ZH = {
 "Bản quyền © 2026 Nguyễn Tấn Tài (Missing)": "版权所有 © 2026 Nguyễn Tấn Tài (Missing)",
 };
 var PAT = [
+[
+"^(.+) \\((.+?)\\) mất kết nối lúc (.+?)(?: · đã có lại lúc (.+))?$",
+"$1 ($2) lost connection at $3$4",
+"$1（$2）于 $3 失去连接$4"
+],
+[
+"^(.+) \\((.+?)\\) không ra hình lúc (.+?)(?: · đã có lại lúc (.+))?$",
+"$1 ($2) stopped sending video at $3$4",
+"$1（$2）于 $3 停止出图$4"
+],
 [
 "^Mất kết nối (d+) phút$",
 "Lost connection for $1 min",
