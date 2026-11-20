@@ -322,8 +322,9 @@ func (s *Server) devAlerts(d *NetDev) {
 	s.mocCanhBao(d, "devmac", "warn", d.MAC != "" && d.MACNow != "" && d.MAC != d.MACNow, "IP đang là thiết bị khác (MAC đổi)")
 }
 
-// Chữ đánh dấu cảnh báo đã hết hỏng nhưng còn chờ người xác nhận.
+// Chữ đánh dấu cảnh báo đã hết hỏng nhưng còn chờ người xác nhận, và chữ đánh dấu nó rớt lại.
 const daCoLai = " · đã có lại lúc "
+const roiLai = " · rớt lại lúc "
 
 // mocCanhBao mở cảnh báo khi thiết bị hỏng, và KHÔNG tự đóng khi nó tốt lại — chỉ ghi thêm giờ phục
 // hồi rồi để đó chờ bấm "Đã xử lý". Thiết bị rớt lúc nửa đêm rồi tự lên lại thì sáng ra vẫn thấy.
@@ -338,17 +339,27 @@ func (s *Server) mocCanhBao(d *NetDev, kind, sev string, hong bool, viec string)
 		}
 	}
 	gio := time.Now().Format("15:04:05 02/01")
+	if !hong {
+		s.boGiu(id, kind) // thiết bị tốt lại: lần rớt sau là chuyện mới
+	}
 	switch {
+	case hong && mo == nil && s.dangGiu(id, kind):
+		// đã bấm "Đã xử lý" mà thiết bị vẫn chưa sống lại lần nào: không báo lại cùng một lỗi
 	case hong && mo == nil:
 		s.st.Alerts = append(s.st.Alerts, &Alert{ID: rid(5), Machine: id, Name: d.Name, Kind: kind, Sev: sev,
 			Msg: d.Name + " (" + d.IP + ") " + viec + " lúc " + gio, Opened: time.Now(), Status: "open"})
 		s.catBotCanhBao()
 		s.notify(s.st.Settings, "Cảnh báo: "+d.Name, d.Name+" ("+d.IP+") "+viec+" lúc "+gio)
 	case hong && mo != nil && strings.Contains(mo.Msg, daCoLai):
-		// hỏng lại sau khi đã phục hồi: mở cảnh báo mới cho khỏi lẫn lần trước
-		mo.Status, mo.Closed, mo.By = "closed", time.Now(), "tự động (hỏng lại)"
-		s.mocCanhBao(d, kind, sev, true, viec)
+		// Rớt lại sau khi đã có lại: GHI VÀO CHÍNH DÒNG NÀY, không đẻ dòng mới. Thiết bị chập chờn
+		// trước đây đẻ ra hàng chục dòng y hệt (đo thật: Hành Chính 2# 26 dòng) — đúng cái đại ca
+		// kêu là cảnh báo lặp. Cũng không nhắn lại: dòng cảnh báo vẫn đang mở, chưa ai xử lý.
+		mo.Lan++
+		mo.Msg = mo.Msg[:strings.Index(mo.Msg, daCoLai)] + roiLai + gio + " (lần thứ " + itoa(mo.Lan+1) + ")"
 	case !hong && mo != nil && !strings.Contains(mo.Msg, daCoLai):
+		if i := strings.Index(mo.Msg, roiLai); i >= 0 {
+			mo.Msg = mo.Msg[:i] // bỏ đuôi "rớt lại" cũ, vẫn giữ một dòng duy nhất
+		}
 		mo.Msg += daCoLai + gio
 		s.notify(s.st.Settings, "Đã có lại: "+d.Name, mo.Msg)
 	}
@@ -360,6 +371,7 @@ func (s *Server) devAck(d *NetDev, ai string) int {
 	for _, a := range s.st.Alerts {
 		if a.Machine == id && a.Status == "open" {
 			a.Status, a.Closed, a.By = "closed", time.Now(), ai
+			a.Giu = true // thiết bị chưa sống lại thì đừng báo lại y hệt
 			n++
 		}
 	}

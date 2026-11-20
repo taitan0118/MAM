@@ -53,6 +53,30 @@ func (s *Server) catBotCanhBao() {
 	s.st.Alerts = giu
 }
 
+// moiNhat trả cảnh báo mới nhất của một máy + một loại lỗi (kể cả đã đóng). Gọi khi đang giữ s.mu.
+func (s *Server) moiNhat(machine, kind string) *Alert {
+	for i := len(s.st.Alerts) - 1; i >= 0; i-- {
+		if a := s.st.Alerts[i]; a.Machine == machine && a.Kind == kind {
+			return a
+		}
+	}
+	return nil
+}
+
+// dangGiu: lỗi này vừa được người ta đóng tay và từ đó tới giờ chưa hết lần nào → đừng báo lại.
+// Đây là luật "đã có cảnh báo rồi thì phải có thay đổi thật mới được báo tiếp".
+func (s *Server) dangGiu(machine, kind string) bool {
+	a := s.moiNhat(machine, kind)
+	return a != nil && a.Status != "open" && a.Giu
+}
+
+// boGiu: lỗi đã thật sự hết → bỏ dấu giữ, lần hỏng sau là chuyện mới và được báo.
+func (s *Server) boGiu(machine, kind string) {
+	if a := s.moiNhat(machine, kind); a != nil && a.Giu {
+		a.Giu = false
+	}
+}
+
 // cond mở cảnh báo khi điều kiện đúng, tự đóng khi hết đúng.
 func (s *Server) cond(m *Machine, kind, sev string, on bool, msg string) {
 	var open *Alert
@@ -65,8 +89,14 @@ func (s *Server) cond(m *Machine, kind, sev string, on bool, msg string) {
 			break
 		}
 	}
+	if !on {
+		s.boGiu(m.ID, kind) // lỗi hết rồi: lần hỏng sau là chuyện mới
+	}
 	switch {
 	case on && open == nil:
+		if s.dangGiu(m.ID, kind) {
+			return // đã đóng tay mà lỗi vẫn y nguyên: không báo lại, cũng không nhắn lại
+		}
 		s.st.Alerts = append(s.st.Alerts, &Alert{ID: rid(5), Machine: m.ID, Name: m.Name, Kind: kind, Sev: sev, Msg: msg, Opened: time.Now(), Status: "open"})
 		s.catBotCanhBao()
 		// không lưu ngay: cả nghìn máy tắt cùng lúc sẽ ghi file hàng nghìn lần; watchdog lưu mỗi phút
@@ -208,6 +238,9 @@ func (s *Server) threatsIn(m *Machine, in []ThreatIn) {
 		// Defender phát hiện lại cùng file (quét lại, giải nén lại...) thì ra mã phát hiện mới: không mở thêm cảnh báo
 		// nếu máy đã có cảnh báo cùng virus + cùng file đang mở, hoặc mới đóng trong 24 giờ. Cảnh báo đang mở thì cập nhật trạng thái mới.
 		if a := s.sameThreatAlert(m.ID, kind, base); a != nil {
+			if a.Status != "open" && a.Giu {
+				continue // đúng dấu hiệu đó, đại ca đã đóng tay rồi: không báo lại nữa
+			}
 			if a.Status == "open" && a.Msg != msg {
 				a.Msg = msg
 				s.save()
@@ -225,12 +258,15 @@ func (s *Server) threatsIn(m *Machine, in []ThreatIn) {
 // đang mở, hoặc đóng chưa quá 24 giờ. Gọi khi đang giữ s.mu.
 func (s *Server) sameThreatAlert(machine, kind, base string) *Alert {
 	since := time.Now().Add(-24 * time.Hour)
-	for i := len(s.st.Alerts) - 1; i >= 0 && i > len(s.st.Alerts)-600; i-- {
+	// dò hết danh sách: giới hạn 600 dòng cũng là lỗi như trần 400 ngày trước — cảnh báo cũ nằm
+	// ngoài tầm dò thì lại đẻ ra một dòng y hệt
+	for i := len(s.st.Alerts) - 1; i >= 0; i-- {
 		a := s.st.Alerts[i]
 		if a.Machine != machine || a.Kind != kind || !(a.Msg == base || strings.HasPrefix(a.Msg, base+" [") || strings.HasPrefix(a.Msg, base+". ")) {
 			continue
 		}
-		if a.Status == "open" || a.Closed.After(since) || a.Opened.After(since) {
+		// a.Giu: đã đóng tay thì nhớ mãi, không phải chỉ 24 giờ
+		if a.Status == "open" || a.Giu || a.Closed.After(since) || a.Opened.After(since) {
 			return a
 		}
 	}

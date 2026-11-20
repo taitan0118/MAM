@@ -139,6 +139,11 @@ type Alert struct {
 	Closed  time.Time `json:"closed"`
 	Status  string    `json:"status"` // open | closed
 	By      string    `json:"by"`     // người đóng, hoặc "tự động"
+	// Giữ = người đã đóng tay cảnh báo này. Lỗi còn nguyên (máy vẫn thiếu bản vá, thiết bị vẫn rớt)
+	// thì KHÔNG được mở lại cảnh báo y hệt — chờ tới khi lỗi thật sự hết, lần hỏng sau mới là chuyện mới.
+	Giu bool `json:"giu,omitempty"`
+	// Lan = số lần thiết bị rớt lại trên CÙNG một cảnh báo, thay cho việc đẻ thêm dòng mới.
+	Lan int `json:"lan,omitempty"`
 }
 
 type Command struct {

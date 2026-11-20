@@ -637,6 +637,7 @@ func (s *Server) hAlerts(w http.ResponseWriter, r *http.Request, me *Account) {
 					return
 				}
 				a.Status, a.Closed, a.By = "closed", time.Now(), me.User
+				a.Giu = true // đóng tay: lỗi còn nguyên thì đừng mở lại cảnh báo y hệt
 				s.save()
 				s.mu.Unlock()
 				s.auditBy(me, r, "Cảnh báo", "Đóng cảnh báo "+a.Msg+" trên "+a.Name, a.Name, false)

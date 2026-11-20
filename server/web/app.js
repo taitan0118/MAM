@@ -1213,7 +1213,8 @@ VIEWS.devices = async v => {
     field('Nhóm', select([['all', t('Tất cả nhóm') + dem(() => true)], ...grps.map(g => [g, g + dem(d => coNhom(d, g))]), ['__none', t('Chưa phân nhóm') + dem(d => !nhomCua(d).length)]], DEVF.g, x => { DEVF.g = x; render(); })),
     field('Loại', select([['all', t('Tất cả loại') + dem(() => true)], ...DEVK.map(([k, l]) => [k, t(l) + dem(d => d.kind === k)])], DEVF.k, x => { DEVF.k = x; render(); })),
     field('Tình trạng', select(DEVST.map(([k, l]) => [k, t(l) + (k === 'all' ? dem(() => true) : dem(d => devHop(d, k)))]), DEVF.st, x => { DEVF.st = x; render(); })),
-    field('Sắp xếp', select(DEVSX.map(([k, l]) => [k, t(l)]), DEVF.sx, x => { DEVF.sx = x; DEVF.nguoc = false; render(); })),
+    // ô này phải nói đúng chiều đang sắp, không thì bấm cột đảo ngược rồi mà ô vẫn ghi 'Tên A→Z'
+    field('Sắp xếp', select(DEVSX.map(([k, l]) => [k, t(l) + (DEVF.nguoc && DEVF.sx === k ? ' ' + t('(ngược)') : '')]), DEVF.sx, x => { DEVF.sx = x; DEVF.nguoc = false; render(); })),
     field('Tìm', searchBox('dvq', DEVF.q, x => DEVF.q = x, t('Tìm tên, IP, nhóm…'))),
     el('div', { style: 'flex:1' }),
     canWrite() ? recheck : null,
