@@ -651,11 +651,23 @@ func (s *Server) hAlerts(w http.ResponseWriter, r *http.Request, me *Account) {
 	st := r.URL.Query().Get("status")
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := []*Alert{}
+	// kèm IP: công ty có nhiều máy trùng tên nên chỉ nhìn tên thì tưởng cảnh báo bị lặp
+	ipMay := map[string]string{}
+	for _, m := range s.st.Machines {
+		ipMay[m.ID] = m.IP
+	}
+	for _, d := range s.st.Devices {
+		ipMay[devAlertID(d.ID)] = d.IP
+	}
+	out := []map[string]interface{}{}
 	for i := len(s.st.Alerts) - 1; i >= 0 && len(out) < 300; i-- {
 		a := s.st.Alerts[i]
 		if (st == "" || a.Status == st) && s.alertVisible(me, a) {
-			out = append(out, a)
+			out = append(out, map[string]interface{}{
+				"id": a.ID, "machine": a.Machine, "name": a.Name, "kind": a.Kind, "sev": a.Sev,
+				"msg": a.Msg, "opened": a.Opened, "closed": a.Closed, "status": a.Status, "by": a.By,
+				"ip": ipMay[a.Machine],
+			})
 		}
 	}
 	jok(w, out)
