@@ -1,7 +1,9 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -777,5 +779,107 @@ func TestDeviceBulk(t *testing.T) {
 	var list []map[string]interface{}
 	if json.Unmarshal(raw, &list); len(list) != 1 || list[0]["id"] != b {
 		t.Fatalf("phải còn đúng C2: %s", raw)
+	}
+}
+
+// Nhập hàng loạt từ file: bỏ dòng thiếu/sai, bỏ dòng trùng IP, chỉ lấy tên và IP.
+func TestDeviceImport(t *testing.T) {
+	f := setup(t)
+	code, _, _ := f.super.do("POST", "/api/devices", map[string]interface{}{"name": "Da co", "ip": "172.20.5.1", "kind": "camera"}, nil)
+	expect(t, code, 200, "thêm sẵn một cái")
+
+	ds := []map[string]string{
+		{"name": "Cam A", "ip": "172.20.5.10"},
+		{"name": "Cam B", "ip": "172.20.5.11"},
+		{"name": "Trùng", "ip": "172.20.5.1"},             // trùng với cái đã có
+		{"name": "Trùng trong file", "ip": "172.20.5.10"}, // trùng ngay trong file
+		{"name": "Thiếu IP", "ip": ""},
+		{"name": "", "ip": "172.20.5.12"}, // thiếu tên
+		{"name": "Ngoài mạng nội bộ", "ip": "8.8.8.8"},
+		{"name": "IP bậy", "ip": "abc"},
+	}
+	code, m, _ := f.super.do("POST", "/api/devices/import", map[string]interface{}{"devices": ds, "kind": "camera", "group": "Camera Hải Quan"}, nil)
+	expect(t, code, 200, "nhập từ file")
+	if m["them"].(float64) != 2 || m["boQua"].(float64) != 6 {
+		t.Fatalf("phải thêm 2 bỏ 6, nhận thêm=%v bỏ=%v", m["them"], m["boQua"])
+	}
+	f.s.mu.RLock()
+	n, nhom := 0, ""
+	for _, d := range f.s.st.Devices {
+		if d.Group == "Camera Hải Quan" {
+			n++
+			nhom = d.Group
+		}
+	}
+	f.s.mu.RUnlock()
+	if n != 2 || nhom != "Camera Hải Quan" {
+		t.Fatalf("phải có 2 thiết bị trong nhóm, nhận %d", n)
+	}
+	code, _, _ = f.super.do("POST", "/api/devices/import", map[string]interface{}{"devices": ds, "kind": "may-bay"}, nil)
+	expect(t, code, 400, "loại lạ")
+	code, _, _ = f.tech.do("POST", "/api/devices/import", map[string]interface{}{"devices": ds, "kind": "camera"}, nil)
+	expect(t, code, 403, "kỹ thuật viên không được nhập")
+}
+
+// Đọc .xlsx: tự dựng một file Excel tối thiểu trong bộ nhớ rồi đọc lại.
+func TestDocXLSX(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	them := func(name, body string) {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.Write([]byte(body))
+	}
+	them("xl/workbook.xml", `<workbook><sheets><sheet name="DS TỔNG" sheetId="1"/><sheet name="Trống" sheetId="2"/></sheets></workbook>`)
+	them("xl/sharedStrings.xml", `<sst><si><t>VỊ TRÍ</t></si><si><t>IP</t></si><si><t>Nhuom 1</t></si><si><t>Chinh Ly</t></si></sst>`)
+	// B2 là số viết thẳng, các ô chữ dùng bảng chuỗi chung; D3 kiểu inlineStr
+	them("xl/worksheets/sheet1.xml", `<worksheet><sheetData>`+
+		`<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>`+
+		`<row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2"><v>172.20.42.140</v></c></row>`+
+		`<row r="3"><c r="A3" t="s"><v>3</v></c><c r="B3"><v>172.20.20.250</v></c><c r="D3" t="inlineStr"><is><t>ghi chú</t></is></c></row>`+
+		`<row r="4"></row>`+
+		`</sheetData></worksheet>`)
+	them("xl/worksheets/sheet2.xml", `<worksheet><sheetData></sheetData></worksheet>`)
+	zw.Close()
+
+	sheets, err := docXLSX(buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sheets) != 1 { // sheet rỗng bị bỏ
+		t.Fatalf("phải còn 1 sheet có dữ liệu, nhận %d", len(sheets))
+	}
+	s := sheets[0]
+	if s.Name != "DS TỔNG" {
+		t.Fatalf("tên sheet sai: %q", s.Name)
+	}
+	if len(s.Rows) != 3 { // dòng rỗng bị bỏ
+		t.Fatalf("phải có 3 dòng, nhận %d: %v", len(s.Rows), s.Rows)
+	}
+	if s.Rows[0][0] != "VỊ TRÍ" || s.Rows[0][1] != "IP" {
+		t.Fatalf("dòng tiêu đề sai: %v", s.Rows[0])
+	}
+	if s.Rows[1][0] != "Nhuom 1" || s.Rows[1][1] != "172.20.42.140" {
+		t.Fatalf("dòng dữ liệu sai: %v", s.Rows[1])
+	}
+	// ô trống ở giữa phải giữ đúng vị trí cột
+	if len(s.Rows[2]) != 4 || s.Rows[2][2] != "" || s.Rows[2][3] != "ghi chú" {
+		t.Fatalf("ô trống không giữ đúng vị trí cột: %v", s.Rows[2])
+	}
+	if _, err := docXLSX([]byte("day khong phai file zip")); err == nil {
+		t.Fatal("file hỏng phải báo lỗi")
+	}
+}
+
+func TestCotSo(t *testing.T) {
+	for _, c := range []struct {
+		ref string
+		n   int
+	}{{"A1", 1}, {"B2", 2}, {"Z9", 26}, {"AA1", 27}, {"AB3", 28}, {"", 0}} {
+		if got := cotSo(c.ref); got != c.n {
+			t.Fatalf("cotSo(%q) = %d, cần %d", c.ref, got, c.n)
+		}
 	}
 }

@@ -528,3 +528,87 @@ func scanSubnet(ctx context.Context, n *net.IPNet, taken map[string]string, sem 
 	wg.Wait()
 	return res, len(ips)
 }
+
+// hDeviceParse: nhận file Excel tải lên, trả bảng chữ của từng sheet để Console cho người dùng chọn
+// cột IP và cột tên. Không lưu file lại, chỉ đọc rồi trả nội dung.
+func (s *Server) hDeviceParse(w http.ResponseWriter, r *http.Request, me *Account) {
+	if me.Role != "super" || r.Method != "POST" {
+		jerr(w, 403, "Chỉ Super admin được làm việc này")
+		return
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, xlsxMaxFile+1))
+	if err != nil || len(b) == 0 {
+		jerr(w, 400, "Không đọc được file")
+		return
+	}
+	if len(b) > xlsxMaxFile {
+		jerr(w, 400, "File quá lớn, tối đa 40 MB")
+		return
+	}
+	sheets, err := docXLSX(b)
+	if err != nil {
+		jerr(w, 400, "Không đọc được file Excel: "+err.Error())
+		return
+	}
+	jok(w, map[string]interface{}{"sheets": sheets})
+}
+
+// hDeviceImport: thêm hàng loạt thiết bị lấy từ file. Bỏ qua dòng trùng IP, trả số thêm được.
+func (s *Server) hDeviceImport(w http.ResponseWriter, r *http.Request, me *Account) {
+	if me.Role != "super" || r.Method != "POST" {
+		jerr(w, 403, "Chỉ Super admin được làm việc này")
+		return
+	}
+	var in struct {
+		Devices []struct{ Name, IP string }
+		Kind    string
+		Group   string
+	}
+	if readJSON(r, &in) != nil || len(in.Devices) == 0 {
+		jerr(w, 400, "Dữ liệu không hợp lệ")
+		return
+	}
+	if !devKinds[in.Kind] {
+		jerr(w, 400, "Chọn loại thiết bị")
+		return
+	}
+	in.Group = strings.TrimSpace(clip(in.Group, 40))
+	s.mu.Lock()
+	daCo := map[string]bool{}
+	for _, d := range s.st.Devices {
+		daCo[d.IP] = true
+	}
+	them, boQua, moi := 0, 0, []*NetDev{}
+	for _, x := range in.Devices {
+		ip := net.ParseIP(strings.TrimSpace(x.IP))
+		ten := strings.TrimSpace(clip(x.Name, 60))
+		if ip == nil || !privateIP(ip) || ten == "" {
+			boQua++
+			continue
+		}
+		v := ip.String()
+		if daCo[v] {
+			boQua++
+			continue
+		}
+		if len(s.st.Devices)+len(moi) >= devMax {
+			break
+		}
+		daCo[v] = true
+		d := &NetDev{ID: rid(5), Name: ten, IP: v, Kind: in.Kind, Group: in.Group}
+		moi = append(moi, d)
+		them++
+	}
+	s.st.Devices = append(s.st.Devices, moi...)
+	s.save()
+	s.mu.Unlock()
+	s.auditBy(me, r, "Thiết bị mạng", "Nhập từ file: thêm "+itoa(them)+" thiết bị vào nhóm "+tenNhom(in.Group), "—", false)
+	if them > 0 {
+		ids := map[string]bool{}
+		for _, d := range moi {
+			ids[d.ID] = true
+		}
+		go s.checkDevices(context.Background(), ids)
+	}
+	jok(w, map[string]interface{}{"them": them, "boQua": boQua})
+}

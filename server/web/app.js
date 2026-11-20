@@ -1187,6 +1187,11 @@ VIEWS.devices = async v => {
     try { await api('POST', '/api/devices/check'); toast(t('Đã kiểm lại')); render(); } catch (e) { fail(e); recheck.disabled = false; recheck.textContent = t('Kiểm lại tất cả'); }
   } }, 'Kiểm lại tất cả');
   const dem = f => ' (' + list.filter(f).length + ')'; // số lượng hiện ngay trong ô lọc, khỏi phải chọn mới biết
+  // Thanh tab theo nhóm: mỗi danh sách thiết bị của công ty là một nhóm, bấm một cái là lọc ngay.
+  if (grps.length) v.append(el('div', { class: 'tabs', style: 'margin-top:12px' },
+    [['all', t('Tất cả')], ...grps.map(g => [g, g]), ...(list.some(d => !d.group) ? [['__none', t('Chưa phân nhóm')]] : [])]
+      .map(([k, l]) => el('button', { class: 'tab' + (DEVF.g === k ? ' on' : ''), onclick: () => { DEVF.g = k; render(); } },
+        l + (k === 'all' ? ' (' + list.length + ')' : k === '__none' ? dem(d => !d.group) : dem(d => d.group === k))))));
   v.append(el('div', { class: 'filters', style: 'margin-top:12px' },
     field('Nhóm', select([['all', t('Tất cả nhóm') + dem(() => true)], ...grps.map(g => [g, g + dem(d => d.group === g)]), ['__none', t('Chưa phân nhóm') + dem(d => !d.group)]], DEVF.g, x => { DEVF.g = x; render(); })),
     field('Loại', select([['all', t('Tất cả loại') + dem(() => true)], ...DEVK.map(([k, l]) => [k, t(l) + dem(d => d.kind === k)])], DEVF.k, x => { DEVF.k = x; render(); })),
@@ -1197,6 +1202,7 @@ VIEWS.devices = async v => {
     canWrite() ? recheck : null,
     isSuper() ? el('button', { class: 'btn', onclick: camChung }, 'Tài khoản camera chung') : null,
     isSuper() ? el('button', { class: 'btn', onclick: () => devScan(grps) }, 'Quét mạng') : null,
+    isSuper() ? el('button', { class: 'btn', onclick: () => nhapFile(grps) }, 'Nhập từ file') : null,
     isSuper() ? el('button', { class: 'btn primary', onclick: () => devAsk(null, grps) }, 'Thêm thiết bị') : null));
   const row = d => {
     const [cls, lbl, sub] = devState(d);
@@ -1270,6 +1276,87 @@ async function camChung() {
      { label: 'Lưu', cls: 'primary', on: async c => {
        try { await api('PUT', '/api/settings', Object.assign({}, st, { camUser: us.value.trim(), camPass: pw.value })); toast(t('Đã lưu')); c(); render(); } catch (e) { err.textContent = trErr(e.message); }
      } }]);
+}
+// Nhập thiết bị từ file Excel công ty đã có sẵn. Server đọc file (xlsx là zip chứa XML, thư viện
+// chuẩn đọc được), Console cho chọn sheet và cột rồi mới thêm.
+const laIP = x => /^\s*(\d{1,3}\.){3}\d{1,3}\s*$/.test(String(x || ''));
+function nhapFile(grps) {
+  const inp = el('input', { type: 'file', accept: '.xlsx', style: 'display:none' });
+  document.body.append(inp);
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0];
+    inp.remove();
+    if (!f) return;
+    let rs;
+    const cho = toast(t('Đang đọc file…'));
+    try {
+      const resp = await fetch('/api/devices/parse', { method: 'POST', headers: { 'X-MAM': '1' }, body: f, credentials: 'same-origin' });
+      rs = await resp.json();
+      if (!resp.ok) throw new Error(rs.error || ('Lỗi ' + resp.status));
+    } catch (e) { fail(e); return; }
+    void cho;
+    chonCot(rs.sheets, grps);
+  };
+  inp.click();
+}
+// Hộp chọn sheet và cột. Đoán sẵn: cột nào nhiều ô dạng IP nhất là cột IP, cột chữ dài nhất là cột tên.
+function chonCot(sheets, grps) {
+  if (!sheets || !sheets.length) { toast(t('File không có dữ liệu đọc được'), 'err'); return; }
+  let iSheet = 0, iIP = 0, iTen = 0;
+  const than = el('div', {});
+  const err = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
+  const kd = select(DEVK.map(([k, l]) => [k, t(l)]), 'camera');
+  const gr = el('input', { class: 'input', list: 'devgrps4', placeholder: t('ví dụ Camera Hải Quan') });
+  const dl = el('datalist', { id: 'devgrps4' }, (grps || []).map(g => el('option', { value: g })));
+  // số ô dạng IP của từng cột, dùng để đoán cột IP
+  const demIP = rows => { const d = []; rows.forEach(r2 => (r2 || []).forEach((v, i) => { if (laIP(v)) d[i] = (d[i] || 0) + 1; })); return d; };
+  const demChu = rows => { const d = []; rows.forEach(r2 => (r2 || []).forEach((v, i) => { if (v && !laIP(v) && String(v).length >= 3) d[i] = (d[i] || 0) + 1; })); return d; };
+  const lonNhat = d => { let b = 0, k = -1; (d || []).forEach((v, i) => { if (v > b) { b = v; k = i; } }); return k; };
+  function ve() {
+    const sh = sheets[iSheet] || { rows: [] };
+    const rows = sh.rows || [];
+    const soCot = rows.reduce((a, r2) => Math.max(a, (r2 || []).length), 0);
+    const cot = Array.from({ length: soCot }, (_, i) => i);
+    const dIP = demIP(rows), dChu = demChu(rows);
+    const dong = rows.filter(r2 => laIP((r2 || [])[iIP]) && String((r2 || [])[iTen] || '').trim());
+    const nhan = i => t('Cột {0}', String.fromCharCode(65 + (i % 26))) + (dIP[i] ? ' · ' + t('{0} ô dạng IP', dIP[i]) : '') + ((rows[0] || [])[i] ? ' · ' + String(rows[0][i]).slice(0, 18) : '');
+    than.innerHTML = '';
+    than.append(
+      el('div', { class: 'filters' },
+        field('Sheet', select(sheets.map((x, i) => [String(i), x.name + ' (' + (x.rows || []).length + ')']), String(iSheet), v => { iSheet = +v; doan(); ve(); })),
+        field('Cột địa chỉ IP', select(cot.map(i => [String(i), nhan(i)]), String(iIP), v => { iIP = +v; ve(); })),
+        field('Cột tên thiết bị', select(cot.map(i => [String(i), nhan(i)]), String(iTen), v => { iTen = +v; ve(); }))),
+      el('div', { class: 'filters', style: 'margin-top:8px' }, field('Loại', kd), field('Nhóm', gr, 'Đặt tên nhóm cho cả lô này, ví dụ Camera Hải Quan')),
+      el('div', { style: 'margin-top:10px;font-size:13px' }, el('b', {}, t('Lấy được {0} dòng', dong.length))),
+      el('div', { style: 'margin-top:6px' }, table(['Tên thiết bị', 'Địa chỉ IP'], dong.slice(0, 8).map(r2 => el('tr', { class: 'nohover' },
+        el('td', {}, String(r2[iTen]).slice(0, 60)), el('td', { class: 'mono' }, String(r2[iIP]).trim()))), 'Chưa chọn đúng cột — xem lại cột IP và cột tên')),
+      dong.length > 8 ? el('div', { style: 'font-size:12px;color:var(--muted);margin-top:6px' }, t('… và {0} dòng nữa', dong.length - 8)) : null);
+    than.lay = () => dong.map(r2 => ({ name: String(r2[iTen]).trim(), ip: String(r2[iIP]).trim() }));
+  }
+  function doan() {
+    const rows = (sheets[iSheet] || {}).rows || [];
+    iIP = Math.max(0, lonNhat(demIP(rows)));
+    const dChu = demChu(rows);
+    dChu[iIP] = 0;
+    // ưu tiên cột mà tiêu đề có chữ Tên / Vị trí / Name — file công ty hay có cả cột tiếng Trung
+    let theoTieuDe = -1;
+    rows.slice(0, 4).forEach(r2 => (r2 || []).forEach((v, i) => {
+      if (theoTieuDe < 0 && i !== iIP && dChu[i] && /t[êe]n|v[ịi] tr[íi]|name|location/i.test(String(v || ''))) theoTieuDe = i;
+    }));
+    iTen = theoTieuDe >= 0 ? theoTieuDe : Math.max(0, lonNhat(dChu));
+  }
+  doan(); ve();
+  modal(t('Nhập thiết bị từ file'), el('div', {}, dl, than, err,
+    infoNote('Server chỉ lấy tên và địa chỉ IP. Những cột khác trong file (tài khoản, mật khẩu, ghi chú) không được đọc vào MAM.'),
+    infoNote('Dòng nào trùng IP với thiết bị đã có thì bỏ qua, không thêm trùng.')),
+    [{ label: 'Hủy', on: c => c() }, { label: 'Nhập', cls: 'primary', on: async c => {
+      const ds = than.lay ? than.lay() : [];
+      if (!ds.length) { err.textContent = t('Chưa lấy được dòng nào — xem lại cột IP và cột tên'); return; }
+      try {
+        const r2 = await api('POST', '/api/devices/import', { devices: ds, kind: kd.value, group: gr.value });
+        c(); toast(t('Đã thêm {0} thiết bị, bỏ qua {1} dòng', r2.them, r2.boQua)); render();
+      } catch (e) { err.textContent = trErr(e.message); }
+    } }], true);
 }
 // Xếp cả lô thiết bị đã chọn vào một nhóm.
 function xepNhomHangLoat(grps, lam) {
