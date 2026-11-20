@@ -1106,6 +1106,20 @@ var EN = {
 "Dòng nào trùng IP với thiết bị đã có thì bỏ qua, không thêm trùng.": "Rows whose IP already belongs to a device are skipped, so nothing is added twice.",
 "File quá lớn, tối đa 40 MB": "The file is too large, 40 MB at most",
 "Không đọc được file": "The file could not be read",
+"Cột nhóm (tuỳ chọn)": "Group column (optional)",
+"(không dùng)": "(not used)",
+"Lấy cột vị trí trong file làm nhóm con, ví dụ Hành Chính, Nhuộm 2, Dệt 1": "Use the location column in the file as a sub-group, for example Admin, Dyeing 2, Weaving 1",
+"Nhóm con": "Sub-group",
+"Nhóm tổng cho cả lô": "Overall group for this batch",
+"Áp cho mọi dòng trong file, ví dụ Camera CTC. Nhiều nhóm thì cách nhau bằng dấu phẩy.": "Applied to every row in the file, for example CTC cameras. Separate several groups with commas.",
+"Đã thêm {0} thiết bị, gộp nhóm cho {1} cái đã có, bỏ qua {2} dòng": "Added {0} devices, merged groups into {1} existing ones, skipped {2} rows",
+"Dòng trùng IP với thiết bị đã có thì không thêm trùng, nhưng vẫn được GỘP THÊM NHÓM — nên camera khu Hải Quan vừa nằm trong nhóm Hải Quan vừa còn nguyên trong nhóm tổng CTC.": "A row whose IP already belongs to a device is not added twice, but its group IS merged in — so a customs-area camera sits in the customs group while staying in the overall group.",
+"Nhiều nhóm thì cách nhau bằng dấu phẩy. Một camera có thể vừa thuộc nhóm tổng vừa thuộc nhóm khu vực.": "Separate several groups with commas. A camera can belong to the overall group and an area group at once.",
+"Nhiều nhóm thì cách nhau bằng dấu phẩy. Để trống rồi bấm Thay nhóm là bỏ hết nhóm.": "Separate several groups with commas. Leave it empty and press Replace to clear all groups.",
+"Thêm vào nhóm: giữ nguyên nhóm cũ, chỉ thêm nhóm mới — dùng khi một camera vừa thuộc nhóm tổng vừa thuộc nhóm khu vực. Thay nhóm: bỏ hết nhóm cũ.": "Add to group keeps the existing groups and only adds the new one — use it when a camera belongs to both an overall group and an area group. Replace clears the old groups.",
+"Thay nhóm": "Replace groups",
+"Thêm vào nhóm": "Add to group",
+"Chi tiết": "Details",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -2367,6 +2381,20 @@ var ZH = {
 "Dòng nào trùng IP với thiết bị đã có thì bỏ qua, không thêm trùng.": "IP 与已有设备重复的行将被跳过，不会重复添加。",
 "File quá lớn, tối đa 40 MB": "文件过大，最多 40 MB",
 "Không đọc được file": "无法读取该文件",
+"Cột nhóm (tuỳ chọn)": "分组列（可选）",
+"(không dùng)": "（不使用）",
+"Lấy cột vị trí trong file làm nhóm con, ví dụ Hành Chính, Nhuộm 2, Dệt 1": "将文件中的位置列作为子分组，例如：行政、染二、织一",
+"Nhóm con": "子分组",
+"Nhóm tổng cho cả lô": "本批设备的总分组",
+"Áp cho mọi dòng trong file, ví dụ Camera CTC. Nhiều nhóm thì cách nhau bằng dấu phẩy.": "应用于文件中的每一行，例如“CTC 摄像机”。多个分组之间用逗号分隔。",
+"Đã thêm {0} thiết bị, gộp nhóm cho {1} cái đã có, bỏ qua {2} dòng": "已添加 {0} 台设备，为 {1} 台已有设备合并分组，跳过 {2} 行",
+"Dòng trùng IP với thiết bị đã có thì không thêm trùng, nhưng vẫn được GỘP THÊM NHÓM — nên camera khu Hải Quan vừa nằm trong nhóm Hải Quan vừa còn nguyên trong nhóm tổng CTC.": "IP 与已有设备重复的行不会重复添加，但其分组会被合并 — 因此海关区摄像机既属于海关分组，也仍保留在总分组中。",
+"Nhiều nhóm thì cách nhau bằng dấu phẩy. Một camera có thể vừa thuộc nhóm tổng vừa thuộc nhóm khu vực.": "多个分组之间用逗号分隔。一台摄像机可同时属于总分组和区域分组。",
+"Nhiều nhóm thì cách nhau bằng dấu phẩy. Để trống rồi bấm Thay nhóm là bỏ hết nhóm.": "多个分组之间用逗号分隔。留空后点击“替换分组”即可清除全部分组。",
+"Thêm vào nhóm: giữ nguyên nhóm cũ, chỉ thêm nhóm mới — dùng khi một camera vừa thuộc nhóm tổng vừa thuộc nhóm khu vực. Thay nhóm: bỏ hết nhóm cũ.": "“加入分组”保留原有分组，仅添加新分组 — 适用于摄像机同时属于总分组和区域分组。“替换分组”则清除原有分组。",
+"Thay nhóm": "替换分组",
+"Thêm vào nhóm": "加入分组",
+"Chi tiết": "详情",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -2491,6 +2519,21 @@ var ZH = {
 "Bản quyền © 2026 Nguyễn Tấn Tài (Missing)": "版权所有 © 2026 Nguyễn Tấn Tài (Missing)",
 };
 var PAT = [
+[
+"^Mất kết nối (d+) phút$",
+"Lost connection for $1 min",
+"失去连接 $1 分钟"
+],
+[
+"^Mất kết nối (d+) tiếng (d+) phút$",
+"Lost connection for $1 h $2 min",
+"失去连接 $1 小时 $2 分钟"
+],
+[
+"^Mất kết nối (d+) ngày (d+) giờ (d+) phút$",
+"Lost connection for $1 d $2 h $3 min",
+"失去连接 $1 天 $2 小时 $3 分钟"
+],
 [
 "^Không đọc được file Excel: (.+)$",
 "The Excel file could not be read: $1",

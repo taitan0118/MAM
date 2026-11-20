@@ -36,7 +36,9 @@ func (s *Server) checkMachine(m *Machine, l *Live) {
 // cond mở cảnh báo khi điều kiện đúng, tự đóng khi hết đúng.
 func (s *Server) cond(m *Machine, kind, sev string, on bool, msg string) {
 	var open *Alert
-	for i := len(s.st.Alerts) - 1; i >= 0 && i > len(s.st.Alerts)-400; i-- {
+	// Phải dò HẾT: trước đây chỉ dò ngược 400 dòng nên khi cảnh báo nhiều hơn thế, cái đang mở nằm
+	// ngoài tầm dò và mỗi lượt kiểm lại mở thêm một cái y hệt.
+	for i := len(s.st.Alerts) - 1; i >= 0; i-- {
 		a := s.st.Alerts[i]
 		if a.Machine == m.ID && a.Kind == kind && a.Status == "open" {
 			open = a
@@ -56,6 +58,25 @@ func (s *Server) cond(m *Machine, kind, sev string, on bool, msg string) {
 	}
 }
 
+// donCanhBaoTrung đóng bớt cảnh báo trùng đã lỡ sinh ra do lỗi dò 400 dòng: mỗi máy + mỗi loại chỉ
+// giữ lại một cảnh báo đang mở (cái cũ nhất), còn lại đóng hết. Gọi khi đang giữ s.mu.
+func (s *Server) donCanhBaoTrung() int {
+	giu, n := map[string]bool{}, 0
+	for _, a := range s.st.Alerts {
+		if a.Status != "open" {
+			continue
+		}
+		k := a.Machine + "\x00" + a.Kind
+		if giu[k] {
+			a.Status, a.Closed, a.By = "closed", time.Now(), "tự động (trùng)"
+			n++
+			continue
+		}
+		giu[k] = true
+	}
+	return n
+}
+
 // watchdog chạy nền: mất kết nối, lệnh treo, lưu lastSeen, sao lưu hằng ngày.
 func (s *Server) watchdog() {
 	tick := time.NewTicker(15 * time.Second)
@@ -70,7 +91,7 @@ func (s *Server) watchdog() {
 			}
 			gap := now.Sub(m.LastSeen)
 			if gap > time.Duration(cfg.OfflineMin*float64(time.Minute)) {
-				s.cond(m, "offline", "crit", true, fmt.Sprintf("Mất kết nối %.0f phút", gap.Minutes()))
+				s.cond(m, "offline", "crit", true, "Mất kết nối "+khoangVN(int(gap.Minutes())))
 			}
 			// máy tắt (không báo về) nhiều ngày liền: cảnh báo riêng, tự đóng khi máy bật lại hoặc khi tắt ngưỡng
 			long := cfg.OfflineDays > 0 && gap > time.Duration(cfg.OfflineDays*float64(24*time.Hour))
@@ -202,6 +223,17 @@ func (s *Server) sameThreatAlert(machine, kind, base string) *Alert {
 
 // patchCheck cảnh báo khi máy Windows hơn 90 ngày chưa cài bản vá nào (lastPatch do agent đọc từ Get-HotFix);
 // tự đóng khi đã vá. Gọi khi đang giữ s.mu.
+// khoangVN đổi số phút thành câu dễ đọc: 45 phút / 2 tiếng 46 phút / 1 ngày 0 giờ 34 phút.
+func khoangVN(phut int) string {
+	if phut < 60 {
+		return itoa(phut) + " phút"
+	}
+	if phut < 24*60 {
+		return itoa(phut/60) + " tiếng " + itoa(phut%60) + " phút"
+	}
+	return itoa(phut/(24*60)) + " ngày " + itoa(phut%(24*60)/60) + " giờ " + itoa(phut%60) + " phút"
+}
+
 func (s *Server) patchCheck(m *Machine) {
 	lp, _ := m.Hw["lastPatch"].(string)
 	t, err := time.Parse("2006-01-02", lp)

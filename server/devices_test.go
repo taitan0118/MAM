@@ -238,8 +238,8 @@ func TestDevicesAPI(t *testing.T) {
 	if json.Unmarshal(raw, &list) != nil || len(list) != 1 {
 		t.Fatalf("danh sách phải có 1 thiết bị: %s", raw)
 	}
-	if list[0]["group"] != "Camera tầng 1" {
-		t.Fatalf("nhóm sai: %v", list[0]["group"])
+	if g, _ := list[0]["groups"].([]interface{}); len(g) != 1 || g[0] != "Camera tầng 1" {
+		t.Fatalf("nhóm sai: %v", list[0]["groups"])
 	}
 
 	// chỉ Super admin được thêm/sửa/xóa
@@ -269,7 +269,11 @@ func TestDevicesAPI(t *testing.T) {
 	expect(t, code, 200, "sửa thiết bị")
 	f.s.mu.RLock()
 	d := f.s.st.Devices[0]
-	keptPass, name, ip, grp := d.Pass, d.Name, d.IP, d.Group
+	grp := ""
+	if g := nhomCua(d); len(g) > 0 {
+		grp = g[0]
+	}
+	keptPass, name, ip := d.Pass, d.Name, d.IP
 	f.s.mu.RUnlock()
 	if keptPass != "bimat" {
 		t.Fatalf("để trống mật khẩu phải giữ mật khẩu cũ, nhận %q", keptPass)
@@ -303,7 +307,7 @@ func TestDevicesLuuVaoDB(t *testing.T) {
 	if _, ok, err := loadState(f.s.db, &st); err != nil || !ok {
 		t.Fatalf("đọc lại DB: ok=%v err=%v", ok, err)
 	}
-	if len(st.Devices) != 1 || st.Devices[0].Name != "Switch tầng 1" || st.Devices[0].Group != "Switch" {
+	if len(st.Devices) != 1 || st.Devices[0].Name != "Switch tầng 1" || len(st.Devices[0].Groups) != 1 || st.Devices[0].Groups[0] != "Switch" {
 		t.Fatalf("thiết bị phải còn trong DB: %+v", st.Devices)
 	}
 	if st.Devices[0].Up {
@@ -761,7 +765,11 @@ func TestDeviceBulk(t *testing.T) {
 	f.s.mu.RLock()
 	nhom := map[string]string{}
 	for _, d := range f.s.st.Devices {
-		nhom[d.ID] = d.Group
+		if g := nhomCua(d); len(g) > 0 {
+			nhom[d.ID] = g[0]
+		} else {
+			nhom[d.ID] = ""
+		}
 	}
 	f.s.mu.RUnlock()
 	if nhom[a] != "Camera kho" || nhom[b] != "Camera kho" || nhom[c] != "" {
@@ -800,20 +808,22 @@ func TestDeviceImport(t *testing.T) {
 	}
 	code, m, _ := f.super.do("POST", "/api/devices/import", map[string]interface{}{"devices": ds, "kind": "camera", "group": "Camera Hải Quan"}, nil)
 	expect(t, code, 200, "nhập từ file")
-	if m["them"].(float64) != 2 || m["boQua"].(float64) != 6 {
-		t.Fatalf("phải thêm 2 bỏ 6, nhận thêm=%v bỏ=%v", m["them"], m["boQua"])
+	// dòng trùng IP với thiết bị đã có giờ được GỘP NHÓM chứ không bỏ hẳn
+	if m["them"].(float64) != 2 || m["gop"].(float64) != 1 || m["boQua"].(float64) != 5 {
+		t.Fatalf("phải thêm 2 gộp 1 bỏ 5, nhận thêm=%v gộp=%v bỏ=%v", m["them"], m["gop"], m["boQua"])
 	}
 	f.s.mu.RLock()
 	n, nhom := 0, ""
 	for _, d := range f.s.st.Devices {
-		if d.Group == "Camera Hải Quan" {
+		if len(nhomCua(d)) > 0 && nhomCua(d)[0] == "Camera Hải Quan" {
 			n++
-			nhom = d.Group
+			nhom = nhomCua(d)[0]
 		}
 	}
 	f.s.mu.RUnlock()
-	if n != 2 || nhom != "Camera Hải Quan" {
-		t.Fatalf("phải có 2 thiết bị trong nhóm, nhận %d", n)
+	// 2 cái mới + 1 cái đã có được gộp thêm nhóm
+	if n != 3 || nhom != "Camera Hải Quan" {
+		t.Fatalf("phải có 3 thiết bị mang nhóm này, nhận %d", n)
 	}
 	code, _, _ = f.super.do("POST", "/api/devices/import", map[string]interface{}{"devices": ds, "kind": "may-bay"}, nil)
 	expect(t, code, 400, "loại lạ")
@@ -881,5 +891,143 @@ func TestCotSo(t *testing.T) {
 		if got := cotSo(c.ref); got != c.n {
 			t.Fatalf("cotSo(%q) = %d, cần %d", c.ref, got, c.n)
 		}
+	}
+}
+
+// Một thiết bị thuộc nhiều nhóm; nhập file trùng IP thì gộp nhóm chứ không bỏ qua.
+func TestNhieuNhom(t *testing.T) {
+	f := setup(t)
+	// nhập lần đầu: nhóm tổng + nhóm con theo từng dòng
+	ds := []map[string]string{
+		{"name": "Cam 1", "ip": "172.20.11.230", "group": "Nhuộm 1"},
+		{"name": "Cam 2", "ip": "172.20.30.232", "group": "Sợi 2"},
+	}
+	code, m, _ := f.super.do("POST", "/api/devices/import", map[string]interface{}{"devices": ds, "kind": "camera", "groups": []string{"Camera CTC"}}, nil)
+	expect(t, code, 200, "nhập lần đầu")
+	if m["them"].(float64) != 2 {
+		t.Fatalf("phải thêm 2, nhận %v", m["them"])
+	}
+	nhom := func(ip string) []string {
+		f.s.mu.RLock()
+		defer f.s.mu.RUnlock()
+		for _, d := range f.s.st.Devices {
+			if d.IP == ip {
+				return nhomCua(d)
+			}
+		}
+		return nil
+	}
+	if g := nhom("172.20.11.230"); len(g) != 2 || g[0] != "Camera CTC" || g[1] != "Nhuộm 1" {
+		t.Fatalf("phải thuộc cả nhóm tổng lẫn nhóm con, nhận %v", g)
+	}
+
+	// nhập danh sách thứ hai trùng IP: không thêm trùng nhưng GỘP thêm nhóm
+	code, m, _ = f.super.do("POST", "/api/devices/import", map[string]interface{}{
+		"devices": []map[string]string{{"name": "Cam 2 (HQ)", "ip": "172.20.30.232"}},
+		"kind":    "camera", "groups": []string{"Camera Hải Quan"}}, nil)
+	expect(t, code, 200, "nhập danh sách thứ hai")
+	if m["them"].(float64) != 0 || m["gop"].(float64) != 1 {
+		t.Fatalf("phải thêm 0 gộp 1, nhận thêm=%v gộp=%v", m["them"], m["gop"])
+	}
+	g := nhom("172.20.30.232")
+	if len(g) != 3 || g[2] != "Camera Hải Quan" {
+		t.Fatalf("camera Hải Quan phải vẫn thuộc nhóm tổng CTC và có thêm nhóm Hải Quan, nhận %v", g)
+	}
+	// gộp lần nữa cùng nhóm thì không đổi gì
+	code, m, _ = f.super.do("POST", "/api/devices/import", map[string]interface{}{
+		"devices": []map[string]string{{"name": "Cam 2 (HQ)", "ip": "172.20.30.232"}},
+		"kind":    "camera", "groups": []string{"Camera Hải Quan"}}, nil)
+	expect(t, code, 200, "nhập lại lần nữa")
+	if m["gop"].(float64) != 0 || m["boQua"].(float64) != 1 {
+		t.Fatalf("nhóm đã có thì không gộp nữa: gộp=%v bỏ=%v", m["gop"], m["boQua"])
+	}
+}
+
+func TestDonNhomVaThemNhom(t *testing.T) {
+	if g := donNhom([]string{" A ", "A", "", "B", "A "}); len(g) != 2 || g[0] != "A" || g[1] != "B" {
+		t.Fatalf("phải bỏ trùng và bỏ rỗng, nhận %v", g)
+	}
+	nhieu := make([]string, 20)
+	for i := range nhieu {
+		nhieu[i] = "N" + itoa(i)
+	}
+	if g := donNhom(nhieu); len(g) != 10 {
+		t.Fatalf("tối đa 10 nhóm, nhận %d", len(g))
+	}
+	d := &NetDev{Group: "Cũ"} // dữ liệu bản cũ một nhóm
+	if g := nhomCua(d); len(g) != 1 || g[0] != "Cũ" {
+		t.Fatalf("phải chuyển được nhóm kiểu cũ, nhận %v", g)
+	}
+	if !themNhom(d, []string{"Mới"}) || len(nhomCua(d)) != 2 {
+		t.Fatalf("thêm nhóm hỏng: %v", nhomCua(d))
+	}
+	if themNhom(d, []string{"Mới"}) {
+		t.Fatal("thêm nhóm đã có thì phải trả false")
+	}
+}
+
+func TestKhoangVN(t *testing.T) {
+	for _, c := range []struct {
+		phut int
+		muon string
+	}{
+		{0, "0 phút"}, {45, "45 phút"}, {59, "59 phút"},
+		{60, "1 tiếng 0 phút"}, {166, "2 tiếng 46 phút"}, {1303, "21 tiếng 43 phút"},
+		{1440, "1 ngày 0 giờ 0 phút"}, {1474, "1 ngày 0 giờ 34 phút"}, {2192, "1 ngày 12 giờ 32 phút"},
+	} {
+		if got := khoangVN(c.phut); got != c.muon {
+			t.Fatalf("khoangVN(%d) = %q, cần %q", c.phut, got, c.muon)
+		}
+	}
+}
+
+// Cảnh báo không được lặp lại dù danh sách đã dài hơn tầm dò cũ (400 dòng).
+func TestCanhBaoKhongLap(t *testing.T) {
+	f := setup(t)
+	m := &Machine{ID: "mx", Name: "Máy thử"}
+	f.s.mu.Lock()
+	// nhồi cho danh sách dài hơn 400 dòng đã đóng
+	for i := 0; i < 500; i++ {
+		f.s.st.Alerts = append(f.s.st.Alerts, &Alert{ID: rid(5), Machine: "khac", Kind: "disk", Status: "closed"})
+	}
+	f.s.cond(m, "patch", "warn", true, "Máy chưa cài bản vá Windows nào trong 2192 ngày")
+	for i := 0; i < 300; i++ { // thêm nữa để cảnh báo vừa mở lùi ra ngoài tầm dò cũ
+		f.s.st.Alerts = append(f.s.st.Alerts, &Alert{ID: rid(5), Machine: "khac", Kind: "disk", Status: "closed"})
+	}
+	f.s.cond(m, "patch", "warn", true, "Máy chưa cài bản vá Windows nào trong 2192 ngày")
+	f.s.cond(m, "patch", "warn", true, "Máy chưa cài bản vá Windows nào trong 2192 ngày")
+	mo := 0
+	for _, a := range f.s.st.Alerts {
+		if a.Machine == "mx" && a.Kind == "patch" && a.Status == "open" {
+			mo++
+		}
+	}
+	f.s.mu.Unlock()
+	if mo != 1 {
+		t.Fatalf("một máy một loại chỉ được một cảnh báo đang mở, nhận %d", mo)
+	}
+}
+
+func TestDonCanhBaoTrung(t *testing.T) {
+	f := setup(t)
+	f.s.mu.Lock()
+	for i := 0; i < 4; i++ {
+		f.s.st.Alerts = append(f.s.st.Alerts, &Alert{ID: rid(5), Machine: "m1", Kind: "patch", Status: "open", Opened: time.Now()})
+	}
+	f.s.st.Alerts = append(f.s.st.Alerts, &Alert{ID: rid(5), Machine: "m1", Kind: "disk", Status: "open"})
+	f.s.st.Alerts = append(f.s.st.Alerts, &Alert{ID: rid(5), Machine: "m2", Kind: "patch", Status: "open"})
+	n := f.s.donCanhBaoTrung()
+	mo := map[string]int{}
+	for _, a := range f.s.st.Alerts {
+		if a.Status == "open" {
+			mo[a.Machine+"/"+a.Kind]++
+		}
+	}
+	f.s.mu.Unlock()
+	if n != 3 {
+		t.Fatalf("phải đóng 3 cái trùng, nhận %d", n)
+	}
+	if mo["m1/patch"] != 1 || mo["m1/disk"] != 1 || mo["m2/patch"] != 1 {
+		t.Fatalf("mỗi máy mỗi loại phải còn đúng 1: %v", mo)
 	}
 }

@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.81"
+const Version = "1.1.82"
 
 //go:embed web
 var webFS embed.FS
@@ -156,6 +156,13 @@ func main() {
 		log.Fatalf(T("Không đọc được dữ liệu ở %s: %v"), *dir, err)
 	}
 	s.boot = boot
+	// dọn cảnh báo trùng đã lỡ sinh ra ở bản cũ (lỗi chỉ dò 400 dòng gần nhất)
+	s.mu.Lock()
+	if n := s.donCanhBaoTrung(); n > 0 {
+		s.save()
+		log.Printf(T("Đã đóng %d cảnh báo trùng"), n)
+	}
+	s.mu.Unlock()
 	go s.watchdog()
 	go s.schedLoop()
 	go s.devLoop()

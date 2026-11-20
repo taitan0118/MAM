@@ -373,7 +373,7 @@ func csvSafe(s string) string { // chống chèn công thức khi mở bằng Ex
 	return s
 }
 
-var exportNames = map[string]string{"requests": "Yêu cầu hỗ trợ", "alerts": "Cảnh báo", "machines": "Máy", "inventory": "Kiểm kê", "uptime": "Thời gian hoạt động"}
+var exportNames = map[string]string{"requests": "Yêu cầu hỗ trợ", "alerts": "Cảnh báo", "machines": "Máy", "inventory": "Kiểm kê", "uptime": "Thời gian hoạt động", "devices": "Thiết bị mạng"}
 var reqStatusVN = map[string]string{"new": "Mới", "working": "Đang xử lý", "done": "Đã xong"}
 
 // exportRows: gọi khi đang giữ s.mu.
@@ -381,6 +381,28 @@ func (s *Server) exportRows(what, group string, me *Account) ([][]string, bool) 
 	inG := s.groupPred(me, group)
 	rows := [][]string{}
 	switch what {
+	case "devices": // xuất ra đúng kiểu nhập vào được, để sửa ngoài Excel rồi nhập lại
+		rows = append(rows, []string{"Tên thiết bị", "Địa chỉ IP", "Loại", "Nhóm", "Cổng", "Đường RTSP", "Tình trạng", "Chi tiết", "Từ lúc", "Kiểm lúc"})
+		for _, d := range s.st.Devices {
+			tt, ct := "Chưa kiểm", ""
+			if !d.Checked.IsZero() {
+				switch {
+				case !d.Up:
+					tt = "Mất kết nối"
+				case s.doHinh(d) && !d.Video:
+					tt, ct = "Sống nhưng không ra hình", congMo(d.Ports)
+				case s.doHinh(d):
+					tt, ct = "Có hình", itoa(d.Kbps)+" kbps"
+				default:
+					tt, ct = "Hoạt động", congMo(d.Ports)
+				}
+			}
+			port := ""
+			if d.Port > 0 {
+				port = itoa(d.Port)
+			}
+			rows = append(rows, []string{d.Name, d.IP, devKindVN(d.Kind), strings.Join(nhomCua(d), ", "), port, d.Path, tt, ct, gioPhut(d.Since), gioPhut(d.Checked)})
+		}
 	case "machines":
 		rows = append(rows, []string{"Tên máy", "Nhóm", "IP", "MAC", "Hệ điều hành", "Trạng thái", "CPU %", "RAM %", "Nhiệt độ °C", "Ổ trống nhất %", "Người dùng", "Thấy lần cuối"})
 		for _, m := range s.st.Machines {

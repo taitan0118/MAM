@@ -321,7 +321,7 @@ VIEWS.overview = async v => {
   const devCard = !dv.length ? null : card('Thiết bị mạng', null, el('div', { class: 'scrollbox short' }, dvBad.length
     ? dvBad.sort((a, b) => (a.up ? 1 : 0) - (b.up ? 1 : 0)).map(d => { const [cls, lbl, sub] = devState(d);
       return el('div', { style: rowCss, onclick: () => go('devices') }, pill(cls, t(lbl)),
-        el('div', { style: 'flex:1;min-width:0' }, el('b', {}, d.name), el('div', { style: 'font-size:12.5px;color:var(--muted)' }, d.ip + (d.group ? ' · ' + d.group : ''))),
+        el('div', { style: 'flex:1;min-width:0' }, el('b', {}, d.name), el('div', { style: 'font-size:12.5px;color:var(--muted)' }, d.ip + (nhomCua(d).length ? ' · ' + nhomCua(d).join(', ') : ''))),
         el('span', { style: 'font-size:12px;color:var(--faint);white-space:nowrap' }, d.since ? ago(d.since) : '')); })
     : el('div', { class: 'empty' }, t('Tất cả {0} thiết bị đang hoạt động', dv.length))),
     el('button', { class: 'btn', style: 'padding:2px 9px;font-size:12px', onclick: () => go('devices') }, 'Xem tất cả'));
@@ -1146,6 +1146,10 @@ VIEWS.discover = async v => {
 const DEVK = [['camera', 'Camera'], ['attend', 'Máy chấm công'], ['switch', 'Switch'], ['router', 'Router'], ['wifi', 'Thiết bị WiFi'], ['led', 'Bảng LED'], ['other', 'Khác']];
 const devKind = k => ((DEVK.find(x => x[0] === k) || [0, 'Khác'])[1]);
 const DEVF = { g: 'all', k: 'all', st: 'all', sx: 'loi', q: '', chon: new Set() };
+// Một thiết bị thuộc nhiều nhóm: camera khu Hải Quan vừa nằm trong nhóm Hải Quan để xem riêng,
+// vừa nằm trong nhóm chung của công ty để đếm chung.
+const nhomCua = d => (d && d.groups) || [];
+const coNhom = (d, g) => nhomCua(d).indexOf(g) >= 0;
 // Tình trạng để lọc, và cách sắp xếp. 'loi' = cái đang hỏng lên đầu.
 const DEVST = [['all', 'Mọi tình trạng'], ['up', 'Đang hoạt động'], ['down', 'Mất kết nối'], ['novideo', 'Camera không ra hình'], ['new', 'Chưa kiểm']];
 const DEVSX = [['loi', 'Đang hỏng lên đầu'], ['name', 'Tên A→Z'], ['ip', 'Địa chỉ IP'], ['group', 'Nhóm'], ['kind', 'Loại'], ['checked', 'Kiểm gần nhất']];
@@ -1163,18 +1167,18 @@ function devState(d) {
 }
 VIEWS.devices = async v => {
   let list = await api('GET', '/api/devices');
-  const grps = [...new Set(list.map(d => d.group).filter(Boolean))].sort();
+  const grps = [...new Set(list.flatMap(nhomCua))].sort();
   if (DEVF.g !== 'all' && DEVF.g !== '__none' && grps.indexOf(DEVF.g) < 0) DEVF.g = 'all';
   const xep = {
     loi: (a, b) => devXau(a) - devXau(b) || a.name.localeCompare(b.name),
     name: (a, b) => a.name.localeCompare(b.name),
     ip: (a, b) => devSoIP(a) - devSoIP(b),
-    group: (a, b) => (a.group || '\uffff').localeCompare(b.group || '\uffff') || a.name.localeCompare(b.name),
+    group: (a, b) => (nhomCua(a)[0] || '\uffff').localeCompare(nhomCua(b)[0] || '\uffff') || a.name.localeCompare(b.name),
     kind: (a, b) => t(devKind(a.kind)).localeCompare(t(devKind(b.kind))) || a.name.localeCompare(b.name),
     checked: (a, b) => String(b.checked).localeCompare(String(a.checked)),
   };
-  const shown = list.filter(d => (DEVF.g === 'all' || (DEVF.g === '__none' ? !d.group : d.group === DEVF.g))
-    && (DEVF.k === 'all' || d.kind === DEVF.k) && devHop(d, DEVF.st) && hit(DEVF.q, d.name, d.ip, d.group))
+  const shown = list.filter(d => (DEVF.g === 'all' || (DEVF.g === '__none' ? !nhomCua(d).length : coNhom(d, DEVF.g)))
+    && (DEVF.k === 'all' || d.kind === DEVF.k) && devHop(d, DEVF.st) && hit(DEVF.q, d.name, d.ip, nhomCua(d).join(' ')))
     .sort(xep[DEVF.sx] || xep.loi);
   const noVid = list.filter(d => d.done && d.up && d.vid && !d.video).length;
   v.append(el('div', { class: 'kpis' },
@@ -1189,11 +1193,11 @@ VIEWS.devices = async v => {
   const dem = f => ' (' + list.filter(f).length + ')'; // số lượng hiện ngay trong ô lọc, khỏi phải chọn mới biết
   // Thanh tab theo nhóm: mỗi danh sách thiết bị của công ty là một nhóm, bấm một cái là lọc ngay.
   if (grps.length) v.append(el('div', { class: 'tabs', style: 'margin-top:12px' },
-    [['all', t('Tất cả')], ...grps.map(g => [g, g]), ...(list.some(d => !d.group) ? [['__none', t('Chưa phân nhóm')]] : [])]
+    [['all', t('Tất cả')], ...grps.map(g => [g, g]), ...(list.some(d => !nhomCua(d).length) ? [['__none', t('Chưa phân nhóm')]] : [])]
       .map(([k, l]) => el('button', { class: 'tab' + (DEVF.g === k ? ' on' : ''), onclick: () => { DEVF.g = k; render(); } },
-        l + (k === 'all' ? ' (' + list.length + ')' : k === '__none' ? dem(d => !d.group) : dem(d => d.group === k))))));
+        l + (k === 'all' ? ' (' + list.length + ')' : k === '__none' ? dem(d => !nhomCua(d).length) : dem(d => coNhom(d, k)))))));
   v.append(el('div', { class: 'filters', style: 'margin-top:12px' },
-    field('Nhóm', select([['all', t('Tất cả nhóm') + dem(() => true)], ...grps.map(g => [g, g + dem(d => d.group === g)]), ['__none', t('Chưa phân nhóm') + dem(d => !d.group)]], DEVF.g, x => { DEVF.g = x; render(); })),
+    field('Nhóm', select([['all', t('Tất cả nhóm') + dem(() => true)], ...grps.map(g => [g, g + dem(d => coNhom(d, g))]), ['__none', t('Chưa phân nhóm') + dem(d => !nhomCua(d).length)]], DEVF.g, x => { DEVF.g = x; render(); })),
     field('Loại', select([['all', t('Tất cả loại') + dem(() => true)], ...DEVK.map(([k, l]) => [k, t(l) + dem(d => d.kind === k)])], DEVF.k, x => { DEVF.k = x; render(); })),
     field('Tình trạng', select(DEVST.map(([k, l]) => [k, t(l) + (k === 'all' ? dem(() => true) : dem(d => devHop(d, k)))]), DEVF.st, x => { DEVF.st = x; render(); })),
     field('Sắp xếp', select(DEVSX.map(([k, l]) => [k, t(l)]), DEVF.sx, x => { DEVF.sx = x; render(); })),
@@ -1203,6 +1207,8 @@ VIEWS.devices = async v => {
     isSuper() ? el('button', { class: 'btn', onclick: camChung }, 'Tài khoản camera chung') : null,
     isSuper() ? el('button', { class: 'btn', onclick: () => devScan(grps) }, 'Quét mạng') : null,
     isSuper() ? el('button', { class: 'btn', onclick: () => nhapFile(grps) }, 'Nhập từ file') : null,
+    el('button', { class: 'btn', onclick: () => { location.href = '/api/export/devices.xlsx'; } }, 'Xuất Excel'),
+    el('button', { class: 'btn', onclick: () => { location.href = '/api/export/devices.csv'; } }, 'Xuất CSV'),
     isSuper() ? el('button', { class: 'btn primary', onclick: () => devAsk(null, grps) }, 'Thêm thiết bị') : null));
   const row = d => {
     const [cls, lbl, sub] = devState(d);
@@ -1211,7 +1217,7 @@ VIEWS.devices = async v => {
       isSuper() ? el('td', {}, el('input', { type: 'checkbox', checked: DEVF.chon.has(d.id), onchange: e => { e.target.checked ? DEVF.chon.add(d.id) : DEVF.chon.delete(d.id); render(); } })) : null,
       el('td', {}, pill(cls, t(lbl)), sub ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:3px' }, sub) : null),
       el('td', {}, el('b', {}, d.name), macBad ? el('div', { style: 'font-size:11.5px;color:var(--crit);margin-top:3px' }, t('IP này đang là thiết bị khác (MAC đổi)')) : null),
-      el('td', {}, d.group || el('span', { style: 'color:var(--faint)' }, t('Chưa phân nhóm'))),
+      el('td', {}, nhomCua(d).length ? nhomCua(d).join(', ') : el('span', { style: 'color:var(--faint)' }, t('Chưa phân nhóm'))),
       el('td', {}, t(devKind(d.kind))),
       el('td', { class: 'mono' }, d.ip + (d.port ? ':' + d.port : '')),
       el('td', { style: 'font-size:12.5px;color:var(--muted)' }, d.done ? ago(d.checked) : '—'),
@@ -1235,9 +1241,9 @@ VIEWS.devices = async v => {
     render();
   } });
   cbTatCaDS.checked = shown.length > 0 && soChon() === shown.length;
-  const lamHangLoat = async (hanhDong, nhom) => {
+  const lamHangLoat = async (hanhDong, nhom, them) => {
     try {
-      const r2 = await api('POST', '/api/devices/bulk', { ids: [...DEVF.chon], action: hanhDong, group: nhom || '' });
+      const r2 = await api('POST', '/api/devices/bulk', { ids: [...DEVF.chon], action: hanhDong, groups: (nhom || '').split(',').map(x => x.trim()).filter(Boolean), them: !!them });
       DEVF.chon.clear();
       toast(hanhDong === 'delete' ? t('Đã xóa {0} thiết bị', r2.n) : t('Đã xếp {0} thiết bị vào nhóm', r2.n));
       render();
@@ -1302,7 +1308,7 @@ function nhapFile(grps) {
 // Hộp chọn sheet và cột. Đoán sẵn: cột nào nhiều ô dạng IP nhất là cột IP, cột chữ dài nhất là cột tên.
 function chonCot(sheets, grps) {
   if (!sheets || !sheets.length) { toast(t('File không có dữ liệu đọc được'), 'err'); return; }
-  let iSheet = 0, iIP = 0, iTen = 0;
+  let iSheet = 0, iIP = 0, iTen = 0, iNhom = -1;
   const than = el('div', {});
   const err = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
   const kd = select(DEVK.map(([k, l]) => [k, t(l)]), 'camera');
@@ -1325,14 +1331,23 @@ function chonCot(sheets, grps) {
       el('div', { class: 'filters' },
         field('Sheet', select(sheets.map((x, i) => [String(i), x.name + ' (' + (x.rows || []).length + ')']), String(iSheet), v => { iSheet = +v; doan(); ve(); })),
         field('Cột địa chỉ IP', select(cot.map(i => [String(i), nhan(i)]), String(iIP), v => { iIP = +v; ve(); })),
-        field('Cột tên thiết bị', select(cot.map(i => [String(i), nhan(i)]), String(iTen), v => { iTen = +v; ve(); }))),
-      el('div', { class: 'filters', style: 'margin-top:8px' }, field('Loại', kd), field('Nhóm', gr, 'Đặt tên nhóm cho cả lô này, ví dụ Camera Hải Quan')),
+        field('Cột tên thiết bị', select(cot.map(i => [String(i), nhan(i)]), String(iTen), v => { iTen = +v; ve(); })),
+        field('Cột nhóm (tuỳ chọn)', select([['-1', t('(không dùng)')], ...cot.map(i => [String(i), nhan(i)])], String(iNhom), v => { iNhom = +v; ve(); }), 'Lấy cột vị trí trong file làm nhóm con, ví dụ Hành Chính, Nhuộm 2, Dệt 1')),
+      el('div', { class: 'filters', style: 'margin-top:8px' }, field('Loại', kd), field('Nhóm tổng cho cả lô', gr, 'Áp cho mọi dòng trong file, ví dụ Camera CTC. Nhiều nhóm thì cách nhau bằng dấu phẩy.')),
       el('div', { style: 'margin-top:10px;font-size:13px' }, el('b', {}, t('Lấy được {0} dòng', dong.length))),
-      el('div', { style: 'margin-top:6px' }, table(['Tên thiết bị', 'Địa chỉ IP'], dong.slice(0, 8).map(r2 => el('tr', { class: 'nohover' },
-        el('td', {}, String(r2[iTen]).slice(0, 60)), el('td', { class: 'mono' }, String(r2[iIP]).trim()))), 'Chưa chọn đúng cột — xem lại cột IP và cột tên')),
+      el('div', { style: 'margin-top:6px' }, table(['Tên thiết bị', 'Địa chỉ IP', 'Nhóm con'], dong.slice(0, 8).map(r2 => el('tr', { class: 'nohover' },
+        el('td', {}, String(r2[iTen]).slice(0, 60)), el('td', { class: 'mono' }, String(r2[iIP]).trim()),
+        el('td', {}, nhomDong(r2) || el('span', { style: 'color:var(--faint)' }, '—')))), 'Chưa chọn đúng cột — xem lại cột IP và cột tên')),
       dong.length > 8 ? el('div', { style: 'font-size:12px;color:var(--muted);margin-top:6px' }, t('… và {0} dòng nữa', dong.length - 8)) : null);
-    than.lay = () => dong.map(r2 => ({ name: String(r2[iTen]).trim(), ip: String(r2[iIP]).trim() }));
+    than.lay = () => dong.map(r2 => ({ name: String(r2[iTen]).trim(), ip: String(r2[iIP]).trim(), group: nhomDong(r2) }));
   }
+  // nhóm của một dòng: ô ở cột nhóm; ô kiểu "漂染一车间 (Nhuộm 1)" thì lấy phần trong ngoặc cho gọn
+  const nhomDong = r2 => {
+    if (iNhom < 0) return '';
+    const v = String((r2 || [])[iNhom] || '').trim();
+    const m = /\(([^)]{1,40})\)\s*$/.exec(v);
+    return (m ? m[1] : v).trim().slice(0, 40);
+  };
   function doan() {
     const rows = (sheets[iSheet] || {}).rows || [];
     iIP = Math.max(0, lonNhat(demIP(rows)));
@@ -1348,13 +1363,13 @@ function chonCot(sheets, grps) {
   doan(); ve();
   modal(t('Nhập thiết bị từ file'), el('div', {}, dl, than, err,
     infoNote('Server chỉ lấy tên và địa chỉ IP. Những cột khác trong file (tài khoản, mật khẩu, ghi chú) không được đọc vào MAM.'),
-    infoNote('Dòng nào trùng IP với thiết bị đã có thì bỏ qua, không thêm trùng.')),
+    infoNote('Dòng trùng IP với thiết bị đã có thì không thêm trùng, nhưng vẫn được GỘP THÊM NHÓM — nên camera khu Hải Quan vừa nằm trong nhóm Hải Quan vừa còn nguyên trong nhóm tổng CTC.')),
     [{ label: 'Hủy', on: c => c() }, { label: 'Nhập', cls: 'primary', on: async c => {
       const ds = than.lay ? than.lay() : [];
       if (!ds.length) { err.textContent = t('Chưa lấy được dòng nào — xem lại cột IP và cột tên'); return; }
       try {
-        const r2 = await api('POST', '/api/devices/import', { devices: ds, kind: kd.value, group: gr.value });
-        c(); toast(t('Đã thêm {0} thiết bị, bỏ qua {1} dòng', r2.them, r2.boQua)); render();
+        const r2 = await api('POST', '/api/devices/import', { devices: ds, kind: kd.value, groups: gr.value.split(',').map(x => x.trim()).filter(Boolean) });
+        c(); toast(t('Đã thêm {0} thiết bị, gộp nhóm cho {1} cái đã có, bỏ qua {2} dòng', r2.them, r2.gop, r2.boQua)); render();
       } catch (e) { err.textContent = trErr(e.message); }
     } }], true);
 }
@@ -1363,9 +1378,11 @@ function xepNhomHangLoat(grps, lam) {
   const gr = el('input', { class: 'input', list: 'devgrps3', placeholder: t('ví dụ Camera tầng 1') });
   const dl = el('datalist', { id: 'devgrps3' }, (grps || []).map(g => el('option', { value: g })));
   modal(t('Xếp vào nhóm'), el('div', {}, dl,
-    field('Nhóm', gr, 'Để trống là bỏ nhóm, đưa về Chưa phân nhóm'),
-    infoNote('Áp cho tất cả thiết bị đang chọn. Nhóm cũ của chúng bị thay.')),
-    [{ label: 'Hủy', on: c => c() }, { label: 'Xếp nhóm', cls: 'primary', on: c => { c(); lam('group', gr.value); } }]);
+    field('Nhóm', gr, 'Nhiều nhóm thì cách nhau bằng dấu phẩy. Để trống rồi bấm Thay nhóm là bỏ hết nhóm.'),
+    infoNote('Thêm vào nhóm: giữ nguyên nhóm cũ, chỉ thêm nhóm mới — dùng khi một camera vừa thuộc nhóm tổng vừa thuộc nhóm khu vực. Thay nhóm: bỏ hết nhóm cũ.')),
+    [{ label: 'Hủy', on: c => c() },
+     { label: 'Thay nhóm', on: c => { c(); lam('group', gr.value, false); } },
+     { label: 'Thêm vào nhóm', cls: 'primary', on: c => { c(); lam('group', gr.value, true); } }]);
 }
 // Lịch sử rớt / sống lại của một thiết bị. Server ghi lại mỗi lần đổi trạng thái nên xem được
 // đúng ngày giờ phút giây, giống phần mềm quản lý camera.
@@ -1513,7 +1530,7 @@ function devAsk(d, grps) {
   const nm = input('ví dụ Camera cổng trước', 'text', d.name || '');
   const ip = input('192.168.1.50', 'text', d.ip || '');
   const kd = select(DEVK.map(([k, l]) => [k, t(l)]), d.kind || 'camera', () => toggle());
-  const gr = el('input', { class: 'input', list: 'devgrps', placeholder: t('ví dụ Camera tầng 1'), value: d.group || '' });
+  const gr = el('input', { class: 'input', list: 'devgrps', placeholder: t('ví dụ Camera tầng 1'), value: nhomCua(d).join(', ') });
   const dl = el('datalist', { id: 'devgrps' }, (grps || []).map(g => el('option', { value: g })));
   const pt = input('', 'number', d.port ? String(d.port) : '');
   const pa = input('/Streaming/Channels/102', 'text', d.path || '');
@@ -1526,10 +1543,10 @@ function devAsk(d, grps) {
   const err = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
   modal(t(d.id ? 'Sửa thiết bị' : 'Thêm thiết bị'), el('div', {}, dl,
     field('Tên thiết bị', nm), field('Địa chỉ IP', ip, 'Phải là IP nội bộ. Nên đặt IP tĩnh cho thiết bị, nếu không IP đổi là mất dấu.'),
-    field('Loại', kd), field('Nhóm', gr, 'Nhóm riêng của thiết bị mạng, không liên quan Nhóm máy'),
+    field('Loại', kd), field('Nhóm', gr, 'Nhiều nhóm thì cách nhau bằng dấu phẩy. Một camera có thể vừa thuộc nhóm tổng vừa thuộc nhóm khu vực.'),
     field('Cổng', pt, 'Để trống là tự thử các cổng thường gặp của loại thiết bị. Với camera đây là cổng RTSP (mặc định 554).'), cam, err),
     [{ label: 'Hủy', on: c => c() }, { label: d.id ? 'Lưu' : 'Thêm', cls: 'primary', on: async c => {
-      const body = { id: d.id, name: nm.value, ip: ip.value, kind: kd.value, group: gr.value, port: Number(pt.value) || 0, path: pa.value, user: us.value, pass: pw.value };
+      const body = { id: d.id, name: nm.value, ip: ip.value, kind: kd.value, groups: gr.value.split(',').map(x => x.trim()).filter(Boolean), port: Number(pt.value) || 0, path: pa.value, user: us.value, pass: pw.value };
       try { await api(d.id ? 'PUT' : 'POST', '/api/devices', body); c(); toast(t(d.id ? 'Đã lưu' : 'Đã thêm thiết bị')); render(); } catch (x) { err.textContent = trErr(x.message); }
     } }]);
 }

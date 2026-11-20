@@ -560,9 +560,12 @@ func (s *Server) hDeviceImport(w http.ResponseWriter, r *http.Request, me *Accou
 		return
 	}
 	var in struct {
-		Devices []struct{ Name, IP string }
+		// Group của từng dòng: file công ty có cột vị trí (Hành Chính, Nhuộm 2, Dệt 1…), lấy luôn làm
+		// nhóm con; nhóm chung của cả lượt nhập vẫn áp cho mọi dòng.
+		Devices []struct{ Name, IP, Group string }
 		Kind    string
 		Group   string
+		Groups  []string
 	}
 	if readJSON(r, &in) != nil || len(in.Devices) == 0 {
 		jerr(w, 400, "Dữ liệu không hợp lệ")
@@ -572,13 +575,13 @@ func (s *Server) hDeviceImport(w http.ResponseWriter, r *http.Request, me *Accou
 		jerr(w, 400, "Chọn loại thiết bị")
 		return
 	}
-	in.Group = strings.TrimSpace(clip(in.Group, 40))
+	in.Groups = donNhom(append(in.Groups, in.Group))
 	s.mu.Lock()
-	daCo := map[string]bool{}
+	daCo := map[string]*NetDev{}
 	for _, d := range s.st.Devices {
-		daCo[d.IP] = true
+		daCo[d.IP] = d
 	}
-	them, boQua, moi := 0, 0, []*NetDev{}
+	them, gop, boQua, moi := 0, 0, 0, []*NetDev{}
 	for _, x := range in.Devices {
 		ip := net.ParseIP(strings.TrimSpace(x.IP))
 		ten := strings.TrimSpace(clip(x.Name, 60))
@@ -587,22 +590,28 @@ func (s *Server) hDeviceImport(w http.ResponseWriter, r *http.Request, me *Accou
 			continue
 		}
 		v := ip.String()
-		if daCo[v] {
-			boQua++
+		if cu := daCo[v]; cu != nil {
+			// thiết bị đã có: không thêm trùng, nhưng gộp nhóm vào — camera khu Hải Quan vẫn thuộc
+			// danh sách chung của công ty, chỉ là có thêm một nhóm nữa để dễ xem riêng
+			if themNhom(cu, append(append([]string{}, in.Groups...), x.Group)) {
+				gop++
+			} else {
+				boQua++
+			}
 			continue
 		}
 		if len(s.st.Devices)+len(moi) >= devMax {
 			break
 		}
-		daCo[v] = true
-		d := &NetDev{ID: rid(5), Name: ten, IP: v, Kind: in.Kind, Group: in.Group}
+		d := &NetDev{ID: rid(5), Name: ten, IP: v, Kind: in.Kind, Groups: donNhom(append(append([]string{}, in.Groups...), x.Group))}
+		daCo[v] = d
 		moi = append(moi, d)
 		them++
 	}
 	s.st.Devices = append(s.st.Devices, moi...)
 	s.save()
 	s.mu.Unlock()
-	s.auditBy(me, r, "Thiết bị mạng", "Nhập từ file: thêm "+itoa(them)+" thiết bị vào nhóm "+tenNhom(in.Group), "—", false)
+	s.auditBy(me, r, "Thiết bị mạng", "Nhập từ file vào nhóm "+tenNhom(strings.Join(in.Groups, ", "))+": thêm "+itoa(them)+", gộp nhóm "+itoa(gop), "—", false)
 	if them > 0 {
 		ids := map[string]bool{}
 		for _, d := range moi {
@@ -610,5 +619,5 @@ func (s *Server) hDeviceImport(w http.ResponseWriter, r *http.Request, me *Accou
 		}
 		go s.checkDevices(context.Background(), ids)
 	}
-	jok(w, map[string]interface{}{"them": them, "boQua": boQua})
+	jok(w, map[string]interface{}{"them": them, "gop": gop, "boQua": boQua})
 }

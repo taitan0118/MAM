@@ -20,12 +20,15 @@ import (
 )
 
 type NetDev struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	IP    string `json:"ip"`
-	Kind  string `json:"kind"`  // camera | attend | switch | other
-	Group string `json:"group"` // nhóm riêng của thiết bị mạng, rỗng = chưa phân nhóm
-	Port  int    `json:"port"`  // 0 = thử các cổng mặc định theo loại; camera thì đây là cổng RTSP
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	IP   string `json:"ip"`
+	Kind string `json:"kind"` // camera | attend | switch | other
+	// Một thiết bị có thể thuộc NHIỀU nhóm: camera khu Hải Quan vừa nằm trong danh sách Hải Quan
+	// vừa nằm trong danh sách chung của công ty, phải đếm được ở cả hai chỗ.
+	Groups []string `json:"groups"`
+	Group  string   `json:"group,omitempty"` // kiểu cũ một nhóm; chỉ còn để đọc dữ liệu bản cũ
+	Port   int      `json:"port"`            // 0 = thử các cổng mặc định theo loại; camera thì đây là cổng RTSP
 	// Camera: đường RTSP + tài khoản để đo luồng hình. Để trống tài khoản = chỉ kiểm sống/chết.
 	Path string `json:"path"`
 	User string `json:"user"`
@@ -72,6 +75,45 @@ func (s *Server) ghiMoc(d *NetDev, up bool, at time.Time) {
 
 // devAlertAfter: chờ ngần này lượt liên tiếp mới báo, để một lần trượt mạng không làm kêu oan.
 const devAlertAfter = 2
+
+// nhomCua trả danh sách nhóm của thiết bị, tự chuyển dữ liệu kiểu cũ (một nhóm) sang kiểu mới.
+func nhomCua(d *NetDev) []string {
+	if len(d.Groups) == 0 && d.Group != "" {
+		d.Groups, d.Group = []string{d.Group}, ""
+	}
+	if d.Groups == nil {
+		return []string{}
+	}
+	return d.Groups
+}
+
+// donNhom: bỏ khoảng trắng thừa, bỏ trùng, bỏ rỗng; tối đa 10 nhóm cho một thiết bị.
+func donNhom(in []string) []string {
+	out, seen := []string{}, map[string]bool{}
+	for _, g := range in {
+		g = strings.TrimSpace(clip(g, 40))
+		if g == "" || seen[g] {
+			continue
+		}
+		seen[g] = true
+		out = append(out, g)
+		if len(out) >= 10 {
+			break
+		}
+	}
+	return out
+}
+
+// themNhom thêm các nhóm vào thiết bị, giữ nguyên nhóm cũ. Trả true nếu có thay đổi.
+func themNhom(d *NetDev, g []string) bool {
+	cu := nhomCua(d)
+	moi := donNhom(append(append([]string{}, cu...), g...))
+	if len(moi) == len(cu) {
+		return false
+	}
+	d.Groups = moi
+	return true
+}
 
 var devKinds = map[string]bool{"camera": true, "attend": true, "switch": true, "router": true, "led": true, "wifi": true, "other": true}
 
@@ -278,7 +320,7 @@ func (s *Server) devView(d *NetDev) map[string]interface{} {
 		p = []int{}
 	}
 	return map[string]interface{}{
-		"id": d.ID, "name": d.Name, "ip": d.IP, "kind": d.Kind, "group": d.Group, "port": d.Port,
+		"id": d.ID, "name": d.Name, "ip": d.IP, "kind": d.Kind, "groups": nhomCua(d), "port": d.Port,
 		"vid":  vid,
 		"path": d.Path, "user": d.User, "hasPass": d.Pass != "", "mac": d.MAC, "macNow": d.MACNow,
 		"up": d.Up, "video": d.Video, "kbps": d.Kbps, "ports": p, "way": d.Way,
@@ -307,7 +349,8 @@ func (s *Server) hDevices(w http.ResponseWriter, r *http.Request, me *Account) {
 			return
 		}
 		in.Name = strings.TrimSpace(clip(in.Name, 60))
-		in.Group = strings.TrimSpace(clip(in.Group, 40))
+		in.Groups = donNhom(append(in.Groups, in.Group))
+		in.Group = ""
 		in.Path = strings.TrimSpace(clip(in.Path, 120))
 		in.User = strings.TrimSpace(clip(in.User, 60))
 		in.IP = strings.TrimSpace(in.IP)
@@ -346,7 +389,8 @@ func (s *Server) hDevices(w http.ResponseWriter, r *http.Request, me *Account) {
 					d.MAC, d.MACNow, d.Up, d.Ports, d.Video, d.Kbps = "", "", false, nil, false, 0
 					d.Checked, d.Since, d.VidAt = time.Time{}, time.Time{}, time.Time{}
 				}
-				d.Name, d.IP, d.Kind, d.Group, d.Port = in.Name, in.IP, in.Kind, in.Group, in.Port
+				d.Name, d.IP, d.Kind, d.Groups, d.Port = in.Name, in.IP, in.Kind, in.Groups, in.Port
+				d.Group = ""
 				d.Path, d.User = in.Path, in.User
 				if in.Pass != "" { // để trống = giữ mật khẩu cũ
 					d.Pass = in.Pass
@@ -367,7 +411,7 @@ func (s *Server) hDevices(w http.ResponseWriter, r *http.Request, me *Account) {
 			jerr(w, 400, "Tối đa 5000 thiết bị mạng")
 			return
 		}
-		d := &NetDev{ID: rid(5), Name: in.Name, IP: in.IP, Kind: in.Kind, Group: in.Group, Port: in.Port, Path: in.Path, User: in.User, Pass: in.Pass}
+		d := &NetDev{ID: rid(5), Name: in.Name, IP: in.IP, Kind: in.Kind, Groups: in.Groups, Port: in.Port, Path: in.Path, User: in.User, Pass: in.Pass}
 		s.st.Devices = append(s.st.Devices, d)
 		s.save()
 		s.mu.Unlock()
@@ -476,6 +520,8 @@ func (s *Server) hDeviceBulk(w http.ResponseWriter, r *http.Request, me *Account
 		IDs    []string
 		Action string
 		Group  string
+		Groups []string
+		Them   bool // true = thêm vào nhóm đang có, false = thay hết nhóm cũ
 	}
 	if r.Method != "POST" || readJSON(r, &in) != nil || len(in.IDs) == 0 {
 		jerr(w, 400, "Dữ liệu không hợp lệ")
@@ -485,7 +531,7 @@ func (s *Server) hDeviceBulk(w http.ResponseWriter, r *http.Request, me *Account
 		jerr(w, 400, "Dữ liệu không hợp lệ")
 		return
 	}
-	in.Group = strings.TrimSpace(clip(in.Group, 40))
+	in.Groups = donNhom(append(in.Groups, in.Group))
 	chon := map[string]bool{}
 	for _, id := range in.IDs {
 		chon[id] = true
@@ -502,7 +548,11 @@ func (s *Server) hDeviceBulk(w http.ResponseWriter, r *http.Request, me *Account
 			s.devAlertsClose(d)
 			continue // không giữ lại
 		}
-		d.Group = in.Group
+		if in.Them {
+			themNhom(d, in.Groups)
+		} else {
+			d.Groups, d.Group = in.Groups, ""
+		}
 		giu = append(giu, d)
 	}
 	s.st.Devices = giu
@@ -511,7 +561,7 @@ func (s *Server) hDeviceBulk(w http.ResponseWriter, r *http.Request, me *Account
 	if in.Action == "delete" {
 		s.auditBy(me, r, "Thiết bị mạng", "Xóa "+itoa(n)+" thiết bị", "—", false)
 	} else {
-		s.auditBy(me, r, "Thiết bị mạng", "Xếp "+itoa(n)+" thiết bị vào nhóm "+tenNhom(in.Group), "—", false)
+		s.auditBy(me, r, "Thiết bị mạng", "Xếp "+itoa(n)+" thiết bị vào nhóm "+tenNhom(strings.Join(in.Groups, ", ")), "—", false)
 	}
 	jok(w, map[string]interface{}{"ok": true, "n": n})
 }
@@ -522,4 +572,33 @@ func tenNhom(s string) string {
 		return "(chưa phân nhóm)"
 	}
 	return s
+}
+
+// devKindVN: tên loại thiết bị để xuất ra file.
+var devKindVN = func(k string) string {
+	m := map[string]string{"camera": "Camera", "attend": "Máy chấm công", "switch": "Switch", "router": "Router", "wifi": "Thiết bị WiFi", "led": "Bảng LED", "other": "Khác"}
+	if v := m[k]; v != "" {
+		return v
+	}
+	return k
+}
+
+// congMo: liệt kê cổng đang mở để ghi vào file xuất ra.
+func congMo(p []int) string {
+	if len(p) == 0 {
+		return ""
+	}
+	v := make([]string, len(p))
+	for i, x := range p {
+		v[i] = itoa(x)
+	}
+	return "mở cổng " + strings.Join(v, ", ")
+}
+
+// gioPhut: thời điểm dạng dd/MM/yyyy HH:mm:ss, rỗng nếu chưa có.
+func gioPhut(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("02/01/2006 15:04:05")
 }
