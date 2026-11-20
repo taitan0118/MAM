@@ -1128,6 +1128,7 @@ var EN = {
 "Đã đóng {0} cảnh báo": "Closed {0} alerts",
 "Bấm để sắp xếp, bấm lần nữa để đảo chiều": "Click to sort, click again to reverse",
 "đã từng mất kết nối": "dropped before",
+"Thiết bị mạng bị báo khi không trả lời 2 lượt kiểm liên tiếp (khoảng 2 phút), khi camera còn sống mà không kéo được hình, và khi IP đó đổi sang thiết bị khác (MAC đổi). Thiết bị sống lại thì cảnh báo chỉ ghi thêm giờ có lại chứ KHÔNG tự đóng — bấm \"Đã xử lý\" ở trang Thiết bị mạng mới đóng.": "A network device is reported when it misses 2 checks in a row (about 2 minutes), when a camera is alive but sends no video, and when that IP turns into a different device (MAC changed). When the device comes back the alert only records the time it returned — it does NOT close by itself; press \"Done\" on the Network devices page to close it.",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -2411,6 +2412,7 @@ var ZH = {
 "Đã đóng {0} cảnh báo": "已关闭 {0} 条告警",
 "Bấm để sắp xếp, bấm lần nữa để đảo chiều": "点击排序，再次点击反向排序",
 "đã từng mất kết nối": "曾经掉线过",
+"Thiết bị mạng bị báo khi không trả lời 2 lượt kiểm liên tiếp (khoảng 2 phút), khi camera còn sống mà không kéo được hình, và khi IP đó đổi sang thiết bị khác (MAC đổi). Thiết bị sống lại thì cảnh báo chỉ ghi thêm giờ có lại chứ KHÔNG tự đóng — bấm \"Đã xử lý\" ở trang Thiết bị mạng mới đóng.": "网络设备连续 2 次（约 2 分钟）无应答、摄像机在线但无画面、或该 IP 换成了别的设备（MAC 变了）时都会报警。设备恢复后只会补记恢复时间，警报不会自动关闭 — 要在\"网络设备\"页点\"已处理\"才关闭。",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -2536,14 +2538,34 @@ var ZH = {
 };
 var PAT = [
 [
-"^(.+) \\((.+?)\\) mất kết nối lúc (.+?)(?: · đã có lại lúc (.+))?$",
-"$1 ($2) lost connection at $3$4",
-"$1（$2）于 $3 失去连接$4"
+"^(.+) \\((.+?)\\) mất kết nối lúc (.+?) · đã có lại lúc (.+)$",
+"$1 ($2) lost connection at $3 · back at $4",
+"$1（$2）于 $3 失去连接 · $4 恢复"
 ],
 [
-"^(.+) \\((.+?)\\) không ra hình lúc (.+?)(?: · đã có lại lúc (.+))?$",
-"$1 ($2) stopped sending video at $3$4",
-"$1（$2）于 $3 停止出图$4"
+"^(.+) \\((.+?)\\) mất kết nối lúc (.+)$",
+"$1 ($2) lost connection at $3",
+"$1（$2）于 $3 失去连接"
+],
+[
+"^(.+) \\((.+?)\\) không ra hình lúc (.+?) · đã có lại lúc (.+)$",
+"$1 ($2) stopped sending video at $3 · back at $4",
+"$1（$2）于 $3 停止出图 · $4 恢复"
+],
+[
+"^(.+) \\((.+?)\\) không ra hình lúc (.+)$",
+"$1 ($2) stopped sending video at $3",
+"$1（$2）于 $3 停止出图"
+],
+[
+"^(.+) \\((.+?)\\) IP đang là thiết bị khác \\(MAC đổi\\) lúc (.+?) · đã có lại lúc (.+)$",
+"$1 ($2) — this IP is now a different device (MAC changed) at $3 · back at $4",
+"$1（$2）于 $3 该 IP 已换成别的设备（MAC 变了） · $4 恢复"
+],
+[
+"^(.+) \\((.+?)\\) IP đang là thiết bị khác \\(MAC đổi\\) lúc (.+)$",
+"$1 ($2) — this IP is now a different device (MAC changed) at $3",
+"$1（$2）于 $3 该 IP 已换成别的设备（MAC 变了）"
 ],
 [
 "^Mất kết nối (d+) phút$",

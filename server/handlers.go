@@ -649,6 +649,9 @@ func (s *Server) hAlerts(w http.ResponseWriter, r *http.Request, me *Account) {
 		return
 	}
 	st := r.URL.Query().Get("status")
+	// Lọc loại NGAY TẠI ĐÂY: Console chia hai tab, mà cắt 300 dòng trước rồi mới chia thì tab thiết bị
+	// mạng có thể trống trơn dù cảnh báo vẫn còn, chỉ vì 300 cái mới nhất toàn của máy tính.
+	loai := r.URL.Query().Get("loai")
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	// kèm IP: công ty có nhiều máy trùng tên nên chỉ nhìn tên thì tưởng cảnh báo bị lặp
@@ -662,6 +665,12 @@ func (s *Server) hAlerts(w http.ResponseWriter, r *http.Request, me *Account) {
 	out := []map[string]interface{}{}
 	for i := len(s.st.Alerts) - 1; i >= 0 && len(out) < 300; i-- {
 		a := s.st.Alerts[i]
+		if loai == "mang" && !strings.HasPrefix(a.Machine, "__dev-") {
+			continue
+		}
+		if loai == "it" && strings.HasPrefix(a.Machine, "__dev-") {
+			continue
+		}
 		if (st == "" || a.Status == st) && s.alertVisible(me, a) {
 			out = append(out, map[string]interface{}{
 				"id": a.ID, "machine": a.Machine, "name": a.Name, "kind": a.Kind, "sev": a.Sev,

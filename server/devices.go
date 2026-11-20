@@ -185,6 +185,11 @@ func checkDev(ctx context.Context, d NetDev, wantVid bool) NetDev {
 	if out.Up {
 		out.MACNow = arpMAC(ctx, d.IP)
 	}
+	// Lượt kiểm bị cắt giữa chừng (Console ngắt, quá hạn) thì mọi thứ đều "không gọi được" — kết luận
+	// rớt lúc này là ghi mốc rớt giả vào lịch sử. Bỏ nguyên lượt, giữ trạng thái cũ.
+	if !out.Up && ctx.Err() != nil {
+		return d
+	}
 	if out.Up {
 		out.Miss = 0
 	} else {
@@ -261,7 +266,9 @@ func (s *Server) checkDevices(ctx context.Context, ids map[string]bool) {
 		go func(i int, d NetDev) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			vid := d.Kind == "camera" && d.User != "" && (len(ids) > 0 || now.Sub(d.VidAt) >= devVidEvery)
+			// chỉ ép đo hình khi đại ca bấm "Kiểm lại" đúng một thiết bị; kiểm hàng loạt mà ép đo
+			// cả mấy trăm camera (12 giây mỗi cái) thì quá hạn 30 giây rồi bị cắt giữa chừng
+			vid := d.Kind == "camera" && d.User != "" && (len(ids) == 1 || now.Sub(d.VidAt) >= devVidEvery)
 			res[i] = checkDev(ctx, d, vid)
 		}(i, d)
 	}
@@ -272,6 +279,9 @@ func (s *Server) checkDevices(ctx context.Context, ids map[string]bool) {
 	for _, x := range res {
 		by[x.ID] = x
 	}
+	// một switch chết kéo cả chục camera rớt cùng lúc: lưu từng cái một thì mỗi lần lưu là ghi lại
+	// toàn bộ dữ liệu, Console đứng hình. Gom lại lưu một lần.
+	luu := false
 	for _, d := range s.st.Devices {
 		x, ok := by[d.ID]
 		if !ok || d.IP != x.IP { // đại ca vừa sửa IP trong lúc đang kiểm: bỏ kết quả cũ
@@ -279,16 +289,19 @@ func (s *Server) checkDevices(ctx context.Context, ids map[string]bool) {
 		}
 		if d.Checked.IsZero() || d.Up != x.Up { // lần kiểm đầu, hoặc vừa rớt / vừa sống lại
 			s.ghiMoc(d, x.Up, x.Checked)
-			s.save() // mốc này hiếm (chỉ khi đổi trạng thái) nên lưu ngay cho chắc
+			luu = true
 		}
 		d.Up, d.Video, d.Kbps, d.Ports, d.Way = x.Up, x.Video, x.Kbps, x.Ports, x.Way
 		d.MACNow, d.Checked, d.Since, d.VidAt = x.MACNow, x.Checked, x.Since, x.VidAt
 		d.Miss, d.VidMiss = x.Miss, x.VidMiss
 		if d.MAC == "" && x.MACNow != "" { // lần đầu kiểm được: ghi nhớ để sau biết IP có bị chiếm
 			d.MAC = x.MACNow
-			s.save()
+			luu = true
 		}
 		s.devAlerts(d)
+	}
+	if luu {
+		s.save()
 	}
 }
 
@@ -304,6 +317,9 @@ func (s *Server) devAlerts(d *NetDev) {
 	// camera còn sống mà không kéo được hình: máy vẫn đó nhưng không quay, vẫn phải báo
 	noVid := d.Up && s.doHinh(d) && d.VidMiss >= devAlertAfter
 	s.mocCanhBao(d, "devvideo", "warn", noVid, "không ra hình")
+	// camera bị tháo, cắm máy khác vào đúng IP: cổng vẫn mở nên vẫn xanh, chỉ MAC là lộ ra.
+	// ARP chỉ thấy thiết bị cùng dải mạng với máy chủ, qua router trả rỗng — nên phải có MACNow mới xét.
+	s.mocCanhBao(d, "devmac", "warn", d.MAC != "" && d.MACNow != "" && d.MAC != d.MACNow, "IP đang là thiết bị khác (MAC đổi)")
 }
 
 // Chữ đánh dấu cảnh báo đã hết hỏng nhưng còn chờ người xác nhận.
@@ -326,9 +342,7 @@ func (s *Server) mocCanhBao(d *NetDev, kind, sev string, hong bool, viec string)
 	case hong && mo == nil:
 		s.st.Alerts = append(s.st.Alerts, &Alert{ID: rid(5), Machine: id, Name: d.Name, Kind: kind, Sev: sev,
 			Msg: d.Name + " (" + d.IP + ") " + viec + " lúc " + gio, Opened: time.Now(), Status: "open"})
-		if len(s.st.Alerts) > 2000 {
-			s.st.Alerts = s.st.Alerts[len(s.st.Alerts)-1500:]
-		}
+		s.catBotCanhBao()
 		s.notify(s.st.Settings, "Cảnh báo: "+d.Name, d.Name+" ("+d.IP+") "+viec+" lúc "+gio)
 	case hong && mo != nil && strings.Contains(mo.Msg, daCoLai):
 		// hỏng lại sau khi đã phục hồi: mở cảnh báo mới cho khỏi lẫn lần trước

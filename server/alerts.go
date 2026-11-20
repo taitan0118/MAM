@@ -33,6 +33,26 @@ func (s *Server) checkMachine(m *Machine, l *Live) {
 	s.cond(m, "offline", "crit", false, "") // máy đã báo lại: đóng cảnh báo mất kết nối
 }
 
+// catBotCanhBao: nhiều cảnh báo quá thì bỏ bớt cái CŨ NHẤT ĐÃ ĐÓNG, không bao giờ bỏ cái đang mở.
+// Trước đây cắt thẳng theo thứ tự nên cảnh báo đang mở cũng bị bỏ; lượt kiểm sau dò không thấy nó nữa
+// nên mở thêm một cái y hệt — đó chính là lỗi "cảnh báo cứ lặp lại".
+// Số cảnh báo đang mở có trần tự nhiên (mỗi máy/thiết bị mỗi loại chỉ một cái) nên không sợ phình mãi.
+func (s *Server) catBotCanhBao() {
+	if len(s.st.Alerts) <= 2000 {
+		return
+	}
+	bo := len(s.st.Alerts) - 1500
+	giu := make([]*Alert, 0, len(s.st.Alerts))
+	for _, a := range s.st.Alerts {
+		if bo > 0 && a.Status != "open" {
+			bo--
+			continue
+		}
+		giu = append(giu, a)
+	}
+	s.st.Alerts = giu
+}
+
 // cond mở cảnh báo khi điều kiện đúng, tự đóng khi hết đúng.
 func (s *Server) cond(m *Machine, kind, sev string, on bool, msg string) {
 	var open *Alert
@@ -48,9 +68,7 @@ func (s *Server) cond(m *Machine, kind, sev string, on bool, msg string) {
 	switch {
 	case on && open == nil:
 		s.st.Alerts = append(s.st.Alerts, &Alert{ID: rid(5), Machine: m.ID, Name: m.Name, Kind: kind, Sev: sev, Msg: msg, Opened: time.Now(), Status: "open"})
-		if len(s.st.Alerts) > 2000 {
-			s.st.Alerts = s.st.Alerts[len(s.st.Alerts)-1500:]
-		}
+		s.catBotCanhBao()
 		// không lưu ngay: cả nghìn máy tắt cùng lúc sẽ ghi file hàng nghìn lần; watchdog lưu mỗi phút
 		s.notify(s.st.Settings, "Cảnh báo: "+m.Name, msg)
 	case !on && open != nil:
@@ -197,9 +215,7 @@ func (s *Server) threatsIn(m *Machine, in []ThreatIn) {
 			continue
 		}
 		s.st.Alerts = append(s.st.Alerts, &Alert{ID: rid(5), Machine: m.ID, Name: m.Name, Kind: kind, Sev: sev, Msg: msg, Opened: time.Now(), Status: "open"})
-		if len(s.st.Alerts) > 2000 {
-			s.st.Alerts = s.st.Alerts[len(s.st.Alerts)-1500:]
-		}
+		s.catBotCanhBao()
 		s.save()
 		s.notify(s.st.Settings, "Cảnh báo: "+m.Name, msg)
 	}
