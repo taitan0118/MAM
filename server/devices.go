@@ -86,16 +86,58 @@ const devLogMax = 50000 // giữ chừng này mốc; đầy thì bỏ phần cũ
 func (s *Server) mocCuoi(id string) string {
 	for i := len(s.st.DevLog) - 1; i >= 0; i-- {
 		if e := s.st.DevLog[i]; e.Dev == id {
-			if e.Trang != "" {
-				return e.Trang
-			}
-			if e.Up { // dữ liệu ghi trước 1.1.90 chỉ có Up
-				return "up"
-			}
-			return "down"
+			return mocTrang(e)
 		}
 	}
 	return ""
+}
+
+func mocTrang(e *DevEvent) string {
+	if e.Trang != "" {
+		return e.Trang
+	}
+	if e.Up { // dữ liệu ghi trước 1.1.90 chỉ có Up
+		return "up"
+	}
+	return "down"
+}
+
+// donMocTreoGia bỏ các mốc "treo không ra hình" GIẢ mà lỗi sửa ở 1.1.98 đẻ ra: luồng hình chỉ đo 5
+// phút một lần, mà lượt nào không đo cũng xóa kết quả đo cũ, nên cứ sau mỗi lượt đo lại sinh một cặp
+// mốc "novideo" rồi "up" giả. Dấu nhận: một mốc novideo kẹp giữa hai mốc up và chỉ kéo dài chưa tới
+// một chu kỳ đo. Bỏ xong thì mốc up phía sau thành trùng với mốc up phía trước, nên gộp luôn.
+//
+//	shortcut: một lần treo THẬT mà ngắn hơn một chu kỳ đo cũng bị dọn theo — không có cách nào phân
+//	biệt, và treo ngắn như vậy thì cũng chưa tới mức phải báo. Nâng cấp khi nào ghi thêm lý do vào
+//	từng mốc: lúc đó lọc theo lý do thay vì theo độ dài.
+//
+// Gọi khi đang giữ s.mu.
+func (s *Server) donMocTreoGia() int {
+	han := devVidEvery + devEvery // cho rộng ra một lượt kiểm, phòng server chạy trễ
+	ke := make([]*DevEvent, len(s.st.DevLog))
+	cuoi := map[string]int{}
+	for i := len(s.st.DevLog) - 1; i >= 0; i-- { // mốc kế tiếp của CÙNG thiết bị
+		if j, ok := cuoi[s.st.DevLog[i].Dev]; ok {
+			ke[i] = s.st.DevLog[j]
+		}
+		cuoi[s.st.DevLog[i].Dev] = i
+	}
+	truoc := map[string]string{} // trạng thái của mốc đã GIỮ gần nhất, theo từng thiết bị
+	giu := make([]*DevEvent, 0, len(s.st.DevLog))
+	n := 0
+	for i, e := range s.st.DevLog {
+		tr := mocTrang(e)
+		gia := tr == "novideo" && truoc[e.Dev] == "up" && ke[i] != nil &&
+			mocTrang(ke[i]) == "up" && ke[i].At.Sub(e.At) < han
+		if gia || tr == truoc[e.Dev] {
+			n++
+			continue
+		}
+		truoc[e.Dev] = tr
+		giu = append(giu, e)
+	}
+	s.st.DevLog = giu
+	return n
 }
 
 // ghiMoc ghi lại lúc thiết bị đổi trạng thái. Gọi khi đang giữ s.mu.

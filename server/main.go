@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.98"
+const Version = "1.1.99"
 
 //go:embed web
 var webFS embed.FS
@@ -164,6 +164,11 @@ func main() {
 	if n := s.donCanhBaoTrung(); n > 0 {
 		s.save()
 		log.Printf(T("Đã đóng %d cảnh báo trùng"), n)
+	}
+	// dọn mốc "treo không ra hình" giả mà bản trước 1.1.99 đẻ ra sau mỗi lượt đo luồng hình
+	if n := s.donMocTreoGia(); n > 0 {
+		s.save()
+		log.Printf(T("Đã dọn %d mốc treo giả trong lịch sử thiết bị"), n)
 	}
 	s.mu.Unlock()
 	go s.watchdog()
