@@ -36,6 +36,8 @@ type NetDev struct {
 	User string `json:"user"`
 	Pass string `json:"pass"` // phải lưu thô vì mỗi lượt đo lại đăng nhập camera; API không trả ra
 	MAC  string `json:"mac"`  // MAC lần kiểm đầu, để biết IP có bị thiết bị khác chiếm
+	// Đường ảnh JPEG đã dò ra được của camera này, để lần sau khỏi thử lại cả danh sách.
+	SnapPath string `json:"snapPath,omitempty"`
 
 	// Trạng thái lượt kiểm gần nhất: chỉ ở RAM, mất khi khởi động lại server (kiểm lại sau 1 phút).
 	Up      bool      `json:"-"`

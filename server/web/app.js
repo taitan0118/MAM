@@ -1427,6 +1427,8 @@ function xepNhomHangLoat(grps, lam) {
 const hai = n => String(n).padStart(2, '0');
 const gioDayDu = x => { const d = new Date(x); return isNaN(d) || d.getFullYear() < 2000 ? '—'
   : hai(d.getDate()) + '/' + hai(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + hai(d.getHours()) + ':' + hai(d.getMinutes()) + ':' + hai(d.getSeconds()); };
+// ngày dạng dd/MM/yyyy
+const ngayVN = x => { const d = new Date(x); return hai(d.getDate()) + '/' + hai(d.getMonth() + 1) + '/' + d.getFullYear(); };
 // giờ ngắn: cùng ngày thì chỉ HH:mm:ss, khác ngày thì kèm ngày/tháng cho khỏi nhầm
 const gioNgan = x => { const d = new Date(x); if (isNaN(d) || d.getFullYear() < 2000) return '—';
   const n = new Date(); const cungNgay = d.toDateString() === n.toDateString();
@@ -1443,6 +1445,36 @@ function khoang(ms) {
   ra.push(t('{0} giây', s));
   return ra.join(' ');
 }
+// Khung xem hình camera. Trình duyệt không phát RTSP được nên server lấy ảnh JPEG camera nén sẵn,
+// đây chỉ thay ảnh mỗi giây — đủ biết camera quay gì, không mượt như đầu ghi.
+function khungHinh(d) {
+  const img = el('img', { alt: t('Hình camera'), style: 'width:100%;display:block;border-radius:10px;background:#000;aspect-ratio:16/9;object-fit:contain' });
+  const bao = el('div', { style: 'font-size:12.5px;color:var(--muted);margin-top:6px' }, t('Đang lấy hình…'));
+  let chay = true, lan = 0, hong = 0;
+  const lay = async () => {
+    if (!chay) return;
+    const t0 = Date.now();
+    try {
+      const rp = await fetch('/api/devices/snapshot?id=' + encodeURIComponent(d.id) + '&_=' + t0, { credentials: 'same-origin' });
+      if (!rp.ok) throw new Error((await rp.json().catch(() => ({}))).error || rp.status);
+      const b = await rp.blob();
+      if (!chay) return;
+      const cu = img.src;
+      img.src = URL.createObjectURL(b);
+      if (cu && cu.startsWith('blob:')) URL.revokeObjectURL(cu); // không thì mỗi giây rò một tấm
+      lan++; hong = 0;
+      bao.textContent = t('{0} · làm mới {1} lần', gioNgan(new Date().toISOString()), lan);
+    } catch (e) {
+      hong++;
+      bao.textContent = t('Không lấy được hình: {0}', trErr(String(e.message || e)));
+      if (hong >= 3) { chay = false; bao.textContent += ' · ' + t('đã dừng thử'); return; }
+    }
+    if (chay) setTimeout(lay, Math.max(300, 1000 - (Date.now() - t0)));
+  };
+  lay();
+  return { el: el('div', {}, img, bao), dung: () => { chay = false; if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src); } };
+}
+
 async function devChiTiet(d) {
   let r;
   try { r = await api('GET', '/api/devices/log?id=' + encodeURIComponent(d.id)); } catch (e) { fail(e); return; }
@@ -1461,18 +1493,39 @@ async function devChiTiet(d) {
     el('td', { class: 'mono', style: 'font-size:12.5px' }, x.den ? gioDayDu(x.den) : el('span', { style: 'color:var(--muted)' }, t('tới bây giờ'))),
     el('td', { style: 'font-size:12.5px' }, khoang(het(x) - new Date(x.tu))))),
     'Chưa có mốc nào — server mới bắt đầu theo dõi thiết bị này');
-  // Dải giờ trong ngày hôm nay, vẽ y như trang Thời gian hoạt động của máy.
-  const nua = new Date(); nua.setHours(0, 0, 0, 0);
-  const phut = tt => Math.max(0, Math.min(1440, (new Date(tt) - nua) / 60000));
-  const homNay = doan.filter(x => het(x) > nua).reverse(); // cũ → mới
-  const ss = homNay.filter(x => x.tr !== 'down').map(x => [phut(x.tu), phut(het(x)), !x.den]);
-  const soLan = homNay.filter(x => x.tr === 'down').length;
-  const tongNay = ss.reduce((a, x) => a + (x[1] - x[0]), 0);
-  const lanRot = homNay.filter(x => x.tr === 'down').slice(-1)[0];
+  // Dải giờ của MỘT ngày, xem lùi được để biết thiết bị rớt ngày nào giờ nào.
+  const dauNgay = x => { const n = new Date(x); n.setHours(0, 0, 0, 0); return n; };
+  let ngay = dauNgay(new Date());
+  const somNhat = doan.length ? dauNgay(doan[doan.length - 1].tu) : ngay; // mốc cũ nhất còn giữ
+  const oNgay = el('div');
+  const veNgay = () => {
+    const d0 = ngay, d1 = new Date(+ngay + 864e5);
+    const phut = tt => Math.max(0, Math.min(1440, (new Date(tt) - d0) / 60000));
+    const trong = doan.filter(x => het(x) > d0 && new Date(x.tu) < d1).reverse(); // cũ → mới
+    const ss = trong.filter(x => x.tr !== 'down').map(x => [phut(x.tu), phut(het(x)), !x.den && +d1 > Date.now()]);
+    const rots = trong.filter(x => x.tr === 'down');
+    const tongNay = ss.reduce((a, x) => a + (x[1] - x[0]), 0);
+    const lanRot = rots[rots.length - 1];
+    const homNay = +ngay === +dauNgay(new Date());
+    oNgay.replaceChildren(
+      el('div', { class: 'filters', style: 'margin:0 0 10px' },
+        el('button', { class: 'btn', disabled: +ngay <= +somNhat, onclick: () => { ngay = new Date(+ngay - 864e5); veNgay(); } }, '‹'),
+        el('b', { style: 'font-size:13.5px' }, homNay ? t('Hôm nay') + ' · ' + ngayVN(ngay) : ngayVN(ngay)),
+        el('button', { class: 'btn', disabled: homNay, onclick: () => { ngay = new Date(+ngay + 864e5); veNgay(); } }, '›'),
+        homNay ? null : el('button', { class: 'btn', onclick: () => { ngay = dauNgay(new Date()); veNgay(); } }, 'Về hôm nay')),
+      el('div', { class: 'kpis', style: 'grid-template-columns:repeat(3,1fr);margin:0 0 10px' },
+        kpi(t('Thời gian hoạt động'), 'var(--good)', upDur(tongNay), t('trong ngày này')),
+        kpi(t('Số lần rớt'), rots.length ? 'var(--crit)' : 'var(--muted)', String(rots.length), t('trong ngày này')),
+        kpi(t('Rớt gần nhất'), 'var(--warn)', lanRot ? gioNgan(lanRot.tu) : '—', lanRot ? t('kéo dài {0}', khoang(het(lanRot) - new Date(lanRot.tu))) : t('ngày này không rớt lần nào'))),
+      upTimeline(ss, true));
+  };
+  veNgay();
   const dong = (nhan, giaTri) => el('div', { style: 'display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--border);font-size:13px' },
     el('div', { style: 'width:150px;color:var(--muted);flex:none' }, t(nhan)), el('div', { style: 'flex:1;min-width:0' }, giaTri));
   const [cls2, lbl2, sub2] = devState(d);
+  const hinh = d.kind === 'camera' ? khungHinh(d) : null;
   modal(t('Chi tiết thiết bị') + ' · ' + tenTB(d), el('div', {},
+    hinh ? el('div', { style: 'margin-bottom:12px' }, card(t('Hình camera'), t('ảnh làm mới mỗi giây, không phải video mượt'), hinh.el)) : null,
     el('div', { class: 'kpis', style: 'grid-template-columns:repeat(3,1fr)' },
       kpi(t('Đang'), r.up ? 'var(--good)' : 'var(--crit)', t(r.up ? 'Hoạt động' : 'Mất kết nối'), r.since ? t('từ {0}', gioDayDu(r.since)) : ''),
       kpi(t('Số lần rớt'), 'var(--warn)', String(rot.length), t('trong {0} mốc đã ghi', lg.length)),
@@ -1487,19 +1540,14 @@ async function devChiTiet(d) {
       d.mac ? dong('Địa chỉ MAC', el('span', { class: 'mono' }, d.mac)) : null,
       d.path ? dong('Đường RTSP', d.path) : null,
       dong('Kiểm lần cuối', d.done ? gioDayDu(d.checked) : t('Chưa kiểm'))),
-    el('div', { style: 'margin-top:14px' }, card(t('Hôm nay'), t('rê chuột lên từng khúc để xem giờ'), el('div', {},
-      el('div', { class: 'kpis', style: 'grid-template-columns:repeat(3,1fr);margin:0 0 10px' },
-        kpi(t('Thời gian hoạt động'), 'var(--good)', upDur(tongNay), t('tính từ 0h hôm nay')),
-        kpi(t('Số lần rớt'), soLan ? 'var(--crit)' : 'var(--muted)', String(soLan), t('trong hôm nay')),
-        kpi(t('Rớt gần nhất'), 'var(--warn)', lanRot ? gioNgan(lanRot.tu) : '—', lanRot ? t('kéo dài {0}', khoang(het(lanRot) - new Date(lanRot.tu))) : t('hôm nay chưa rớt lần nào'))),
-      upTimeline(ss)))),
+    el('div', { style: 'margin-top:14px' }, card(t('Khoảng giờ hoạt động'), t('rê chuột lên từng khúc để xem giờ'), oNgay)),
     el('div', { style: 'margin-top:12px;font-size:13px' }, el('b', {}, t('Lịch sử hoạt động')),
       el('span', { style: 'color:var(--muted);font-size:12.5px' }, treo.length ? ' · ' + t('{0} lần treo không ra hình', treo.length) : '')),
     el('div', { style: 'margin-top:6px' }, bang),
     el('div', { style: 'margin-top:10px' }, infoNote('Server kiểm thiết bị mỗi phút nên mốc ghi lại có thể lệch tối đa một phút so với lúc thiết bị rớt thật. Giữ 500 mốc gần nhất cho mỗi thiết bị.'))),
-    [{ label: 'Đóng', on: c => c() },
+    [{ label: 'Đóng', on: c => { if (hinh) hinh.dung(); c(); } },
      ...(d.canhBao ? [{ label: 'Đã xử lý', cls: 'primary', on: async c => {
-       try { const r2 = await api('POST', '/api/devices/ack?id=' + encodeURIComponent(d.id)); c(); toast(t('Đã đóng {0} cảnh báo', r2.n)); render(); } catch (x) { fail(x); }
+       try { const r2 = await api('POST', '/api/devices/ack?id=' + encodeURIComponent(d.id)); if (hinh) hinh.dung(); c(); toast(t('Đã đóng {0} cảnh báo', r2.n)); render(); } catch (x) { fail(x); }
      } }] : [])], true);
 }
 // Quét dải mạng tìm thiết bị chưa khai. Không tự thêm: người dùng tick cái nào mới thêm cái đó.
@@ -1795,15 +1843,17 @@ function upStrip(ss) {
   return el('div', { class: 'up-strip', html: `<svg viewBox="0 0 1440 16" preserveAspectRatio="none">${o}</svg>` });
 }
 // trục 24 giờ lớn của một ngày
-function upTimeline(ss) {
+// to = true: vẽ dải cao gấp đôi, dùng trong hộp Chi tiết thiết bị cho dễ nhìn từng khúc ngắn.
+function upTimeline(ss, to) {
   const W = 960, L = 10, x = m => L + m / 1440 * (W - 2 * L);
-  let o = `<rect x="${L}" y="22" width="${W - 2 * L}" height="22" rx="6" fill="var(--surface-2)"/>`;
-  for (let h = 0; h <= 24; h += 2) o += `<line class="up-grid" x1="${x(h * 60)}" x2="${x(h * 60)}" y1="14" y2="52"/><text x="${x(h * 60)}" y="68" text-anchor="middle">${h}h</text>`;
+  const H = to ? 46 : 22, Y = 22, D = Y + H, HV = D + 30; // chiều cao thanh, đáy thanh, cả khung
+  let o = `<rect x="${L}" y="${Y}" width="${W - 2 * L}" height="${H}" rx="6" fill="var(--surface-2)"/>`;
+  for (let h = 0; h <= 24; h += 2) o += `<line class="up-grid" x1="${x(h * 60)}" x2="${x(h * 60)}" y1="${Y - 8}" y2="${D + 8}"/><text x="${x(h * 60)}" y="${D + 24}" text-anchor="middle">${h}h</text>`;
   ss.forEach(s => {
-    o += `<rect class="up-ses${s[2] ? ' live' : ''}" x="${x(s[0])}" y="22" width="${Math.max(3, x(s[1]) - x(s[0]))}" height="22" rx="6"><title>${upClock(s[0])} – ${s[2] ? t('đang bật') : upClock(s[1])} (${upDur(s[1] - s[0])})</title></rect>`;
-    if (x(s[1]) - x(s[0]) > 80) o += `<text class="up-in" x="${(x(s[0]) + x(s[1])) / 2}" y="37" text-anchor="middle">${upDur(s[1] - s[0])}</text>`;
+    o += `<rect class="up-ses${s[2] ? ' live' : ''}" x="${x(s[0])}" y="${Y}" width="${Math.max(3, x(s[1]) - x(s[0]))}" height="${H}" rx="6"><title>${upClock(s[0])} – ${s[2] ? t('đang bật') : upClock(s[1])} (${upDur(s[1] - s[0])})</title></rect>`;
+    if (x(s[1]) - x(s[0]) > 80) o += `<text class="up-in" x="${(x(s[0]) + x(s[1])) / 2}" y="${Y + H / 2 + 5}" text-anchor="middle">${upDur(s[1] - s[0])}</text>`;
   });
-  return el('div', { class: 'up-chart', html: `<svg viewBox="0 0 ${W} 74">${o}</svg>` });
+  return el('div', { class: 'up-chart', html: `<svg viewBox="0 0 ${W} ${HV}">${o}</svg>` });
 }
 // biểu đồ cột tổng giờ: items [{lb, sub, v (phút), dim}]
 // n = true: cột là số lần (lỗi), không phải phút
