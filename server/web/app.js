@@ -317,14 +317,16 @@ VIEWS.overview = async v => {
   const groupsCard = card('Máy online theo nhóm', null, el('div', { class: 'scrollbox short', style: 'display:flex;flex-direction:column;gap:10px' }, gr.length ? gr.map(([nm, s]) => el('div', { style: 'display:flex;align-items:center;gap:10px;cursor:pointer', onclick: () => { MF.group = nm === 'Chưa phân nhóm' ? '__none' : nm; go('machines'); } },
     el('div', { style: 'width:130px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, nm), el('div', { class: 'bar', style: 'max-width:none' }, el('i', { style: 'width:' + (s.Total ? s.Online / s.Total * 100 : 0) + '%;background:' + (s.Online === s.Total ? 'var(--good)' : s.Online / s.Total >= 0.6 ? 'var(--warn)' : 'var(--crit)') })), el('span', { class: 'mono', style: 'font-size:12.5px;min-width:56px;text-align:right' }, s.Online + '/' + s.Total))) : el('div', { class: 'empty' }, 'Chưa có dữ liệu')));
   // Thiết bị mạng (camera, máy chấm công, switch): cái nào rớt đưa lên đầu. Chưa khai cái nào thì giấu thẻ đi.
-  const dvBad = dv.filter(d => d.done && (!d.up || (d.vid && !d.video)));
+  // gồm cả cái đã sống lại mà chưa ai bấm "Đã xử lý" — rớt lúc nửa đêm thì sáng ra vẫn phải thấy
+  const dvBad = dv.filter(d => d.done && (!d.up || (d.vid && !d.video) || d.canhBao > 0));
   const devCard = !dv.length ? null : card('Thiết bị mạng', null, el('div', { class: 'scrollbox short' }, dvBad.length
-    ? dvBad.sort((a, b) => (a.up ? 1 : 0) - (b.up ? 1 : 0)).map(d => { const [cls, lbl, sub] = devState(d);
+    ? dvBad.sort((a, b) => devXau(a) - devXau(b) || tenTB(a).localeCompare(tenTB(b))).map(d => { const [cls, lbl, sub] = devState(d);
       return el('div', { style: rowCss, onclick: () => go('devices') }, pill(cls, t(lbl)),
-        el('div', { style: 'flex:1;min-width:0' }, el('b', {}, d.name), el('div', { style: 'font-size:12.5px;color:var(--muted)' }, d.ip + (nhomCua(d).length ? ' · ' + nhomCua(d).join(', ') : ''))),
+        el('div', { style: 'flex:1;min-width:0' }, el('b', {}, tenTB(d)), el('div', { style: 'font-size:12.5px;color:var(--muted)' }, d.ip + (nhomCua(d).length ? ' · ' + nhomCua(d).map(g => t(g)).join(', ') : ''))),
         el('span', { style: 'font-size:12px;color:var(--faint);white-space:nowrap' }, d.since ? ago(d.since) : '')); })
     : el('div', { class: 'empty' }, t('Tất cả {0} thiết bị đang hoạt động', dv.length))),
     el('button', { class: 'btn', style: 'padding:2px 9px;font-size:12px', onclick: () => go('devices') }, 'Xem tất cả'));
+  if (devCard) devCard.classList.add('ovcao'); // thẻ này cần chỗ nhất nên cho cao gấp đôi
   // một trang: không cuộn cả trang, mỗi thẻ tự cuộn bên trong
   v.append(el('div', { class: 'ov' }, kpiRow, emptyNote, el('div', { class: 'ovmain' }, health, el('div', { class: 'ovside' }, devCard, reqCard, chatCard))));
 };
@@ -1162,11 +1164,14 @@ const nhomCua = d => (d && d.groups) || [];
 const tenTB = d => (MAMI.lang() === 'zh' && d && d.nameZh) ? d.nameZh : ((d && d.name) || '');
 const coNhom = (d, g) => nhomCua(d).indexOf(g) >= 0;
 // Tình trạng để lọc, và cách sắp xếp. 'loi' = cái đang hỏng lên đầu.
-const DEVST = [['all', 'Mọi tình trạng'], ['up', 'Đang hoạt động'], ['down', 'Mất kết nối'], ['novideo', 'Camera không ra hình'], ['new', 'Chưa kiểm']];
+const DEVST = [['all', 'Mọi tình trạng'], ['up', 'Đang hoạt động'], ['down', 'Mất kết nối'], ['tung', 'Đã từng mất kết nối'], ['novideo', 'Camera không ra hình'], ['new', 'Chưa kiểm']];
 const DEVSX = [['loi', 'Đang hỏng lên đầu'], ['name', 'Tên A→Z'], ['ip', 'Địa chỉ IP'], ['group', 'Nhóm'], ['kind', 'Loại'], ['checked', 'Kiểm gần nhất']];
-const devHop = (d, st) => st === 'all' || (st === 'up' ? d.done && d.up : st === 'down' ? d.done && !d.up : st === 'new' ? !d.done : d.done && d.up && d.vid && !d.video);
-// điểm xấu: càng hỏng càng nhỏ, để xếp lên đầu
-const devXau = d => !d.done ? 3 : !d.up ? 0 : (d.vid && !d.video) ? 1 : 2;
+// "tung" = đang chạy nhưng còn cảnh báo chưa ai bấm Đã xử lý, tức là đã từng rớt
+const devTung = d => d.done && d.up && d.canhBao > 0;
+const devHop = (d, st) => st === 'all' || (st === 'up' ? d.done && d.up : st === 'down' ? d.done && !d.up
+  : st === 'tung' ? devTung(d) : st === 'new' ? !d.done : d.done && d.up && d.vid && !d.video);
+// điểm xấu: càng hỏng càng nhỏ, để xếp lên đầu. Cái đã từng rớt nằm trên cái vẫn chạy ngon.
+const devXau = d => !d.done ? 4 : !d.up ? 0 : (d.vid && !d.video) ? 1 : devTung(d) ? 2 : 3;
 const devSoIP = d => String(d.ip).split('.').reduce((a, b) => a * 256 + (+b || 0), 0);
 // Trạng thái một thiết bị: [màu, chữ, chi tiết]
 function devState(d) {

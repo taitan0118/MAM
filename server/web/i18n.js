@@ -1147,6 +1147,9 @@ var EN = {
 "Năng lượng": "Utilities",
 "KDQT": "Export sales",
 "Kế toán": "Accounting",
+"Đã từng mất kết nối": "Dropped before",
+"Kế Toán": "Accounting",
+"Kế Hoạch/Sản Xuất": "Planning / Production",
 "Phát hiện virus": "Virus detected",
 "Thiếu bản vá Windows": "Missing Windows patches",
 "Phần mềm": "Software",
@@ -2448,6 +2451,9 @@ var ZH = {
 "Năng lượng": "能源",
 "KDQT": "营销部",
 "Kế toán": "财务",
+"Đã từng mất kết nối": "曾经掉线过",
+"Kế Toán": "财务",
+"Kế Hoạch/Sản Xuất": "计划/生产",
 "Phát hiện virus": "发现病毒",
 "Thiếu bản vá Windows": "缺少 Windows 补丁",
 "Phần mềm": "软件",
@@ -2618,17 +2624,17 @@ var PAT = [
 "$1（$2）于 $3 该 IP 已换成别的设备（MAC 变了）"
 ],
 [
-"^Mất kết nối (d+) phút$",
+"^Mất kết nối (\\d+) phút$",
 "Lost connection for $1 min",
 "失去连接 $1 分钟"
 ],
 [
-"^Mất kết nối (d+) tiếng (d+) phút$",
+"^Mất kết nối (\\d+) tiếng (\\d+) phút$",
 "Lost connection for $1 h $2 min",
 "失去连接 $1 小时 $2 分钟"
 ],
 [
-"^Mất kết nối (d+) ngày (d+) giờ (d+) phút$",
+"^Mất kết nối (\\d+) ngày (\\d+) giờ (\\d+) phút$",
 "Lost connection for $1 d $2 h $3 min",
 "失去连接 $1 天 $2 小时 $3 分钟"
 ],
