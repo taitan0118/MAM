@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.96"
+const Version = "1.1.97"
 
 //go:embed web
 var webFS embed.FS
@@ -77,6 +77,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/devices/log", s.authed("", s.hDeviceLog))
 	mux.HandleFunc("/api/devices/ack", s.authed("", s.hDeviceAck))
 	mux.HandleFunc("/api/devices/snapshot", s.authed("", s.hDeviceSnap))
+	mux.HandleFunc("/api/devices/video", s.authed("", s.hDeviceVideo))
 	mux.HandleFunc("/api/devices/bulk", s.authed("super", s.hDeviceBulk))
 	mux.HandleFunc("/api/devices/parse", s.authed("super", s.hDeviceParse))
 	mux.HandleFunc("/api/devices/import", s.authed("super", s.hDeviceImport))
@@ -121,7 +122,7 @@ func secure(h http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:47640; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' http://127.0.0.1:47640; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 		if !strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-cache")
 		}

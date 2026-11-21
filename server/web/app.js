@@ -1453,11 +1453,23 @@ function khoang(ms) {
 // Khung xem hình camera. Trình duyệt không phát RTSP được nên server lấy ảnh JPEG camera nén sẵn,
 // đây chỉ thay ảnh mỗi giây — đủ biết camera quay gì, không mượt như đầu ghi.
 function khungHinh(d) {
-  const img = el('img', { alt: t('Hình camera'), style: 'width:100%;display:block;border-radius:10px;background:#000;aspect-ratio:16/9;object-fit:contain' });
-  const bao = el('div', { style: 'font-size:12.5px;color:var(--muted);margin-top:6px' }, t('Đang lấy hình…'));
-  // Camera đòi đăng nhập thì khai ngay tại đây, khỏi đi tìm nút "Tài khoản camera chung" ở trang khác.
-  // Tài khoản này dùng chung cho mọi camera chưa khai riêng.
+  // Hai đường xem: video mượt (server gói luồng RTSP thành fMP4) và ảnh mỗi giây. Thử đường mượt
+  // trước; camera nào không ra video thì tự lùi về ảnh, người dùng không phải bấm gì.
+  const img = el('img', { alt: t('Hình camera'), style: 'width:100%;display:block' });
+  const vid = el('video', { muted: true, autoplay: true, playsinline: true, style: 'width:100%;display:block' });
+  // giờ thật của máy đang xem, đè lên hình để đối chiếu với giờ camera tự in trong ảnh
+  const gio = el('div', { style: 'position:absolute;left:8px;bottom:8px;padding:2px 8px;border-radius:6px;background:rgba(0,0,0,.6);color:#fff;font:600 12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.3px;pointer-events:none' });
+  const khung = el('div', { style: 'position:relative;background:#000;border-radius:10px;overflow:hidden;min-height:140px' }, img, gio);
+  const bao = el('div', { style: 'font-size:12.5px;color:var(--muted);margin-top:6px' }, t('Đang mở video…'));
   const oTK = el('div', { style: 'display:none;margin-top:8px' });
+  let chay = true, lan = 0, dut = 0, huy = null, daLui = false, viAnh = '';
+
+  const veGio = () => { const n = new Date(); gio.textContent = hai(n.getHours()) + ':' + hai(n.getMinutes()) + ':' + hai(n.getSeconds()); };
+  veGio();
+  const nhipGio = setInterval(veGio, 1000);
+  const doiTK = m => /đăng nhập|mật khẩu|login|password|登录|密码/i.test(String(m));
+
+  // Camera đòi đăng nhập thì khai ngay tại đây, khỏi đi tìm nút "Tài khoản camera chung" ở trang khác.
   const moTK = () => {
     if (!isSuper() || oTK.dataset.mo) return;
     oTK.dataset.mo = '1';
@@ -1470,16 +1482,79 @@ function khungHinh(d) {
         const st = await api('GET', '/api/settings');
         await api('PUT', '/api/settings', Object.assign({}, st, { camUser: us.value.trim(), camPass: pw.value }));
         oTK.style.display = 'none'; delete oTK.dataset.mo;
-        chay = true; hong = 0; bao.textContent = t('Đang lấy hình…'); lay();
+        chay = true; dut = 0; daLui = false; viAnh = '';
+        bao.textContent = t('Đang mở video…'); video();
       } catch (e) { loi.textContent = trErr(e.message); nut.disabled = false; }
     } }, 'Lưu và xem lại');
     oTK.replaceChildren(el('div', { class: 'filters', style: 'margin:0' },
       field('Tài khoản camera', us), field('Mật khẩu', pw), nut), loi,
       infoNote('Dùng chung cho mọi camera chưa khai tài khoản riêng. Camera Hikvision mặc định là admin kèm mật khẩu đặt lúc lắp.'));
   };
-  let chay = true, lan = 0, hong = 0;
+
+  // ---- đường 1: video mượt ----
+  const video = () => {
+    if (!chay || daLui) return;
+    if (!window.MediaSource) return lui(t('trình duyệt không mở được video'));
+    khung.replaceChildren(vid, gio);
+    const ms = new MediaSource();
+    vid.src = URL.createObjectURL(ms);
+    ms.addEventListener('sourceopen', async () => {
+      try {
+        huy = new AbortController();
+        const rp = await fetch('/api/devices/video?id=' + encodeURIComponent(d.id), { credentials: 'same-origin', signal: huy.signal });
+        if (!rp.ok) throw new Error((await rp.json().catch(() => ({}))).error || rp.status);
+        const ma = 'video/mp4; codecs="' + (rp.headers.get('X-Codec') || 'avc1.42E01E') + '"';
+        if (!MediaSource.isTypeSupported(ma)) throw new Error(t('trình duyệt không phát được {0}', ma));
+        const sb = ms.addSourceBuffer(ma);
+        sb.mode = 'segments';
+        const hang = [];
+        const day = () => {
+          if (!chay || sb.updating || ms.readyState !== 'open') return;
+          if (sb.buffered.length) {
+            // bỏ phần đã xem, không thì bộ nhớ trình duyệt phình mãi
+            if (vid.currentTime - sb.buffered.start(0) > 20) { sb.remove(sb.buffered.start(0), vid.currentTime - 10); return; }
+            // tụt lại (tab bị ẩn chẳng hạn) thì nhảy tới chỗ mới nhất, đây là xem trực tiếp
+            if (sb.buffered.end(0) - vid.currentTime > 2) vid.currentTime = sb.buffered.end(0) - 0.3;
+          }
+          if (hang.length) sb.appendBuffer(hang.shift());
+        };
+        sb.addEventListener('updateend', day);
+        const rd = rp.body.getReader();
+        for (;;) {
+          const r = await rd.read();
+          if (r.done || !chay) break;
+          if (!lan++) { dut = 0; bao.textContent = t('Video trực tiếp'); }
+          hang.push(r.value);
+          day();
+        }
+        if (!chay) return;
+        // server cắt luồng sau 10 phút, hoặc camera tự ngắt: nối lại vài lần rồi mới chịu thua
+        if (++dut > 3) return lui(t('video đứt nhiều lần'));
+        bao.textContent = t('Nối lại video…');
+        setTimeout(video, 1000);
+      } catch (e) {
+        if (!chay) return;
+        const m = trErr(String(e.message || e));
+        if (doiTK(m)) { chay = false; moTK(); return; }
+        lui(m);
+      }
+    });
+  };
+
+  // ---- đường 2: ảnh mỗi giây ----
+  const lui = vi => {
+    if (daLui || !chay) return;
+    daLui = true; viAnh = vi; lan = 0;
+    if (huy) { try { huy.abort(); } catch (e) {} huy = null; }
+    try { vid.pause(); } catch (e) {}
+    if (vid.src && vid.src.startsWith('blob:')) URL.revokeObjectURL(vid.src);
+    vid.removeAttribute('src');
+    khung.replaceChildren(img, gio);
+    bao.textContent = t('Xem bằng ảnh: {0}', vi);
+    lay();
+  };
   const lay = async () => {
-    if (!chay) return;
+    if (!chay || !daLui) return;
     const t0 = Date.now();
     try {
       const rp = await fetch('/api/devices/snapshot?id=' + encodeURIComponent(d.id) + '&_=' + t0, { credentials: 'same-origin' });
@@ -1489,18 +1564,26 @@ function khungHinh(d) {
       const cu = img.src;
       img.src = URL.createObjectURL(b);
       if (cu && cu.startsWith('blob:')) URL.revokeObjectURL(cu); // không thì mỗi giây rò một tấm
-      lan++; hong = 0;
-      bao.textContent = t('{0} · làm mới {1} lần', gioNgan(new Date().toISOString()), lan);
+      lan++; dut = 0;
+      bao.textContent = t('Xem bằng ảnh: {0}', viAnh) + ' · ' + t('làm mới {0} lần', lan);
     } catch (e) {
-      hong++;
-      bao.textContent = t('Không lấy được hình: {0}', trErr(String(e.message || e)));
-      if (/đăng nhập|mật khẩu|login|password|登录|密码/i.test(String(e.message || e))) { chay = false; moTK(); return; }
-      if (hong >= 3) { chay = false; bao.textContent += ' · ' + t('đã dừng thử'); return; }
+      const m = trErr(String(e.message || e));
+      bao.textContent = t('Không lấy được hình: {0}', m);
+      if (doiTK(m)) { chay = false; moTK(); return; }
+      if (++dut >= 3) { chay = false; bao.textContent += ' · ' + t('đã dừng thử'); return; }
     }
     if (chay) setTimeout(lay, Math.max(300, 1000 - (Date.now() - t0)));
   };
-  lay();
-  return { el: el('div', {}, img, bao, oTK), dung: () => { chay = false; if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src); } };
+
+  video();
+  return { el: el('div', {}, khung, bao, oTK), dung: () => {
+    chay = false;
+    clearInterval(nhipGio);
+    if (huy) { try { huy.abort(); } catch (e) {} huy = null; } // không thì server còn kéo RTSP cả 10 phút
+    try { vid.pause(); } catch (e) {}
+    if (vid.src && vid.src.startsWith('blob:')) URL.revokeObjectURL(vid.src);
+    if (img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+  } };
 }
 
 async function devChiTiet(d) {
@@ -1535,7 +1618,7 @@ async function devChiTiet(d) {
     const tongNay = ss.reduce((a, x) => a + (x[1] - x[0]), 0);
     const lanRot = rots[rots.length - 1];
     const homNay = +ngay === +dauNgay(new Date());
-    oNav.replaceChildren(
+    oNav.replaceChildren(...[
         el('button', { class: 'btn', disabled: +ngay <= +somNhat, onclick: () => { ngay = new Date(+ngay - 864e5); veNgay(); } }, '‹'),
         el('input', { type: 'date', class: 'input', style: 'max-width:160px',
           value: ngay.getFullYear() + '-' + hai(ngay.getMonth() + 1) + '-' + hai(ngay.getDate()),
@@ -1543,7 +1626,8 @@ async function devChiTiet(d) {
           max: new Date().getFullYear() + '-' + hai(new Date().getMonth() + 1) + '-' + hai(new Date().getDate()),
           onchange: e => { const v = e.target.value; if (!v) return; const [y, m, d] = v.split('-').map(Number); ngay = new Date(y, m - 1, d); veNgay(); } }),
         el('button', { class: 'btn', disabled: homNay, onclick: () => { ngay = new Date(+ngay + 864e5); veNgay(); } }, '›'),
-        homNay ? null : el('button', { class: 'btn', onclick: () => { ngay = dauNgay(new Date()); veNgay(); } }, 'Về hôm nay'));
+        homNay ? null : el('button', { class: 'btn', onclick: () => { ngay = dauNgay(new Date()); veNgay(); } }, 'Về hôm nay'),
+      ].filter(Boolean));
     oNgay.replaceChildren(
       el('div', { class: 'kpis gon', style: 'grid-template-columns:repeat(3,1fr);margin:0 0 10px' },
         kpi(t('Thời gian hoạt động'), 'var(--good)', upDur(tongNay), t('trong ngày này')),
