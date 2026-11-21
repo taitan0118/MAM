@@ -1206,11 +1206,11 @@ VIEWS.devices = async v => {
   const dem = f => ' (' + list.filter(f).length + ')'; // số lượng hiện ngay trong ô lọc, khỏi phải chọn mới biết
   // Thanh tab theo nhóm: mỗi danh sách thiết bị của công ty là một nhóm, bấm một cái là lọc ngay.
   if (grps.length) v.append(el('div', { class: 'tabs', style: 'margin-top:12px' },
-    [['all', t('Tất cả')], ...grps.map(g => [g, g]), ...(list.some(d => !nhomCua(d).length) ? [['__none', t('Chưa phân nhóm')]] : [])]
+    [['all', t('Tất cả')], ...grps.map(g => [g, t(g)]), ...(list.some(d => !nhomCua(d).length) ? [['__none', t('Chưa phân nhóm')]] : [])]
       .map(([k, l]) => el('button', { class: 'tab' + (DEVF.g === k ? ' on' : ''), onclick: () => { DEVF.g = k; render(); } },
         l + (k === 'all' ? ' (' + list.length + ')' : k === '__none' ? dem(d => !nhomCua(d).length) : dem(d => coNhom(d, k)))))));
   v.append(el('div', { class: 'filters', style: 'margin-top:12px' },
-    field('Nhóm', select([['all', t('Tất cả nhóm') + dem(() => true)], ...grps.map(g => [g, g + dem(d => coNhom(d, g))]), ['__none', t('Chưa phân nhóm') + dem(d => !nhomCua(d).length)]], DEVF.g, x => { DEVF.g = x; render(); })),
+    field('Nhóm', select([['all', t('Tất cả nhóm') + dem(() => true)], ...grps.map(g => [g, t(g) + dem(d => coNhom(d, g))]), ['__none', t('Chưa phân nhóm') + dem(d => !nhomCua(d).length)]], DEVF.g, x => { DEVF.g = x; render(); })),
     field('Loại', select([['all', t('Tất cả loại') + dem(() => true)], ...DEVK.map(([k, l]) => [k, t(l) + dem(d => d.kind === k)])], DEVF.k, x => { DEVF.k = x; render(); })),
     field('Tình trạng', select(DEVST.map(([k, l]) => [k, t(l) + (k === 'all' ? dem(() => true) : dem(d => devHop(d, k)))]), DEVF.st, x => { DEVF.st = x; render(); })),
     // ô này phải nói đúng chiều đang sắp, không thì bấm cột đảo ngược rồi mà ô vẫn ghi 'Tên A→Z'
@@ -1233,7 +1233,7 @@ VIEWS.devices = async v => {
       el('td', { style: 'cursor:pointer' }, el('b', {}, tenTB(d)),
         d.canhBao ? el('span', { class: 'count badge-red', style: 'margin-left:7px' }, String(d.canhBao)) : null,
         macBad ? el('div', { style: 'font-size:11.5px;color:var(--crit);margin-top:3px' }, t('IP này đang là thiết bị khác (MAC đổi)')) : null),
-      el('td', {}, nhomCua(d).length ? nhomCua(d).join(', ') : el('span', { style: 'color:var(--faint)' }, t('Chưa phân nhóm'))),
+      el('td', {}, nhomCua(d).length ? nhomCua(d).map(g => t(g)).join(', ') : el('span', { style: 'color:var(--faint)' }, t('Chưa phân nhóm'))),
       el('td', {}, t(devKind(d.kind))),
       el('td', { class: 'mono' }, d.ip + (d.port ? ':' + d.port : '')),
       el('td', { style: 'font-size:12.5px;color:var(--muted)' }, d.done ? ago(d.checked) : '—'),
@@ -1449,7 +1449,7 @@ async function devChiTiet(d) {
       d.nameZh && d.nameZh !== d.name ? dong('Tên trong file gốc', d.nameZh) : null,
       dong('Địa chỉ IP', el('span', { class: 'mono' }, d.ip + (d.port ? ':' + d.port : ''))),
       dong('Loại', t(devKind(d.kind))),
-      dong('Nhóm', nhomCua(d).join(', ') || t('Chưa phân nhóm')),
+      dong('Nhóm', nhomCua(d).map(g => t(g)).join(', ') || t('Chưa phân nhóm')),
       dong('Trạng thái', el('span', {}, pill(cls2, t(lbl2)), sub2 ? ' ' + sub2 : '')),
       d.mac ? dong('Địa chỉ MAC', el('span', { class: 'mono' }, d.mac)) : null,
       d.path ? dong('Đường RTSP', d.path) : null,
