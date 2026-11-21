@@ -46,7 +46,41 @@ type luongH264 struct {
 	key      bool
 }
 
+var errMaLa = errors.New("bộ mã lạ")
+
+// Thiết bị nào chưa khai đường luồng thì thử các đường hay gặp, luồng PHỤ trước: luồng chính của
+// Hikvision/Dahua phần lớn là H.265 mà Chrome không phát được, còn luồng phụ gần như luôn là H.264.
+var duongPhu = []string{"/Streaming/Channels/102", "/cam/realmonitor?channel=1&subtype=1", "/h264/ch1/sub/av_stream", ""}
+
+// moLuong mở luồng hình. path rỗng thì dò lần lượt các đường hay gặp.
+// shortcut: dò lại mỗi lần xem, không nhớ đường đã được. Nâng cấp khi nào thấy chậm: ghi lại vào thiết bị.
 func moLuong(ctx context.Context, ip string, port int, path, user, pass string) (*luongH264, error) {
+	if path != "" {
+		return moMot(ctx, ip, port, path, user, pass)
+	}
+	var dau, maLa error
+	for _, p := range duongPhu {
+		l, err := moMot(ctx, ip, port, p, user, pass)
+		if err == nil {
+			return l, nil
+		}
+		if errors.Is(err, errChuaKhai) || errors.Is(err, errSaiMatKhau) {
+			return nil, err // sai tài khoản thì đường nào cũng sai, dò thêm vô ích
+		}
+		if errors.Is(err, errMaLa) {
+			maLa = err
+		}
+		if dau == nil {
+			dau = err
+		}
+	}
+	if maLa != nil { // camera có hình, chỉ sai bộ mã: báo cái đó mới giúp được người dùng
+		return nil, maLa
+	}
+	return nil, dau
+}
+
+func moMot(ctx context.Context, ip string, port int, path, user, pass string) (*luongH264, error) {
 	if port <= 0 {
 		port = 554
 	}
@@ -84,7 +118,7 @@ func moLuong(ctx context.Context, ip string, port int, path, user, pass string) 
 	}
 	if ten != "H264" {
 		c.Close()
-		return nil, fmt.Errorf("camera đang phát %s, trình duyệt chỉ xem được H.264 — vào web camera đổi luồng phụ sang H.264", ten)
+		return nil, fmt.Errorf("camera đang phát %s, trình duyệt chỉ xem được H.264 — vào web camera đổi luồng phụ sang H.264: %w", ten, errMaLa)
 	}
 	l.sps, l.pps = sps, pps
 
