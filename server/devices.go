@@ -61,14 +61,45 @@ type DevEvent struct {
 	Dev string    `json:"dev"`
 	Up  bool      `json:"up"`
 	At  time.Time `json:"at"`
+	// Trạng thái cụ thể: "up" | "down" | "novideo". Thiếu (dữ liệu cũ) thì suy từ Up.
+	// Có nó mới phân biệt được thiết bị MẤT KẾT NỐI với camera còn sống mà TREO không ra hình.
+	Trang string `json:"trang,omitempty"`
+}
+
+// devTrang: trạng thái để ghi vào lịch sử.
+func devTrang(up, doHinh, coHinh bool) string {
+	if !up {
+		return "down"
+	}
+	if doHinh && !coHinh {
+		return "novideo"
+	}
+	return "up"
 }
 
 const devLogMax = 50000 // giữ chừng này mốc; đầy thì bỏ phần cũ nhất
 
+// mocCuoi: trạng thái của mốc gần nhất đã ghi cho thiết bị, rỗng nếu chưa có mốc nào.
+// Gọi khi đang giữ s.mu.
+func (s *Server) mocCuoi(id string) string {
+	for i := len(s.st.DevLog) - 1; i >= 0; i-- {
+		if e := s.st.DevLog[i]; e.Dev == id {
+			if e.Trang != "" {
+				return e.Trang
+			}
+			if e.Up { // dữ liệu ghi trước 1.1.90 chỉ có Up
+				return "up"
+			}
+			return "down"
+		}
+	}
+	return ""
+}
+
 // ghiMoc ghi lại lúc thiết bị đổi trạng thái. Gọi khi đang giữ s.mu.
-func (s *Server) ghiMoc(d *NetDev, up bool, at time.Time) {
+func (s *Server) ghiMoc(d *NetDev, trang string, at time.Time) {
 	s.st.DevLog = append(s.st.DevLog, &DevEvent{
-		ID: d.ID + "/" + strconv.FormatInt(at.UnixNano(), 36), Dev: d.ID, Up: up, At: at,
+		ID: d.ID + "/" + strconv.FormatInt(at.UnixNano(), 36), Dev: d.ID, Up: trang != "down", At: at, Trang: trang,
 	})
 	if len(s.st.DevLog) > devLogMax {
 		s.st.DevLog = append([]*DevEvent{}, s.st.DevLog[len(s.st.DevLog)-devLogMax*9/10:]...)
@@ -287,8 +318,10 @@ func (s *Server) checkDevices(ctx context.Context, ids map[string]bool) {
 		if !ok || d.IP != x.IP { // đại ca vừa sửa IP trong lúc đang kiểm: bỏ kết quả cũ
 			continue
 		}
-		if d.Checked.IsZero() || d.Up != x.Up { // lần kiểm đầu, hoặc vừa rớt / vừa sống lại
-			s.ghiMoc(d, x.Up, x.Checked)
+		// So với MỐC GẦN NHẤT ĐÃ GHI, không so với trạng thái trong RAM: trạng thái RAM mất khi
+		// khởi động lại server, nên kiểu cũ đẻ ra một mốc "Hoạt động" giả sau mỗi lần nâng cấp.
+		if tr := devTrang(x.Up, s.doHinh(d), x.Video); tr != s.mocCuoi(d.ID) {
+			s.ghiMoc(d, tr, x.Checked)
 			luu = true
 		}
 		d.Up, d.Video, d.Kbps, d.Ports, d.Way = x.Up, x.Video, x.Kbps, x.Ports, x.Way
@@ -401,11 +434,28 @@ func (s *Server) devView(d *NetDev) map[string]interface{} {
 	if p == nil {
 		p = []int{}
 	}
+	// giờ rớt và giờ có lại của lần gần nhất, để danh sách nói rõ chứ không chỉ "đã từng mất kết nối"
+	var rot, lai interface{}
+	for i := len(s.st.DevLog) - 1; i >= 0; i-- {
+		e := s.st.DevLog[i]
+		if e.Dev != d.ID {
+			continue
+		}
+		if e.Up && lai == nil && rot == nil {
+			lai = e.At
+			continue
+		}
+		if !e.Up {
+			rot = e.At
+			break
+		}
+	}
 	return map[string]interface{}{
 		"id": d.ID, "name": d.Name, "nameZh": d.NameZH, "ip": d.IP, "kind": d.Kind, "groups": nhomCua(d), "port": d.Port,
 		"vid":  vid,
 		"path": d.Path, "user": d.User, "hasPass": d.Pass != "", "mac": d.MAC, "macNow": d.MACNow,
 		"up": d.Up, "video": d.Video, "kbps": d.Kbps, "ports": p, "way": d.Way, "canhBao": s.soCanhBao(d),
+		"rot": rot, "lai": lai,
 		"checked": d.Checked, "since": d.Since, "vidAt": d.VidAt, "done": !d.Checked.IsZero(),
 	}
 }
@@ -582,7 +632,14 @@ func (s *Server) hDeviceLog(w http.ResponseWriter, r *http.Request, me *Account)
 	for i := len(s.st.DevLog) - 1; i >= 0; i-- {
 		e := s.st.DevLog[i]
 		if e.Dev == id {
-			out = append(out, map[string]interface{}{"up": e.Up, "at": e.At})
+			tr := e.Trang
+			if tr == "" { // mốc ghi trước 1.1.90
+				tr = "down"
+				if e.Up {
+					tr = "up"
+				}
+			}
+			out = append(out, map[string]interface{}{"up": e.Up, "at": e.At, "trang": tr})
 		}
 		if len(out) >= 500 {
 			break

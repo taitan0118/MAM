@@ -723,7 +723,7 @@ func TestLichSuThietBi(t *testing.T) {
 	}
 	ghi := func(up bool) {
 		f.s.mu.Lock()
-		f.s.ghiMoc(d, up, time.Now())
+		f.s.ghiMoc(d, devTrang(up, false, false), time.Now())
 		f.s.mu.Unlock()
 	}
 	ghi(true)

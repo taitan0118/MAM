@@ -272,7 +272,7 @@ async function render(quiet) {
 
 /* ---------- Tổng quan ---------- */
 const VIEWS = {};
-const OVF = { f: 'all', r: 'all' };
+const OVF = { f: 'all', r: 'all', d: 'all' };
 VIEWS.overview = async v => {
   const noChat = me.role === 'view';
   const [o, ml, rq, ch, dv] = await Promise.all([api('GET', '/api/overview'), api('GET', '/api/machines'), api('GET', '/api/requests?status='), noChat ? { convs: [], unread: 0 } : api('GET', '/api/chat'), api('GET', '/api/devices')]);
@@ -305,7 +305,7 @@ VIEWS.overview = async v => {
   const ord = { new: 0, working: 1, done: 2 }, SL = { new: ['new', 'Mới'], working: ['work', 'Đang xử lý'], done: ['done', 'Xong'] };
   const open = rq.filter(q => OVF.r === 'all' || q.status === OVF.r).sort((a, b) => (a.status !== 'done' && !!b.urgent) - (b.status !== 'done' && !!a.urgent) || ord[a.status] - ord[b.status] || String(b.created).localeCompare(String(a.created)));
   const rcnt = (k, l, c) => el('button', { class: 'ovp ' + c + (OVF.r === k ? ' on' : ''), onclick: () => { OVF.r = k; render(); } }, el('b', {}, String(k === 'all' ? rq.length : cnt(k))), l);
-  const reqCard = !rq.length ? null : card('Yêu cầu hỗ trợ', null, el('div', { class: 'scrollbox short' }, open.length ? open.slice(0, 60).map(q => el('div', { style: rowCss, onclick: () => go('requests') },
+  const reqCard = !rq.some(q => q.status !== 'done') ? null : card('Yêu cầu hỗ trợ', null, el('div', { class: 'scrollbox short' }, open.length ? open.slice(0, 60).map(q => el('div', { style: rowCss, onclick: () => go('requests') },
     el('span', { class: 'ovp ' + SL[q.status][0], style: 'flex:none;margin-top:1px' }, SL[q.status][1]),
     el('div', { style: 'flex:1;min-width:0;font-size:13px' }, q.urgent && q.status !== 'done' ? el('b', { style: 'color:var(--crit)' }, t('Gấp') + ' · ') : null, el('b', {}, q.name), el('span', { style: 'color:var(--muted)' }, ' · ' + q.text)), el('span', { style: 'font-size:12px;color:var(--faint);white-space:nowrap' }, ago(q.created)))) : el('div', { class: 'empty' }, 'Không có yêu cầu nào')),
     el('div', { class: 'ovpills' }, rcnt('all', 'Tất cả', 'all'), rcnt('new', 'Mới', 'new'), rcnt('working', 'Đang xử lý', 'work'), rcnt('done', 'Xong', 'done')));
@@ -316,17 +316,23 @@ VIEWS.overview = async v => {
   const gr = Object.entries(o.groups || {}).sort((a, b) => a[0].localeCompare(b[0]));
   const groupsCard = card('Máy online theo nhóm', null, el('div', { class: 'scrollbox short', style: 'display:flex;flex-direction:column;gap:10px' }, gr.length ? gr.map(([nm, s]) => el('div', { style: 'display:flex;align-items:center;gap:10px;cursor:pointer', onclick: () => { MF.group = nm === 'Chưa phân nhóm' ? '__none' : nm; go('machines'); } },
     el('div', { style: 'width:130px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, nm), el('div', { class: 'bar', style: 'max-width:none' }, el('i', { style: 'width:' + (s.Total ? s.Online / s.Total * 100 : 0) + '%;background:' + (s.Online === s.Total ? 'var(--good)' : s.Online / s.Total >= 0.6 ? 'var(--warn)' : 'var(--crit)') })), el('span', { class: 'mono', style: 'font-size:12.5px;min-width:56px;text-align:right' }, s.Online + '/' + s.Total))) : el('div', { class: 'empty' }, 'Chưa có dữ liệu')));
-  // Thiết bị mạng (camera, máy chấm công, switch): cái nào rớt đưa lên đầu. Chưa khai cái nào thì giấu thẻ đi.
-  // gồm cả cái đã sống lại mà chưa ai bấm "Đã xử lý" — rớt lúc nửa đêm thì sáng ra vẫn phải thấy
-  const dvBad = dv.filter(d => d.done && (!d.up || (d.vid && !d.video) || d.canhBao > 0));
-  const devCard = !dv.length ? null : card('Thiết bị mạng', null, el('div', { class: 'scrollbox short' }, dvBad.length
-    ? dvBad.sort((a, b) => devXau(a) - devXau(b) || tenTB(a).localeCompare(tenTB(b))).map(d => { const [cls, lbl, sub] = devState(d);
-      return el('div', { style: rowCss, onclick: () => go('devices') }, pill(cls, t(lbl)),
-        el('div', { style: 'flex:1;min-width:0' }, el('b', {}, tenTB(d)), el('div', { style: 'font-size:12.5px;color:var(--muted)' }, d.ip + (nhomCua(d).length ? ' · ' + nhomCua(d).map(g => t(g)).join(', ') : ''))),
-        el('span', { style: 'font-size:12px;color:var(--faint);white-space:nowrap' }, d.since ? ago(d.since) : '')); })
-    : el('div', { class: 'empty' }, t('Tất cả {0} thiết bị đang hoạt động', dv.length))),
-    el('button', { class: 'btn', style: 'padding:2px 9px;font-size:12px', onclick: () => go('devices') }, 'Xem tất cả'));
-  if (devCard) devCard.classList.add('ovcao'); // thẻ này cần chỗ nhất nên cho cao gấp đôi
+  // Thiết bị mạng (camera, máy chấm công, switch). Chưa khai cái nào thì giấu thẻ đi.
+  // Dải chip lọc giống thẻ Sức khỏe từng máy: bấm một cái là lọc ngay trong thẻ.
+  const dn = k => dv.filter(d => devHop(d, k)).length;
+  const dchip = (k, l, c) => el('button', { class: 'ovchip' + (OVF.d === k ? ' on' : ''), onclick: () => { OVF.d = k; render(); } },
+    c ? el('i', { style: 'background:' + c }) : null, t(l), el('b', {}, String(k === 'all' ? dv.length : dn(k))));
+  const dvShown = dv.filter(d => devHop(d, OVF.d)).sort((a, b) => devXau(a) - devXau(b) || tenTB(a).localeCompare(tenTB(b)));
+  const devCard = !dv.length ? null : el('div', { class: 'card ovcao' }, // thẻ này cần chỗ nhất nên cho cao gấp đôi
+    el('div', { class: 'card-h', style: 'flex-wrap:wrap' }, el('h3', {}, 'Thiết bị mạng'), el('div', { style: 'flex:1' }),
+      el('div', { class: 'ovchips' }, dchip('all', 'Tất cả', null), dchip('down', 'Mất kết nối', 'var(--crit)'),
+        dchip('tung', 'Đã từng mất kết nối', 'var(--warn)'), dchip('novideo', 'Không ra hình', 'var(--warn)')),
+      el('button', { class: 'btn', style: 'padding:2px 9px;font-size:12px;margin-left:8px', onclick: () => go('devices') }, 'Xem tất cả')),
+    el('div', { class: 'card-b' }, el('div', { class: 'scrollbox short' }, dvShown.length
+      ? dvShown.map(d => { const [cls, lbl, sub] = devState(d);
+        return el('div', { style: rowCss, onclick: () => go('devices') }, pill(cls, t(lbl)),
+          el('div', { style: 'flex:1;min-width:0' }, el('b', {}, tenTB(d)), el('div', { style: 'font-size:12.5px;color:var(--muted)' }, d.ip + (nhomCua(d).length ? ' · ' + nhomCua(d).map(g => t(g)).join(', ') : ''))),
+          el('span', { style: 'font-size:12px;color:var(--faint);white-space:nowrap' }, d.since ? ago(d.since) : '')); })
+      : el('div', { class: 'empty' }, t('Không có thiết bị nào ở mức này')))));
   // một trang: không cuộn cả trang, mỗi thẻ tự cuộn bên trong
   v.append(el('div', { class: 'ov' }, kpiRow, emptyNote, el('div', { class: 'ovmain' }, health, el('div', { class: 'ovside' }, devCard, reqCard, chatCard))));
 };
@@ -793,7 +799,8 @@ VIEWS.alerts = async v => {
   // hỏi riêng hai loại: server chỉ trả 300 dòng mỗi lượt, gộp chung thì một tab có thể trống trơn
   let [it, mang] = await Promise.all([api('GET', '/api/alerts?loai=it&status=' + AF.st), api('GET', '/api/alerts?loai=mang&status=' + AF.st)]);
   // nghiêm trọng lên đầu, rồi mới nhất; lọc theo mức và tên máy/nội dung
-  const loc = ds => ds.filter(x => (AF.sev === 'all' || x.sev === AF.sev) && hit(AF.q, x.name, x.msg, x.ip)).sort((p, q) => (q.sev === 'crit') - (p.sev === 'crit') || String(q.opened).localeCompare(String(p.opened)));
+  // mới nhất lên đầu: đại ca muốn thấy ngay cái vừa xảy ra, mức nghiêm trọng đã có ô lọc riêng
+  const loc = ds => ds.filter(x => (AF.sev === 'all' || x.sev === AF.sev) && hit(AF.q, x.name, x.msg, x.ip)).sort((p, q) => String(q.opened).localeCompare(String(p.opened)));
   it = loc(it); mang = loc(mang);
   const a = it.concat(mang);
   v.append(el('div', { class: 'filters' }, el('div', { class: 'seg' }, [['open', 'Đang mở'], ['closed', 'Đã đóng']].map(([k, l]) => el('button', { class: AF.st === k ? 'on' : '', onclick: () => { AF.st = k; render(); } }, l))), el('span', { style: 'color:var(--muted);font-size:12.5px' }, t('{0} cảnh báo', a.length))));
@@ -802,7 +809,9 @@ VIEWS.alerts = async v => {
   const laMang = x => x.machine.startsWith('__dev-');
   const dong = x => el('tr', { onclick: () => x.machine === '__server' ? go('settings') : laMang(x) ? go('devices') : go('detail', x.machine) },
     el('td', {}, pill(x.sev === 'crit' ? 'crit' : 'warn', x.sev === 'crit' ? 'Nghiêm trọng' : 'Cảnh báo')),
-    el('td', {}, el('div', { style: 'font-weight:600' }, x.name), x.ip ? el('div', { class: 'mono', style: 'font-size:11.5px;color:var(--muted)' }, x.ip) : null),
+    el('td', {}, el('div', { style: 'font-weight:600' }, x.name),
+      x.ip ? el('div', { class: 'mono', style: 'font-size:11.5px;color:var(--muted)' }, x.ip) : null,
+      x.loai ? el('div', { style: 'font-size:11.5px;color:var(--faint)' }, x.loai) : null),
     el('td', {}, x.msg), el('td', {}, fmtDT(x.opened)), el('td', {}, AF.st === 'closed' ? (x.by || '—') + ' · ' + fmtDT(x.closed) : ''),
     el('td', { style: 'text-align:right' }, AF.st === 'open' && canWrite() ? el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: async e => { e.stopPropagation(); try { await api('POST', '/api/alerts/' + x.id + '/close', {}); render(); } catch (er) { fail(er); } } }, 'Đóng') : ''));
   const bang = (ds, trong) => el('div', { style: 'padding:0 16px 8px' }, table(['Mức', 'Máy', 'Nội dung', 'Mở lúc', AF.st === 'closed' ? 'Đóng bởi' : '', ''], ds.map(dong), trong));
@@ -1179,7 +1188,9 @@ function devState(d) {
   if (!d.up) return ['crit', 'Mất kết nối', d.since ? t('từ {0}', fmtDT(d.since)) : ''];
   const openPorts = d.ports && d.ports.length ? t('mở cổng {0}', d.ports.join(', ')) : d.way === 'ping' ? t('trả lời ping') : '';
   // đang chạy nhưng còn cảnh báo chưa xác nhận = đã từng rớt, phải thấy được chứ không im lặng
-  const tung = d.canhBao ? t('đã từng mất kết nối') + ' · ' : '';
+  const tung = !d.canhBao ? '' : (d.rot
+    ? t('ngắt {0}, có lại {1}', gioNgan(d.rot), d.lai ? gioNgan(d.lai) : gioNgan(d.since))
+    : t('đã từng mất kết nối')) + ' · ';
   if (d.vid) return d.video ? ['ok', 'Có hình', tung + t('{0} kbps', d.kbps)] : ['warn', 'Sống nhưng không ra hình', tung + openPorts];
   return ['ok', 'Hoạt động', tung + openPorts];
 }
@@ -1416,6 +1427,11 @@ function xepNhomHangLoat(grps, lam) {
 const hai = n => String(n).padStart(2, '0');
 const gioDayDu = x => { const d = new Date(x); return isNaN(d) || d.getFullYear() < 2000 ? '—'
   : hai(d.getDate()) + '/' + hai(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + hai(d.getHours()) + ':' + hai(d.getMinutes()) + ':' + hai(d.getSeconds()); };
+// giờ ngắn: cùng ngày thì chỉ HH:mm:ss, khác ngày thì kèm ngày/tháng cho khỏi nhầm
+const gioNgan = x => { const d = new Date(x); if (isNaN(d) || d.getFullYear() < 2000) return '—';
+  const n = new Date(); const cungNgay = d.toDateString() === n.toDateString();
+  const gio = hai(d.getHours()) + ':' + hai(d.getMinutes()) + ':' + hai(d.getSeconds());
+  return cungNgay ? gio : hai(d.getDate()) + '/' + hai(d.getMonth() + 1) + ' ' + gio; };
 // khoảng thời gian dạng '2 ngày 3 giờ 15 phút 4 giây', bỏ phần bằng 0 ở đầu
 function khoang(ms) {
   const g = Math.max(0, Math.round(ms / 1000));
@@ -1432,15 +1448,27 @@ async function devChiTiet(d) {
   try { r = await api('GET', '/api/devices/log?id=' + encodeURIComponent(d.id)); } catch (e) { fail(e); return; }
   const lg = r.log || [];
   // ghép thành từng đoạn: mốc này tới mốc kế tiếp (mốc mới nhất thì tới bây giờ)
-  const doan = lg.map((e, i) => ({ up: e.up, tu: e.at, den: i === 0 ? null : lg[i - 1].at }));
-  const rot = doan.filter(x => !x.up);
-  const tong = rot.reduce((a, x) => a + ((x.den ? new Date(x.den) : new Date()) - new Date(x.tu)), 0);
+  const doan = lg.map((e, i) => ({ tr: e.trang || (e.up ? 'up' : 'down'), tu: e.at, den: i === 0 ? null : lg[i - 1].at }));
+  const het = x => x.den ? new Date(x.den) : new Date();
+  const rot = doan.filter(x => x.tr === 'down');
+  const treo = doan.filter(x => x.tr === 'novideo');
+  const tong = rot.reduce((a, x) => a + (het(x) - new Date(x.tu)), 0);
+  // Ba trạng thái: mất kết nối / còn sống mà treo không ra hình / hoạt động.
+  const TR = { down: ['crit', 'Mất kết nối'], novideo: ['warn', 'Treo, không ra hình'], up: ['ok', 'Hoạt động'] };
   const bang = table(['Trạng thái', 'Từ lúc', 'Đến lúc', 'Kéo dài'], doan.map(x => el('tr', { class: 'nohover' },
-    el('td', {}, pill(x.up ? 'ok' : 'crit', t(x.up ? 'Hoạt động' : 'Mất kết nối'))),
+    el('td', {}, pill(TR[x.tr][0], t(TR[x.tr][1]))),
     el('td', { class: 'mono', style: 'font-size:12.5px' }, gioDayDu(x.tu)),
     el('td', { class: 'mono', style: 'font-size:12.5px' }, x.den ? gioDayDu(x.den) : el('span', { style: 'color:var(--muted)' }, t('tới bây giờ'))),
-    el('td', { style: 'font-size:12.5px' }, khoang((x.den ? new Date(x.den) : new Date()) - new Date(x.tu))))),
+    el('td', { style: 'font-size:12.5px' }, khoang(het(x) - new Date(x.tu))))),
     'Chưa có mốc nào — server mới bắt đầu theo dõi thiết bị này');
+  // Dải giờ trong ngày hôm nay, vẽ y như trang Thời gian hoạt động của máy.
+  const nua = new Date(); nua.setHours(0, 0, 0, 0);
+  const phut = tt => Math.max(0, Math.min(1440, (new Date(tt) - nua) / 60000));
+  const homNay = doan.filter(x => het(x) > nua).reverse(); // cũ → mới
+  const ss = homNay.filter(x => x.tr !== 'down').map(x => [phut(x.tu), phut(het(x)), !x.den]);
+  const soLan = homNay.filter(x => x.tr === 'down').length;
+  const tongNay = ss.reduce((a, x) => a + (x[1] - x[0]), 0);
+  const lanRot = homNay.filter(x => x.tr === 'down').slice(-1)[0];
   const dong = (nhan, giaTri) => el('div', { style: 'display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--border);font-size:13px' },
     el('div', { style: 'width:150px;color:var(--muted);flex:none' }, t(nhan)), el('div', { style: 'flex:1;min-width:0' }, giaTri));
   const [cls2, lbl2, sub2] = devState(d);
@@ -1459,7 +1487,14 @@ async function devChiTiet(d) {
       d.mac ? dong('Địa chỉ MAC', el('span', { class: 'mono' }, d.mac)) : null,
       d.path ? dong('Đường RTSP', d.path) : null,
       dong('Kiểm lần cuối', d.done ? gioDayDu(d.checked) : t('Chưa kiểm'))),
-    el('div', { style: 'margin-top:14px;font-size:13px' }, el('b', {}, t('Lịch sử hoạt động'))),
+    el('div', { style: 'margin-top:14px' }, card(t('Hôm nay'), t('rê chuột lên từng khúc để xem giờ'), el('div', {},
+      el('div', { class: 'kpis', style: 'grid-template-columns:repeat(3,1fr);margin:0 0 10px' },
+        kpi(t('Thời gian hoạt động'), 'var(--good)', upDur(tongNay), t('tính từ 0h hôm nay')),
+        kpi(t('Số lần rớt'), soLan ? 'var(--crit)' : 'var(--muted)', String(soLan), t('trong hôm nay')),
+        kpi(t('Rớt gần nhất'), 'var(--warn)', lanRot ? gioNgan(lanRot.tu) : '—', lanRot ? t('kéo dài {0}', khoang(het(lanRot) - new Date(lanRot.tu))) : t('hôm nay chưa rớt lần nào'))),
+      upTimeline(ss)))),
+    el('div', { style: 'margin-top:12px;font-size:13px' }, el('b', {}, t('Lịch sử hoạt động')),
+      el('span', { style: 'color:var(--muted);font-size:12.5px' }, treo.length ? ' · ' + t('{0} lần treo không ra hình', treo.length) : '')),
     el('div', { style: 'margin-top:6px' }, bang),
     el('div', { style: 'margin-top:10px' }, infoNote('Server kiểm thiết bị mỗi phút nên mốc ghi lại có thể lệch tối đa một phút so với lúc thiết bị rớt thật. Giữ 500 mốc gần nhất cho mỗi thiết bị.'))),
     [{ label: 'Đóng', on: c => c() },

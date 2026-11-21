@@ -656,12 +656,15 @@ func (s *Server) hAlerts(w http.ResponseWriter, r *http.Request, me *Account) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	// kèm IP: công ty có nhiều máy trùng tên nên chỉ nhìn tên thì tưởng cảnh báo bị lặp
+	// loại thiết bị: nhìn cảnh báo là biết camera hay switch hay máy chấm công, khỏi mở trang khác
+	loaiMay := map[string]string{}
 	ipMay := map[string]string{}
 	for _, m := range s.st.Machines {
 		ipMay[m.ID] = m.IP
 	}
 	for _, d := range s.st.Devices {
 		ipMay[devAlertID(d.ID)] = d.IP
+		loaiMay[devAlertID(d.ID)] = devKindVN(d.Kind)
 	}
 	out := []map[string]interface{}{}
 	for i := len(s.st.Alerts) - 1; i >= 0 && len(out) < 300; i-- {
@@ -676,7 +679,7 @@ func (s *Server) hAlerts(w http.ResponseWriter, r *http.Request, me *Account) {
 			out = append(out, map[string]interface{}{
 				"id": a.ID, "machine": a.Machine, "name": a.Name, "kind": a.Kind, "sev": a.Sev,
 				"msg": a.Msg, "opened": a.Opened, "closed": a.Closed, "status": a.Status, "by": a.By,
-				"ip": ipMay[a.Machine],
+				"ip": ipMay[a.Machine], "loai": loaiMay[a.Machine],
 			})
 		}
 	}
