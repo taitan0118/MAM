@@ -188,9 +188,13 @@ func privateIP(ip net.IP) bool {
 // checkDev kiểm một thiết bị: đo hình (camera có tài khoản) → gõ cổng TCP → ping. Không giữ khóa.
 func checkDev(ctx context.Context, d NetDev, wantVid bool) NetDev {
 	out := d
-	out.Up, out.Video, out.Kbps, out.Way, out.Ports = false, false, 0, "", []int{}
+	out.Up, out.Way, out.Ports = false, "", []int{}
 	out.Checked = time.Now()
+	// Luồng hình chỉ đo 5 phút một lần. Lượt nào KHÔNG đo thì phải giữ nguyên kết quả đo gần nhất:
+	// xóa đi là suốt 4 phút kế mọi camera đều thành "sống nhưng không ra hình", và tệ hơn nữa là
+	// ghi một mốc "treo không ra hình" giả vào lịch sử hoạt động sau mỗi lượt đo.
 	if wantVid {
+		out.Video, out.Kbps = false, 0
 		out.VidAt = out.Checked
 		if kb, err := rtspKbps(ctx, d.IP, d.Port, d.Path, d.User, d.Pass); err == nil && kb > 0 {
 			out.Up, out.Video, out.Kbps, out.Way = true, true, kb, "rtsp"
@@ -222,6 +226,9 @@ func checkDev(ctx context.Context, d NetDev, wantVid bool) NetDev {
 	// rớt lúc này là ghi mốc rớt giả vào lịch sử. Bỏ nguyên lượt, giữ trạng thái cũ.
 	if !out.Up && ctx.Err() != nil {
 		return d
+	}
+	if !out.Up {
+		out.Video, out.Kbps = false, 0 // không gọi được thì chắc chắn không có hình
 	}
 	if out.Up {
 		out.Miss = 0

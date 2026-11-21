@@ -1649,7 +1649,7 @@ async function devChiTiet(d) {
       el('div', { style: 'flex:1' }),
       el('span', { style: 'font-size:12.5px;color:var(--muted)' }, sub2 || (r.since ? t('từ {0}', gioDayDu(r.since)) : ''))),
     el('div', { class: 'dlg-stack' },
-      hinh ? card(t('Hình camera'), t('ảnh làm mới mỗi giây, không phải video mượt'), hinh.el) : null,
+      hinh ? card(t('Hình camera'), null, hinh.el) : null, // dòng dưới ảnh tự nói đang xem video hay xem ảnh
       card(t('Khoảng giờ hoạt động'), t('rê chuột lên từng khúc để xem giờ'), oNgay, oNav),
       card(t('Lịch sử hoạt động'),
         t('{0} lần rớt · tổng {1}', rot.length, khoang(tong)) + (treo.length ? ' · ' + t('{0} lần treo không ra hình', treo.length) : ''),
