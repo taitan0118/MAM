@@ -1455,6 +1455,28 @@ function khoang(ms) {
 function khungHinh(d) {
   const img = el('img', { alt: t('Hình camera'), style: 'width:100%;display:block;border-radius:10px;background:#000;aspect-ratio:16/9;object-fit:contain' });
   const bao = el('div', { style: 'font-size:12.5px;color:var(--muted);margin-top:6px' }, t('Đang lấy hình…'));
+  // Camera đòi đăng nhập thì khai ngay tại đây, khỏi đi tìm nút "Tài khoản camera chung" ở trang khác.
+  // Tài khoản này dùng chung cho mọi camera chưa khai riêng.
+  const oTK = el('div', { style: 'display:none;margin-top:8px' });
+  const moTK = () => {
+    if (!isSuper() || oTK.dataset.mo) return;
+    oTK.dataset.mo = '1';
+    oTK.style.display = '';
+    const us = input('admin', 'text', ''), pw = input('', 'password', '');
+    const loi = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
+    const nut = el('button', { class: 'btn primary', onclick: async () => {
+      nut.disabled = true;
+      try {
+        const st = await api('GET', '/api/settings');
+        await api('PUT', '/api/settings', Object.assign({}, st, { camUser: us.value.trim(), camPass: pw.value }));
+        oTK.style.display = 'none'; delete oTK.dataset.mo;
+        chay = true; hong = 0; bao.textContent = t('Đang lấy hình…'); lay();
+      } catch (e) { loi.textContent = trErr(e.message); nut.disabled = false; }
+    } }, 'Lưu và xem lại');
+    oTK.replaceChildren(el('div', { class: 'filters', style: 'margin:0' },
+      field('Tài khoản camera', us), field('Mật khẩu', pw), nut), loi,
+      infoNote('Dùng chung cho mọi camera chưa khai tài khoản riêng. Camera Hikvision mặc định là admin kèm mật khẩu đặt lúc lắp.'));
+  };
   let chay = true, lan = 0, hong = 0;
   const lay = async () => {
     if (!chay) return;
@@ -1472,12 +1494,13 @@ function khungHinh(d) {
     } catch (e) {
       hong++;
       bao.textContent = t('Không lấy được hình: {0}', trErr(String(e.message || e)));
+      if (/đăng nhập|mật khẩu|login|password|登录|密码/i.test(String(e.message || e))) { chay = false; moTK(); return; }
       if (hong >= 3) { chay = false; bao.textContent += ' · ' + t('đã dừng thử'); return; }
     }
     if (chay) setTimeout(lay, Math.max(300, 1000 - (Date.now() - t0)));
   };
   lay();
-  return { el: el('div', {}, img, bao), dung: () => { chay = false; if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src); } };
+  return { el: el('div', {}, img, bao, oTK), dung: () => { chay = false; if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src); } };
 }
 
 async function devChiTiet(d) {
