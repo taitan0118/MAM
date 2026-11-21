@@ -27,21 +27,45 @@ import (
 // snapPaths: đường ảnh JPEG của các hãng hay gặp, thử lần lượt. Hãng nào đúng thì nhớ lại
 // (NetDev.SnapPath) để lần sau gọi thẳng một phát.
 var snapPaths = []string{
-	"/ISAPI/Streaming/channels/101/picture", // Hikvision (và mấy hãng OEM theo Hikvision)
-	"/cgi-bin/snapshot.cgi?channel=1",       // Dahua
-	"/onvif-http/snapshot?Profile_1",        // ONVIF chung
+	// Xếp theo mức hay gặp ở Việt Nam: hãng đầu danh sách trúng thì dò xong trong một nhịp.
+	"/ISAPI/Streaming/channels/101/picture", // Hikvision + hãng OEM theo Hikvision (đo thật trên camera công ty)
+	"/cgi-bin/snapshot.cgi?channel=1",       // Dahua, Amcrest, Tiandy, Lorex
+	"/cgi-bin/snapshot.cgi",                 // Dahua đời cũ, không tham số
+	"/onvif-http/snapshot?Profile_1",        // ONVIF chung (nhiều hãng nhỏ)
+	"/onvif/snapshot",                       // ONVIF kiểu khác
 	"/images/snapshot.jpg",                  // Uniview
-	"/axis-cgi/jpg/image.cgi",               // Axis
 	"/cgi-bin/api.cgi?cmd=Snap&channel=0",   // Reolink
-	"/snapshot.jpg",                         // một số camera đời cũ
+	"/axis-cgi/jpg/image.cgi",               // Axis
+	"/stw-cgi/video.cgi?msubmenu=snapshot&action=view", // Hanwha / Samsung Techwin
+	"/cgi-bin/viewer/video.jpg",             // Vivotek
+	"/cgi-bin/CGIProxy.fcgi?cmd=snapPicture2", // Foscam
+	"/SnapshotJPEG?Resolution=640x480",      // Panasonic
+	"/image/jpeg.cgi",                       // D-Link
+	"/cgi/jpg/jpeg.cgi",                     // TRENDnet
+	"/snapshot/view0.jpg",                   // Grandstream
+	"/record/current.jpg",                   // Mobotix
+	"/snap.jpg",                             // Bosch và vài hãng khác
+	"/jpg/image.jpg",                        // Mobotix / ACTi / nhiều hãng nhỏ
+	"/ISAPI/Streaming/channels/1/picture",   // vài model Hikvision đánh số kênh khác
+	"/Streaming/channels/101/picture",       // Hikvision firmware cũ, chưa có tiền tố ISAPI
+	"/media/cam0/still.jpg",                 // vài hãng theo chuẩn mở
+	"/image.jpg",                            // chung
+	"/snapshot.jpg",                         // chung, camera đời cũ
 	"/tmpfs/auto.jpg",                       // vài hãng Trung Quốc
+	"/tmpfs/snap.jpg",                       // biến thể của trên
 }
 
 const (
-	snapMax   = 8 << 20          // ảnh quá 8 MB là bất thường, không nhận
-	snapWait  = 6 * time.Second  // một lượt lấy ảnh
-	snapCache = 900 * time.Millisecond // giữ ảnh vừa lấy: nhiều người cùng xem thì camera chỉ bị gọi một lần
+	snapMax = 8 << 20 // ảnh quá 8 MB là bất thường, không nhận
+	// Đã biết đường đúng thì cho thong thả; còn đang dò giữa hơn hai chục đường thì mỗi đường chỉ
+	// được 2,5 giây, và cả lượt dò không quá 20 giây — không thì camera câm ngốn hết hạn gọi.
+	snapWait = 6 * time.Second
+	snapDo   = 2500 * time.Millisecond
+	snapCache  = 900 * time.Millisecond // nhiều người cùng xem thì camera chỉ bị gọi một lần
 )
+
+// snapBudget: hạn cho cả lượt dò. Là biến để test hạ xuống cho nhanh.
+var snapBudget = 20 * time.Second
 
 // bộ nhớ đệm ảnh: khóa là id thiết bị.
 type snapItem struct {
@@ -167,8 +191,15 @@ func snapCong(d NetDev) []int {
 // layAnh thử các cổng web và các đường ảnh cho tới khi ra ảnh thật. Trả thêm đường vừa dùng được
 // để nhớ lại. Không giữ khóa.
 func layAnh(ctx context.Context, d NetDev, user, pass string) ([]byte, string, error) {
+	han := snapWait // đã nhớ đường thì gọi thẳng, cho thong thả
+	if d.SnapPath == "" {
+		han = snapDo
+		var thoi context.CancelFunc
+		ctx, thoi = context.WithTimeout(ctx, snapBudget)
+		defer thoi()
+	}
 	cl := &http.Client{
-		Timeout:       snapWait,
+		Timeout:       han,
 		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, DisableKeepAlives: true},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}

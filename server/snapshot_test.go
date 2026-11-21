@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // một tấm JPEG bé xíu: chỉ cần đúng hai byte đầu và đủ dài để laAnh nhận
@@ -148,5 +149,53 @@ func TestSnapCongUuTienWeb(t *testing.T) {
 	got := snapCong(NetDev{Ports: []int{554, 8000, 80}})
 	if len(got) != 2 || got[0] != 80 || got[1] != 8000 {
 		t.Fatalf("cổng web phải đứng trước, nhận %v", got)
+	}
+}
+
+// Danh sách đường ảnh: không trùng nhau, đều bắt đầu bằng "/", và Hikvision phải đứng đầu vì
+// camera công ty đo được là dòng đó.
+func TestSnapPathsSach(t *testing.T) {
+	if snapPaths[0] != "/ISAPI/Streaming/channels/101/picture" {
+		t.Fatalf("Hikvision phải đứng đầu, đang là %q", snapPaths[0])
+	}
+	thay := map[string]bool{}
+	for _, x := range snapPaths {
+		if !strings.HasPrefix(x, "/") {
+			t.Fatalf("đường phải bắt đầu bằng /: %q", x)
+		}
+		if thay[x] {
+			t.Fatalf("đường bị lặp: %q", x)
+		}
+		thay[x] = true
+	}
+}
+
+// Camera câm (cổng mở nhưng không trả lời) không được ngốn quá hạn dò của cả lượt.
+func TestLayAnhCoHanDo(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() { // nhận kết nối rồi im luôn, không trả lời gì
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_ = c
+		}
+	}()
+	_, cong, _ := net.SplitHostPort(ln.Addr().String())
+	cu := snapBudget
+	snapBudget = 3 * time.Second // hạ xuống cho bộ test chạy nhanh
+	defer func() { snapBudget = cu }()
+	d := NetDev{IP: "127.0.0.1", Ports: []int{atoiHay(cong)}, Kind: "camera"}
+	t0 := time.Now()
+	if _, _, err := layAnh(context.Background(), d, "admin", "x"); err == nil {
+		t.Fatal("camera câm mà vẫn báo lấy được ảnh")
+	}
+	if d := time.Since(t0); d > snapBudget+4*time.Second {
+		t.Fatalf("dò quá lâu: %v (hạn %v)", d, snapBudget)
 	}
 }
