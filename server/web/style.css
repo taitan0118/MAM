@@ -624,3 +624,15 @@ img.av{display:block}
 
 /* huy hiệu loại thiết bị trong danh sách cảnh báo */
 .kchip{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:600;line-height:17px}
+
+/* Hộp Chi tiết thiết bị: một dòng tóm tắt rồi tới các thẻ cách đều nhau. Trước đây chỗ thì thẻ,
+   chỗ thì khối trần nên nhịp giãn cách so le. */
+.dlg-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:0 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.dlg-stack{display:flex;flex-direction:column;gap:12px}
+.dlg-stack>.card{margin:0}
+/* Thông tin thiết bị: hai cột cho đỡ dài, hộp hẹp thì tự về một cột. */
+.dlg-info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
+@media (max-width:720px){.dlg-info{grid-template-columns:1fr}}
+/* Số liệu trong hộp: nhỏ hơn ngoài trang, không thì "13 giờ 10 phút" bị xuống dòng. */
+.kpis.gon .kpi{padding:10px 12px}
+.kpis.gon .val{font-size:20px;line-height:1.25}
