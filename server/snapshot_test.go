@@ -129,3 +129,24 @@ func TestSnapAPIThietBiLa(t *testing.T) {
 	code, _, _ := f.tech.do("GET", "/api/devices/snapshot?id=khongco", nil, nil)
 	expect(t, code, 404, "thiết bị không có")
 }
+
+// Chưa khai tài khoản mà camera đòi đăng nhập: phải báo ĐÚNG việc cần làm, không để lỗi mạng của
+// cổng khác che mất. Đây là cái đại ca gặp: thông báo hiện ra là "connection forcibly closed" ở
+// cổng 8000, trong khi việc thật phải làm là khai tài khoản camera.
+func TestLayAnhChuaKhaiTaiKhoan(t *testing.T) {
+	ip, cong := camGia(t, "/ISAPI/Streaming/channels/101/picture", "admin", "x", nil)
+	// cổng 8000 không có ai nghe: gõ vào là lỗi mạng, không được lấn át lỗi đăng nhập
+	d := NetDev{IP: ip, Ports: []int{cong, 8000}, Kind: "camera"}
+	_, _, err := layAnh(context.Background(), d, "", "")
+	if err != errChuaKhai {
+		t.Fatalf("phải báo chưa khai tài khoản, nhận: %v", err)
+	}
+}
+
+// Cổng web thử trước, cổng lạ (8000 của Hikvision là cổng SDK) để sau.
+func TestSnapCongUuTienWeb(t *testing.T) {
+	got := snapCong(NetDev{Ports: []int{554, 8000, 80}})
+	if len(got) != 2 || got[0] != 80 || got[1] != 8000 {
+		t.Fatalf("cổng web phải đứng trước, nhận %v", got)
+	}
+}

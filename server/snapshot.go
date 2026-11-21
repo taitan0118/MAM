@@ -54,6 +54,13 @@ var (
 	snapHet = map[string]snapItem{}
 )
 
+// Hai lỗi này nói đúng việc cần làm, nên phải được ưu tiên báo ra thay vì lỗi mạng của cổng khác:
+// camera trả 401 ở ĐÚNG đường ảnh nghĩa là đường đã tìm ra, chỉ còn thiếu tài khoản.
+var (
+	errChuaKhai   = fmt.Errorf("camera đòi đăng nhập — chưa khai Tài khoản camera chung")
+	errSaiMatKhau = fmt.Errorf("sai tài khoản hoặc mật khẩu camera")
+)
+
 // laAnh: dữ liệu nhận về có đúng là JPEG/PNG không. Camera chưa đăng nhập được thường trả về trang
 // HTML báo lỗi với mã 200, nên phải nhìn mấy byte đầu chứ không tin mã trả về.
 func laAnh(b []byte) bool {
@@ -122,7 +129,10 @@ func layAnhURL(ctx context.Context, cl *http.Client, u, duong, user, pass string
 		}
 	}
 	if code == 401 {
-		return nil, fmt.Errorf("sai tài khoản hoặc mật khẩu camera")
+		if user == "" {
+			return nil, errChuaKhai
+		}
+		return nil, errSaiMatKhau
 	}
 	if !laAnh(b) {
 		return nil, fmt.Errorf("không phải ảnh")
@@ -135,12 +145,19 @@ func layAnhURL(ctx context.Context, cl *http.Client, u, duong, user, pass string
 var snapBoCong = map[int]bool{554: true, 37777: true, 34567: true}
 
 func snapCong(d NetDev) []int {
-	ra := []int{}
+	web := map[int]bool{80: true, 8080: true, 443: true, 81: true, 8081: true}
+	truoc, sau := []int{}, []int{}
 	for _, p := range d.Ports {
-		if !snapBoCong[p] {
-			ra = append(ra, p)
+		if snapBoCong[p] {
+			continue
+		}
+		if web[p] { // cổng web thật thử trước; 8000 của Hikvision là cổng SDK, nói HTTP là nó cắt
+			truoc = append(truoc, p)
+		} else {
+			sau = append(sau, p)
 		}
 	}
+	ra := append(truoc, sau...)
 	if len(ra) == 0 {
 		ra = []int{80, 8080, 443}
 	}
@@ -164,7 +181,9 @@ func layAnh(ctx context.Context, d NetDev, user, pass string) ([]byte, string, e
 		// gõ cửa trước: cổng đóng thì bỏ qua ngay, không ngồi chờ hết 8 đường
 		c, err := (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "tcp", net.JoinHostPort(d.IP, itoa(p)))
 		if err != nil {
-			cuoi = err
+			if cuoi == nil {
+				cuoi = err
+			}
 			continue
 		}
 		c.Close()
@@ -181,7 +200,12 @@ func layAnh(ctx context.Context, d NetDev, user, pass string) ([]byte, string, e
 			if err == nil {
 				return b, duong, nil
 			}
-			cuoi = err
+			if err == errChuaKhai {
+				return nil, "", err // đã tìm ra đúng đường, thử tiếp cũng vô ích
+			}
+			if cuoi == nil || err == errSaiMatKhau {
+				cuoi = err
+			}
 		}
 	}
 	if cuoi == nil {

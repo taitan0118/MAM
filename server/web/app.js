@@ -107,6 +107,9 @@ function select(opts, val, onchange) {
 }
 const infoNote = x => el('div', { class: 'note' }, el('span', { html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>' }), el('div', {}, x));
 // Màu tình trạng ổ cứng: server chấm theo S.M.A.R.T (Tốt / Cần chú ý / Sắp hỏng); ổ cũ chưa chấm thì theo chữ của Windows.
+// màu theo loại thiết bị mạng, để trong danh sách cảnh báo nhìn phát biết camera hay switch
+const MAU_LOAI = { camera: '#2563eb', attend: '#7c3aed', switch: '#0d9488', router: '#c2410c', wifi: '#0369a1', led: '#be185d', other: '#64748b' };
+const mauLoai = k => MAU_LOAI[k] || MAU_LOAI.other;
 const diskPill = h => /^(sắp hỏng|unhealthy)$/i.test(h) ? 'crit' : (/^(tốt|healthy|ok)$/i.test(h) ? 'ok' : 'warn');
 const pill = (cls, x) => el('span', { class: 'pill ' + cls }, el('span', { class: 'd' }), x);
 const card = (title, sub, body, right) => el('div', { class: 'card' }, el('div', { class: 'card-h' }, el('h3', {}, title), sub ? el('span', { class: 'sub' }, '· ' + t(sub)) : null, el('div', { style: 'flex:1' }), right), el('div', { class: 'card-b' }, body));
@@ -203,7 +206,7 @@ function forceChange() {
 }
 
 /* ---------- khung ứng dụng ---------- */
-const NAV = [['overview', 'Tổng quan'], ['alerts', 'Cảnh báo'], ['requests', 'Yêu cầu hỗ trợ'], ['chat', 'Chat với máy'], ['machines', 'Máy'], ['groups', 'Nhóm máy'], ['policy', 'Chính sách'], ['security', 'Bảo mật & bản vá'], ['discover', 'Phát hiện máy'], ['devices', 'Thiết bị mạng'], ['net', 'Qua Internet'], ['inventory', 'Kiểm kê'], ['report', 'Báo cáo'], ['uptime', 'Thời gian hoạt động'], ['accounts', 'Tài khoản'], ['audit', 'Nhật ký thao tác'], ['settings', 'Cài đặt']];
+const NAV = [['overview', 'Tổng quan'], ['alerts', 'Cảnh báo'], ['requests', 'Yêu cầu hỗ trợ'], ['chat', 'Chat với máy'], ['machines', 'Máy'], ['groups', 'Nhóm máy'], ['devices', 'Thiết bị mạng'], ['policy', 'Chính sách'], ['security', 'Bảo mật & bản vá'], ['discover', 'Phát hiện máy'], ['net', 'Qua Internet'], ['inventory', 'Kiểm kê'], ['report', 'Báo cáo'], ['uptime', 'Thời gian hoạt động'], ['accounts', 'Tài khoản'], ['audit', 'Nhật ký thao tác'], ['settings', 'Cài đặt']];
 const TITLES = {
   overview: ['Tổng quan', 'Toàn hệ thống · cập nhật trực tiếp'], machines: ['Máy', 'Danh sách, lọc, ra lệnh'], detail: ['Chi tiết máy', ''],
   groups: ['Nhóm máy', 'Sắp xếp máy theo khu vực hoặc phòng ban'], alerts: ['Cảnh báo', 'Nhiệt độ, CPU, ổ cứng, mất kết nối'],
@@ -811,7 +814,7 @@ VIEWS.alerts = async v => {
     el('td', {}, pill(x.sev === 'crit' ? 'crit' : 'warn', x.sev === 'crit' ? 'Nghiêm trọng' : 'Cảnh báo')),
     el('td', {}, el('div', { style: 'font-weight:600' }, x.name),
       x.ip ? el('div', { class: 'mono', style: 'font-size:11.5px;color:var(--muted)' }, x.ip) : null,
-      x.loai ? el('div', { style: 'font-size:11.5px;color:var(--faint)' }, x.loai) : null),
+      x.loai ? el('div', { style: 'margin-top:3px' }, el('span', { class: 'kchip', style: 'background:' + mauLoai(x.loaiMa) }, t(x.loai))) : null),
     el('td', {}, x.msg), el('td', {}, fmtDT(x.opened)), el('td', {}, AF.st === 'closed' ? (x.by || '—') + ' · ' + fmtDT(x.closed) : ''),
     el('td', { style: 'text-align:right' }, AF.st === 'open' && canWrite() ? el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: async e => { e.stopPropagation(); try { await api('POST', '/api/alerts/' + x.id + '/close', {}); render(); } catch (er) { fail(er); } } }, 'Đóng') : ''));
   const bang = (ds, trong) => el('div', { style: 'padding:0 16px 8px' }, table(['Mức', 'Máy', 'Nội dung', 'Mở lúc', AF.st === 'closed' ? 'Đóng bởi' : '', ''], ds.map(dong), trong));
@@ -994,7 +997,9 @@ const diskLine = d => {
   return el('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:1px 0', title: tip.join(' · ') },
     el('span', { class: 'mono', style: 'font-size:12px' }, (d.sizeGB ? d.sizeGB + ' GB' : '') + (d.type ? ' ' + d.type : '')),
     el('span', { style: 'font-size:12px;color:var(--muted)' }, d.model || ''),
-    d.health ? pill(diskPill(d.health), t(d.health) + (d.healthPct != null ? ' ' + Math.round(d.healthPct) + '%' : '')) : null);
+    d.health ? el('span', { title: d.note ? t(d.note) : '' }, pill(diskPill(d.health), t(d.health) + (d.healthPct != null ? ' ' + Math.round(d.healthPct) + '%' : ''))) : null,
+    // tuổi thọ còn 100% mà vẫn "Cần chú ý" thì lý do nằm ở đây (khối hỏng đã thay chẳng hạn)
+    d.note ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:2px' }, t(d.note)) : null);
 };
 const IV = { group: 'all', q: '' };
 VIEWS.inventory = async v => {
@@ -1510,7 +1515,12 @@ async function devChiTiet(d) {
     oNgay.replaceChildren(
       el('div', { class: 'filters', style: 'margin:0 0 10px' },
         el('button', { class: 'btn', disabled: +ngay <= +somNhat, onclick: () => { ngay = new Date(+ngay - 864e5); veNgay(); } }, '‹'),
-        el('b', { style: 'font-size:13.5px' }, homNay ? t('Hôm nay') + ' · ' + ngayVN(ngay) : ngayVN(ngay)),
+        el('input', { type: 'date', class: 'input', style: 'max-width:160px',
+          value: ngay.getFullYear() + '-' + hai(ngay.getMonth() + 1) + '-' + hai(ngay.getDate()),
+          min: somNhat.getFullYear() + '-' + hai(somNhat.getMonth() + 1) + '-' + hai(somNhat.getDate()),
+          max: new Date().getFullYear() + '-' + hai(new Date().getMonth() + 1) + '-' + hai(new Date().getDate()),
+          onchange: e => { const v = e.target.value; if (!v) return; const [y, m, d] = v.split('-').map(Number); ngay = new Date(y, m - 1, d); veNgay(); } }),
+        homNay ? el('b', { style: 'font-size:13px;color:var(--good)' }, t('Hôm nay')) : null,
         el('button', { class: 'btn', disabled: homNay, onclick: () => { ngay = new Date(+ngay + 864e5); veNgay(); } }, '›'),
         homNay ? null : el('button', { class: 'btn', onclick: () => { ngay = dauNgay(new Date()); veNgay(); } }, 'Về hôm nay')),
       el('div', { class: 'kpis', style: 'grid-template-columns:repeat(3,1fr);margin:0 0 10px' },
