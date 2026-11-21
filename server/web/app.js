@@ -305,12 +305,12 @@ VIEWS.overview = async v => {
   const ord = { new: 0, working: 1, done: 2 }, SL = { new: ['new', 'Mới'], working: ['work', 'Đang xử lý'], done: ['done', 'Xong'] };
   const open = rq.filter(q => OVF.r === 'all' || q.status === OVF.r).sort((a, b) => (a.status !== 'done' && !!b.urgent) - (b.status !== 'done' && !!a.urgent) || ord[a.status] - ord[b.status] || String(b.created).localeCompare(String(a.created)));
   const rcnt = (k, l, c) => el('button', { class: 'ovp ' + c + (OVF.r === k ? ' on' : ''), onclick: () => { OVF.r = k; render(); } }, el('b', {}, String(k === 'all' ? rq.length : cnt(k))), l);
-  const reqCard = card('Yêu cầu hỗ trợ', null, el('div', { class: 'scrollbox short' }, open.length ? open.slice(0, 60).map(q => el('div', { style: rowCss, onclick: () => go('requests') },
+  const reqCard = !rq.length ? null : card('Yêu cầu hỗ trợ', null, el('div', { class: 'scrollbox short' }, open.length ? open.slice(0, 60).map(q => el('div', { style: rowCss, onclick: () => go('requests') },
     el('span', { class: 'ovp ' + SL[q.status][0], style: 'flex:none;margin-top:1px' }, SL[q.status][1]),
     el('div', { style: 'flex:1;min-width:0;font-size:13px' }, q.urgent && q.status !== 'done' ? el('b', { style: 'color:var(--crit)' }, t('Gấp') + ' · ') : null, el('b', {}, q.name), el('span', { style: 'color:var(--muted)' }, ' · ' + q.text)), el('span', { style: 'font-size:12px;color:var(--faint);white-space:nowrap' }, ago(q.created)))) : el('div', { class: 'empty' }, 'Không có yêu cầu nào')),
     el('div', { class: 'ovpills' }, rcnt('all', 'Tất cả', 'all'), rcnt('new', 'Mới', 'new'), rcnt('working', 'Đang xử lý', 'work'), rcnt('done', 'Xong', 'done')));
   const unread = ch.convs.filter(c => c.unread);
-  const chatCard = noChat ? null : card('Tin nhắn chưa đọc', null, el('div', { class: 'scrollbox short' }, unread.length ? unread.map(c => el('div', { style: rowCss, onclick: () => { chatSel = c.id; go('chat'); } },
+  const chatCard = (noChat || !unread.length) ? null : card('Tin nhắn chưa đọc', null, el('div', { class: 'scrollbox short' }, unread.length ? unread.map(c => el('div', { style: rowCss, onclick: () => { chatSel = c.id; go('chat'); } },
     el('div', { style: 'flex:1;min-width:0' }, el('b', {}, c.name), el('div', { class: 'chat-last' }, c.last)), el('span', { class: 'count badge-red' }, String(c.unread)))) : el('div', { class: 'empty' }, 'Không có tin nhắn mới')),
     el('button', { class: 'btn', style: 'padding:3px 10px;font-size:12px', onclick: () => go('chat') }, 'Mở chat'));
   const gr = Object.entries(o.groups || {}).sort((a, b) => a[0].localeCompare(b[0]));
