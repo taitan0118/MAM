@@ -1508,15 +1508,19 @@ function khungHinh(d) {
         const sb = ms.addSourceBuffer(ma);
         sb.mode = 'segments';
         const hang = [];
+        let doi = 0; // số byte đang chờ nạp
         const day = () => {
           if (!chay || sb.updating || ms.readyState !== 'open') return;
           if (sb.buffered.length) {
-            // bỏ phần đã xem, không thì bộ nhớ trình duyệt phình mãi
-            if (vid.currentTime - sb.buffered.start(0) > 20) { sb.remove(sb.buffered.start(0), vid.currentTime - 10); return; }
+            // Cắt theo ĐỘ DÀI vùng đệm, không theo chỗ đang xem: máy nào chưa chạy được video thì
+            // chỗ đang xem đứng im, cắt theo nó là vùng đệm phình mãi cho tới khi hết bộ nhớ.
+            const dau = sb.buffered.start(0), cuoi = sb.buffered.end(0);
+            if (cuoi - dau > 30) { sb.remove(dau, cuoi - 10); return; }
             // tụt lại (tab bị ẩn chẳng hạn) thì nhảy tới chỗ mới nhất, đây là xem trực tiếp
-            if (sb.buffered.end(0) - vid.currentTime > 2) vid.currentTime = sb.buffered.end(0) - 0.3;
+            if (cuoi - vid.currentTime > 2) vid.currentTime = cuoi - 0.3;
+            if (vid.paused) vid.play().catch(() => {});
           }
-          if (hang.length) sb.appendBuffer(hang.shift());
+          if (hang.length) { doi -= hang[0].length; try { sb.appendBuffer(hang.shift()); } catch (e) { lui(trErr(String(e.message || e))); } }
         };
         sb.addEventListener('updateend', day);
         const rd = rp.body.getReader();
@@ -1524,7 +1528,10 @@ function khungHinh(d) {
           const r = await rd.read();
           if (r.done || !chay) break;
           if (!lan++) { dut = 0; bao.textContent = t('Video trực tiếp'); }
-          hang.push(r.value);
+          hang.push(r.value); doi += r.value.length;
+          // Khúc dữ liệu không cắt theo ranh giới khung hình nên bỏ bớt là hỏng luồng; dồn quá
+          // nhiều thì bỏ hẳn video chứ không ôm tiếp cho tới lúc hết bộ nhớ.
+          if (doi > 12 << 20) { lui(t('máy không theo kịp luồng video')); return; }
           day();
         }
         if (!chay) return;
