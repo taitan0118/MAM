@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.110"
+const Version = "1.1.111"
 
 //go:embed web
 var webFS embed.FS
@@ -177,12 +177,17 @@ func main() {
 	nHinh := s.donCanhBaoHinhGia()
 	// tin nhắn cũ chưa có ID thì không thả cảm xúc hay thu hồi được — vá luôn lúc khởi động
 	nTin := s.vaIDChat()
-	if nHinh > 0 || nTin > 0 {
+	// đầu ghi khai hồi bản chỉ cho một cái: chuyển vào danh sách nhiều đầu ghi
+	nGhi := s.chuyenDauGhiCu()
+	if nHinh > 0 || nTin > 0 || nGhi {
 		s.save()
 	}
 	s.mu.Unlock()
 	if nTin > 0 {
 		log.Printf(T("Đã đánh số %d tin nhắn cũ để thả cảm xúc và thu hồi được"), nTin)
+	}
+	if nGhi {
+		log.Print(T("Đã chuyển đầu ghi camera khai từ bản cũ sang danh sách nhiều đầu ghi"))
 	}
 	if nHinh > 0 {
 		log.Printf(T("Đã đính chính %d cảnh báo \"không ra hình\" của bản cũ"), nHinh)

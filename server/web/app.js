@@ -2389,9 +2389,10 @@ VIEWS.settings = async v => {
   v.append(card('Ngưỡng cảnh báo', isSuper() ? null : 'chỉ Super admin được sửa', el('div', { class: 'row2 lbl2' }, fe, fc, fd, fo, fod), isSuper() ? el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => {
     try { await api('PUT', '/api/settings', { temp: +ft.value, cpu: +c.value, disk: +d.value, offline: +o.value, offlineDays: +od.value, enrollKey: key.value }); toast('Đã lưu ngưỡng cảnh báo'); settings = await api('GET', '/api/settings'); } catch (e) { fail(e); } } }, 'Lưu') : null));
   if (isSuper()) {
-    // Đầu ghi camera: khai một lần, server đăng nhập thử thật rồi mới lưu
-    const nip = input('vd 172.20.1.10', 'text', settings.nvrIP || ''), npo = input('80', 'text', settings.nvrPort ? String(settings.nvrPort) : '');
-    const nus = input('admin', 'text', settings.nvrUser || ''), npw = input(settings.nvrIP ? t('(giữ mật khẩu đang lưu)') : '', 'password', '');
+    // Đầu ghi camera: khai được NHIỀU cái, server đăng nhập thử thật rồi mới lưu từng cái
+    const ghis = settings.nvrs || [];
+    const nip = input('vd 172.20.1.10', 'text', ''), npo = input('80', 'text', '');
+    const nus = input('admin', 'text', ''), npw = input('', 'password', '');
     const nerr = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
     const nvrLuu = async e => {
       nerr.textContent = '';
@@ -2403,18 +2404,28 @@ VIEWS.settings = async v => {
         render();
       } catch (x) { nerr.textContent = trErr(x.message); e.target.disabled = false; }
     };
-    v.append(card('Đầu ghi camera', settings.nvrIP ? settings.nvrIP + (settings.nvrKenh ? ' · ' + t('{0} kênh', settings.nvrKenh) : '') : 'chưa khai',
-      el('div', {}, el('div', { class: 'row2 lbl2' }, field('IP đầu ghi', nip), field('Cổng web', npo, 'Thường là 80. Đầu ghi Hikvision để cổng khác thì sửa lại.'),
-        field('Tài khoản', nus), field('Mật khẩu', npw)),
-        settings.nvrTen ? el('div', { style: 'font-size:13px;color:var(--muted);margin-top:4px' }, t('Đang khai: {0} · đăng nhập được lúc {1}', settings.nvrTen, fmtDT(settings.nvrAt))) : null,
+    const dongGhi = g => el('div', { style: 'display:flex;gap:10px;align-items:center;padding:9px 11px;border-top:1px solid var(--border)' },
+      el('div', { style: 'flex:1;min-width:0' },
+        el('b', {}, g.ten || g.ip), el('div', { style: 'font-size:12.5px;color:var(--muted)' },
+          el('span', { class: 'mono' }, g.ip + (g.port && g.port !== 80 ? ':' + g.port : '')),
+          ' · ' + (g.kenh ? t('{0} kênh', g.kenh) : t('không đọc được số kênh')),
+          ' · ' + t('gắn {0} camera', g.gan || 0),
+          g.at ? ' · ' + t('đăng nhập được lúc {0}', fmtDT(g.at)) : '')),
+      el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: () => { nip.value = g.ip; npo.value = String(g.port || 80); nus.value = g.user || ''; npw.value = ''; npw.placeholder = t('(giữ mật khẩu đang lưu)'); nip.focus(); } }, 'Khai lại'),
+      el('button', { class: 'btn danger', style: 'padding:4px 10px;font-size:12px', onclick: () => confirmBox(t('Xóa đầu ghi'),
+        t('Bỏ đầu ghi {0} khỏi MAM? Camera của nó sẽ không tua lại được nữa. Không đụng gì tới đầu ghi thật.', g.ten || g.ip), t('Xóa'), true, async () => {
+          try { await api('DELETE', '/api/nvr?ip=' + encodeURIComponent(g.ip)); toast(t('Đã xóa')); render(); } catch (x) { fail(x); }
+        }) }, 'Xóa'));
+    v.append(card('Đầu ghi camera', ghis.length ? t('{0} đầu ghi', ghis.length) : 'chưa khai',
+      el('div', {},
+        ghis.length ? el('div', { style: 'border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px' }, ghis.map(dongGhi)) : null,
+        el('div', { class: 'row2 lbl2' }, field('IP đầu ghi', nip), field('Cổng web', npo, 'Thường là 80. Đầu ghi Hikvision để cổng khác thì sửa lại.'),
+          field('Tài khoản', nus), field('Mật khẩu', npw)),
         infoNote('Server gọi thật vào đầu ghi để đọc tên máy và số kênh: đăng nhập được mới lưu, sai thì không ghi gì. Khai được đầu ghi là sau này chỉ cần một tài khoản cho cả dàn camera thay vì mỗi dải một mật khẩu.'),
-        infoNote('Khai xong, MAM tự gắn camera vào kênh đầu ghi theo IP — camera nào gắn được thì trong khung xem có thêm thanh Tua lại để coi lại đoạn đã lưu. Hiện chỉ nói chuyện được với đầu ghi Hikvision.'),
+        infoNote('Khai bao nhiêu đầu ghi cũng được — một cái 16 hay 32 kênh không ôm hết cả dàn camera. Khai xong, MAM tự gắn camera vào đúng đầu ghi và đúng kênh theo IP; camera nào gắn được thì trong khung xem có thêm thanh Tua lại. Hiện chỉ nói chuyện được với đầu ghi Hikvision.'),
         nerr,
         el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
-          el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: nvrLuu }, 'Kết nối và lưu'),
-          settings.nvrIP ? el('button', { class: 'btn danger', style: 'padding:6px 12px;font-size:12.5px;margin-left:auto', onclick: () => confirmBox(t('Xóa đầu ghi'), t('Xóa IP và tài khoản đầu ghi khỏi cài đặt? Không đụng gì tới đầu ghi thật.'), t('Xóa'), true, async () => {
-            try { await api('DELETE', '/api/nvr'); toast(t('Đã xóa')); render(); } catch (x) { fail(x); }
-          }) }, 'Xóa đầu ghi') : null))));
+          el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: nvrLuu }, ghis.length ? 'Thêm đầu ghi' : 'Kết nối và lưu')))));
     const rp = (await api('GET', '/api/remote-password')).set, pwi = input(rp ? 'Nhập mật khẩu mới để đổi' : 'Ít nhất 8 ký tự', 'password');
     const sv = async v => { try { await api('PUT', '/api/remote-password', { password: v }); toast(v ? 'Đã lưu mật khẩu điều khiển từ xa' : 'Đã tắt mật khẩu điều khiển từ xa'); render(); } catch (e) { fail(e); } };
     v.append(card('Mật khẩu điều khiển từ xa', rp ? 'đang bật' : 'đang tắt: máy phải bấm Đồng ý', field('Mật khẩu', pwi, 'Admin nhập đúng mật khẩu này khi mở điều khiển màn hình là vào thẳng, không cần người ngồi máy đồng ý. Máy vẫn hiện thanh báo và nút Dừng. Để tắt thì bấm Tắt.'),

@@ -142,18 +142,35 @@ func moTua(ctx context.Context, ip, user, pass string, ch int, t0 time.Time) (*l
 }
 
 // hNvr: Console khai đầu ghi. POST = thử đăng nhập, đúng mới lưu (giống khai tài khoản riêng cho
-// camera ở hDeviceTK: sai thì không ghi gì, khỏi phá cái đang chạy được). DELETE = xóa.
+// camera ở hDeviceTK: sai thì không ghi gì, khỏi phá cái đang chạy được). DELETE ?ip=… = bỏ một
+// đầu ghi. Khai được nhiều đầu ghi: một cái 16 hay 32 kênh không ôm hết 395 camera.
 func (s *Server) hNvr(w http.ResponseWriter, r *http.Request, me *Account) {
 	if r.Method == "DELETE" {
+		ip := strings.TrimSpace(r.URL.Query().Get("ip"))
 		s.mu.Lock()
 		st := &s.st.Settings
-		st.NvrIP, st.NvrPort, st.NvrUser, st.NvrPass, st.NvrTen, st.NvrKenh, st.NvrAt = "", 0, "", "", "", 0, time.Time{}
+		con, ten := st.Nvrs[:0], ""
+		for _, g := range st.Nvrs {
+			if g.IP == ip {
+				ten = g.Ten
+				continue
+			}
+			con = append(con, g)
+		}
+		if ten == "" && len(con) == len(st.Nvrs) {
+			s.mu.Unlock()
+			jerr(w, 404, "Không có đầu ghi này")
+			return
+		}
+		st.Nvrs = con
 		for _, d := range s.st.Devices {
-			d.NvrCh = 0 // bỏ đầu ghi thì không còn kênh nào để tua
+			if d.NvrID == ip { // bỏ đầu ghi thì camera của nó không còn gì để tua
+				d.NvrID, d.NvrCh = "", 0
+			}
 		}
 		s.save()
 		s.mu.Unlock()
-		s.auditBy(me, r, "Cài đặt", T("Xóa đầu ghi camera"), "—", true)
+		s.auditBy(me, r, "Cài đặt", T("Xóa đầu ghi camera %s (%s)", ten, ip), "—", true)
 		jok(w, map[string]bool{"ok": true})
 		return
 	}
@@ -177,10 +194,12 @@ func (s *Server) hNvr(w http.ResponseWriter, r *http.Request, me *Account) {
 	if in.Port <= 0 || in.Port > 65535 {
 		in.Port = 80
 	}
-	// để trống mật khẩu = giữ mật khẩu đang lưu, nhưng chỉ khi vẫn là đúng đầu ghi đó
+	// để trống mật khẩu = giữ mật khẩu đang lưu của chính đầu ghi đó, cùng tài khoản
 	s.mu.RLock()
-	if in.Pass == "" && in.IP == s.st.Settings.NvrIP && in.User == s.st.Settings.NvrUser {
-		in.Pass = s.st.Settings.NvrPass
+	for _, g := range s.st.Settings.Nvrs {
+		if in.Pass == "" && g.IP == in.IP && g.User == in.User {
+			in.Pass = g.Pass
+		}
 	}
 	s.mu.RUnlock()
 
@@ -193,10 +212,8 @@ func (s *Server) hNvr(w http.ResponseWriter, r *http.Request, me *Account) {
 	}
 
 	s.mu.Lock()
-	st := &s.st.Settings
-	st.NvrIP, st.NvrPort, st.NvrUser, st.NvrPass = in.IP, in.Port, in.User, in.Pass
-	st.NvrTen, st.NvrKenh, st.NvrAt = strings.TrimSpace(tt.Ten+" "+tt.Model), tt.Kenh, time.Now()
-	ten := st.NvrTen
+	moi := DauGhi{IP: in.IP, Port: in.Port, User: in.User, Pass: in.Pass,
+		Ten: strings.TrimSpace(tt.Ten + " " + tt.Model), Kenh: tt.Kenh, At: time.Now()}
 	// Gắn camera trong MAM vào kênh đầu ghi bằng cách khớp IP: tự làm chứ không bắt gõ tay 395 lần.
 	theoIP := map[string]int{}
 	for _, k := range kenh {
@@ -206,12 +223,66 @@ func (s *Server) hNvr(w http.ResponseWriter, r *http.Request, me *Account) {
 	}
 	for _, d := range s.st.Devices {
 		if ch := theoIP[d.IP]; ch > 0 {
-			d.NvrCh = ch
-			tt.Gan++
+			d.NvrID, d.NvrCh = moi.IP, ch
+			moi.Gan++
+		} else if d.NvrID == moi.IP {
+			// đầu ghi này trước có kéo camera đó, giờ không còn: gỡ ra chứ đừng để kênh ma
+			d.NvrID, d.NvrCh = "", 0
 		}
+	}
+	tt.Gan = moi.Gan
+	st := &s.st.Settings
+	thay := false
+	for i := range st.Nvrs {
+		if st.Nvrs[i].IP == moi.IP { // khai lại đúng đầu ghi đó thì ghi đè, không đẻ thêm dòng
+			st.Nvrs[i], thay = moi, true
+		}
+	}
+	if !thay {
+		st.Nvrs = append(st.Nvrs, moi)
 	}
 	s.save()
 	s.mu.Unlock()
-	s.auditBy(me, r, "Cài đặt", T("Khai đầu ghi camera %s (%s)", ten, in.IP), "—", true)
+	s.auditBy(me, r, "Cài đặt", T("Khai đầu ghi camera %s (%s), gắn được %d camera", moi.Ten, moi.IP, moi.Gan), "—", true)
 	jok(w, tt)
+}
+
+// dauGhiCua: đầu ghi đang giữ camera này, kèm số kênh. Không có thì trả rỗng. Gọi khi đang giữ s.mu.
+func (s *Server) dauGhiCua(d *NetDev) (DauGhi, int) {
+	if d.NvrID == "" || d.NvrCh == 0 {
+		return DauGhi{}, 0
+	}
+	for _, g := range s.st.Settings.Nvrs {
+		if g.IP == d.NvrID {
+			return g, d.NvrCh
+		}
+	}
+	return DauGhi{}, 0
+}
+
+// chuyenDauGhiCu: đầu ghi khai hồi bản 1.1.106–1.1.110 nằm ở mấy ô lẻ, chuyển vào danh sách rồi
+// xóa ô cũ. Chạy khi đang giữ s.mu lúc khởi động. Trả về true nếu có chuyển.
+func (s *Server) chuyenDauGhiCu() bool {
+	st := &s.st.Settings
+	if st.NvrIP == "" {
+		return false
+	}
+	co := false
+	for _, g := range st.Nvrs {
+		if g.IP == st.NvrIP {
+			co = true
+		}
+	}
+	if !co {
+		st.Nvrs = append(st.Nvrs, DauGhi{IP: st.NvrIP, Port: st.NvrPort, User: st.NvrUser, Pass: st.NvrPass,
+			Ten: st.NvrTen, Kenh: st.NvrKenh, At: st.NvrAt})
+		// camera đã gắn kênh hồi đó chưa biết thuộc đầu ghi nào, lúc ấy chỉ có một cái
+		for _, d := range s.st.Devices {
+			if d.NvrCh > 0 && d.NvrID == "" {
+				d.NvrID = st.NvrIP
+			}
+		}
+	}
+	st.NvrIP, st.NvrPort, st.NvrUser, st.NvrPass, st.NvrTen, st.NvrKenh, st.NvrAt = "", 0, "", "", "", 0, time.Time{}
+	return true
 }

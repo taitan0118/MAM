@@ -114,7 +114,7 @@ func TestTuaKhiChuaCoDauGhi(t *testing.T) {
 
 	// khai đầu ghi rồi nhưng camera không nằm trên đó
 	f.s.mu.Lock()
-	f.s.st.Settings.NvrIP, f.s.st.Settings.NvrUser = "10.0.0.1", "admin"
+	f.s.st.Settings.Nvrs = []DauGhi{{IP: "10.0.0.1", Port: 80, User: "admin", Pass: "x"}}
 	f.s.mu.Unlock()
 	code, _, _ = f.super.do("GET", "/api/devices/video?id=cam9&tua=2026-11-26T07:30", nil, nil)
 	expect(t, code, 400, "camera không có trên đầu ghi")
@@ -123,7 +123,7 @@ func TestTuaKhiChuaCoDauGhi(t *testing.T) {
 	f.s.mu.Lock()
 	for _, d := range f.s.st.Devices {
 		if d.ID == "cam9" {
-			d.NvrCh = 3
+			d.NvrID, d.NvrCh = "10.0.0.1", 3
 		}
 	}
 	f.s.mu.Unlock()
@@ -150,16 +150,16 @@ func TestGanCameraVaoKenhDauGhi(t *testing.T) {
 	}
 	f.s.mu.RLock()
 	for _, d := range f.s.st.Devices {
-		if d.ID == "cam9" && d.NvrCh != 1 {
-			t.Fatalf("camera 10.0.0.9 phải nằm ở kênh 1, đang là %d", d.NvrCh)
+		if d.ID == "cam9" && (d.NvrCh != 1 || d.NvrID != ip) {
+			t.Fatalf("camera 10.0.0.9 phải nằm ở kênh 1 của đầu ghi %s, đang là %q/%d", ip, d.NvrID, d.NvrCh)
 		}
-		if d.ID == "cam7" && d.NvrCh != 0 {
-			t.Fatalf("camera không có trên đầu ghi thì phải để 0, đang là %d", d.NvrCh)
+		if d.ID == "cam7" && (d.NvrCh != 0 || d.NvrID != "") {
+			t.Fatalf("camera không có trên đầu ghi thì phải để trống, đang là %q/%d", d.NvrID, d.NvrCh)
 		}
 	}
 	f.s.mu.RUnlock()
 
-	code, _, _ = f.super.do("DELETE", "/api/nvr", nil, nil)
+	code, _, _ = f.super.do("DELETE", "/api/nvr?ip="+ip, nil, nil)
 	expect(t, code, 200, "xóa đầu ghi")
 	f.s.mu.RLock()
 	defer f.s.mu.RUnlock()

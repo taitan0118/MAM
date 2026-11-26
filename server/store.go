@@ -57,6 +57,19 @@ type Machine struct {
 	LicenseNote string                 `json:"licenseNote"`          // bản quyền Windows/Office/phần mềm máy này, admin tự ghi
 }
 
+// DauGhi: một đầu ghi camera. IP là mã nhận dạng luôn — một địa chỉ chỉ có một đầu ghi, khỏi đẻ
+// thêm id cho Console phải mang theo.
+type DauGhi struct {
+	IP   string    `json:"ip"`
+	Port int       `json:"port"` // cổng web (ISAPI), thường 80
+	User string    `json:"user"`
+	Pass string    `json:"pass,omitempty"` // không bao giờ trả về Console
+	Ten  string    `json:"ten"`            // tên + model đầu ghi tự khai lúc đăng nhập được
+	Kenh int       `json:"kenh"`           // số kênh camera đầu ghi báo; 0 = không đọc được
+	Gan  int       `json:"gan"`            // số camera trong MAM gắn được vào đầu ghi này
+	At   time.Time `json:"at"`             // lần đăng nhập được gần nhất
+}
+
 type Settings struct {
 	TempC           float64 `json:"temp"`
 	CPU             float64 `json:"cpu"`
@@ -70,15 +83,19 @@ type Settings struct {
 	// ở đây một lần là mọi camera chưa có tài khoản riêng đều đo được luồng hình.
 	CamUser string `json:"camUser"`
 	CamPass string `json:"camPass"`
-	// Đầu ghi camera (NVR). Chỉ đổi qua /api/nvr: đăng nhập thử được mới lưu, nên PUT /api/settings
-	// phải giữ nguyên mấy ô này (Console gửi cả cục Settings lên, trống là mất).
-	NvrIP   string    `json:"nvrIP"`
-	NvrPort int       `json:"nvrPort"`
-	NvrUser string    `json:"nvrUser"`
-	NvrPass string    `json:"nvrPass"`
-	NvrTen  string    `json:"nvrTen"`  // tên + model đầu ghi tự khai lúc đăng nhập được
-	NvrKenh int       `json:"nvrKenh"` // số kênh camera đầu ghi báo; 0 = không đọc được
-	NvrAt   time.Time `json:"nvrAt"`   // lần đăng nhập được gần nhất
+	// Đầu ghi camera (NVR) — NHIỀU cái: một đầu ghi 16 hay 32 kênh không ôm hết 395 camera, công ty
+	// có mấy cái thì khai hết mấy cái. Chỉ đổi qua /api/nvr: đăng nhập thử được mới lưu, nên PUT
+	// /api/settings phải giữ nguyên (Console gửi cả cục Settings lên, trống là mất).
+	Nvrs []DauGhi `json:"nvrs,omitempty"`
+	// Đầu ghi khai từ bản 1.1.106–1.1.110 (hồi đó chỉ cho một cái). Lúc khởi động chuyển vào Nvrs
+	// rồi xóa, giữ lại mấy ô này chỉ để đọc được dữ liệu cũ.
+	NvrIP   string    `json:"nvrIP,omitempty"`
+	NvrPort int       `json:"nvrPort,omitempty"`
+	NvrUser string    `json:"nvrUser,omitempty"`
+	NvrPass string    `json:"nvrPass,omitempty"`
+	NvrTen  string    `json:"nvrTen,omitempty"`
+	NvrKenh int       `json:"nvrKenh,omitempty"`
+	NvrAt   time.Time `json:"nvrAt,omitempty"`
 	// Đã đính chính đám cảnh báo "không ra hình" do lỗi kết luận của bản ≤ 1.1.102 chưa. Một lần là
 	// thôi: để nó chạy lại mỗi lần khởi động thì cảnh báo thật về sau cũng bị đóng oan.
 	DaDonHinhGia bool `json:"daDonHinhGia,omitempty"`

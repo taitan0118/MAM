@@ -55,9 +55,11 @@ type NetDev struct {
 	SaiTK   bool      `json:"-"` // camera từ chối tài khoản: chưa biết có hình hay không
 	VidLoi  string    `json:"-"` // lý do thật của lượt đo hình gần nhất, để Console khỏi phải đoán
 	KhongDo bool      `json:"-"` // hỏi không tới camera: chưa biết nó có hình hay không
-	// Camera này nằm ở kênh nào của đầu ghi — có nó mới tua lại được. MAM tự điền lúc đăng nhập đầu
-	// ghi bằng cách khớp IP; 0 = đầu ghi không kéo hình camera này về nên không có gì để tua.
-	NvrCh int `json:"nvrCh,omitempty"`
+	// Camera này nằm ở đầu ghi nào, kênh nào — có đủ hai thứ mới tua lại được. MAM tự điền lúc đăng
+	// nhập đầu ghi bằng cách khớp IP; 0 = không đầu ghi nào kéo hình camera này về nên không có gì
+	// để tua. NvrID là IP của đầu ghi.
+	NvrID string `json:"nvrID,omitempty"`
+	NvrCh int    `json:"nvrCh,omitempty"`
 }
 
 // devAlertID: cảnh báo của thiết bị mạng gắn vào một "máy" giả, giống cách cảnh báo máy chủ dùng __server.

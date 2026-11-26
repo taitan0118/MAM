@@ -1394,6 +1394,20 @@ var EN = {
 "Giờ muốn tua lại nằm ở tương lai": "The rewind time is in the future",
 /* tha cam xuc / thu hoi / sua tin nhan */
 "Khai xong, MAM tự gắn camera vào kênh đầu ghi theo IP — camera nào gắn được thì trong khung xem có thêm thanh Tua lại để coi lại đoạn đã lưu. Hiện chỉ nói chuyện được với đầu ghi Hikvision.": "Once configured, MAM matches cameras to NVR channels by IP — a matched camera gets a Rewind bar in its view for replaying the recording. Only Hikvision NVRs are supported for now.",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"{0} đầu ghi": "{0} NVRs",
+"không đọc được số kênh": "channel count unavailable",
+"gắn {0} camera": "{0} cameras matched",
+"đăng nhập được lúc {0}": "signed in at {0}",
+"Khai lại": "Re-enter",
+"Thêm đầu ghi": "Add NVR",
+"Bỏ đầu ghi {0} khỏi MAM? Camera của nó sẽ không tua lại được nữa. Không đụng gì tới đầu ghi thật.": "Remove NVR {0} from MAM? Its cameras can no longer be rewound. The real NVR is not touched.",
+"Khai bao nhiêu đầu ghi cũng được — một cái 16 hay 32 kênh không ôm hết cả dàn camera. Khai xong, MAM tự gắn camera vào đúng đầu ghi và đúng kênh theo IP; camera nào gắn được thì trong khung xem có thêm thanh Tua lại. Hiện chỉ nói chuyện được với đầu ghi Hikvision.": "Add as many NVRs as needed — one 16 or 32 channel unit cannot cover the whole camera fleet. MAM then matches each camera to the right NVR and channel by IP; a matched camera gets a Rewind bar in its view. Only Hikvision NVRs are supported for now.",
+"Không đầu ghi nào kéo hình camera này về nên không có gì để tua lại": "No NVR pulls this camera, so there is nothing to rewind",
+"Không có đầu ghi này": "No such NVR",
+"Xóa đầu ghi camera %s (%s)": "Removed camera NVR %s (%s)",
+"Khai đầu ghi camera %s (%s), gắn được %d camera": "Configured camera NVR %s (%s), matched %d cameras",
+"Đã chuyển đầu ghi camera khai từ bản cũ sang danh sách nhiều đầu ghi": "Moved the NVR configured by an older version into the multi-NVR list",
 };
 var ZH = {
 "Tìm máy, IP, model, serial, bản quyền…": "搜索设备、IP、型号、序列号、授权…",
@@ -2794,6 +2808,20 @@ var ZH = {
 "Giờ muốn tua lại nằm ở tương lai": "回放时间位于未来",
 /* tha cam xuc / thu hoi / sua tin nhan */
 "Khai xong, MAM tự gắn camera vào kênh đầu ghi theo IP — camera nào gắn được thì trong khung xem có thêm thanh Tua lại để coi lại đoạn đã lưu. Hiện chỉ nói chuyện được với đầu ghi Hikvision.": "配置完成后，MAM 会按 IP 将摄像机匹配到录像机通道——匹配成功的摄像机在查看窗口中会出现回放栏，可重看已录内容。目前仅支持海康录像机。",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"{0} đầu ghi": "{0} 台录像机",
+"không đọc được số kênh": "无法读取通道数",
+"gắn {0} camera": "匹配 {0} 台摄像机",
+"đăng nhập được lúc {0}": "登录时间 {0}",
+"Khai lại": "重新填写",
+"Thêm đầu ghi": "添加录像机",
+"Bỏ đầu ghi {0} khỏi MAM? Camera của nó sẽ không tua lại được nữa. Không đụng gì tới đầu ghi thật.": "从 MAM 中移除录像机 {0}？其摄像机将无法再回放。不会影响真实录像机。",
+"Khai bao nhiêu đầu ghi cũng được — một cái 16 hay 32 kênh không ôm hết cả dàn camera. Khai xong, MAM tự gắn camera vào đúng đầu ghi và đúng kênh theo IP; camera nào gắn được thì trong khung xem có thêm thanh Tua lại. Hiện chỉ nói chuyện được với đầu ghi Hikvision.": "可以添加任意数量的录像机——一台 16 或 32 通道的设备无法覆盖整个摄像机群。添加后，MAM 会按 IP 将每台摄像机匹配到正确的录像机和通道；匹配成功的摄像机在查看窗口中会出现回放栏。目前仅支持海康录像机。",
+"Không đầu ghi nào kéo hình camera này về nên không có gì để tua lại": "没有录像机接入此摄像机，因此没有可回放的内容",
+"Không có đầu ghi này": "没有该录像机",
+"Xóa đầu ghi camera %s (%s)": "已删除摄像机录像机 %s（%s）",
+"Khai đầu ghi camera %s (%s), gắn được %d camera": "已配置摄像机录像机 %s（%s），匹配 %d 台摄像机",
+"Đã chuyển đầu ghi camera khai từ bản cũ sang danh sách nhiều đầu ghi": "已将旧版本配置的录像机迁移至多录像机列表",
 };
 var PAT = [
 [

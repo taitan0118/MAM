@@ -60,20 +60,43 @@ func TestKhaiDauGhiDungMoiLuu(t *testing.T) {
 		t.Fatalf("phải đọc ra 16 kênh, đang là %v", m["kenh"])
 	}
 	f.s.mu.RLock()
-	st := f.s.st.Settings
+	ghis := f.s.st.Settings.Nvrs
 	f.s.mu.RUnlock()
-	if st.NvrIP != ip || st.NvrUser != "admin" || st.NvrPass != "dung123" || st.NvrPort != port {
-		t.Fatalf("phải lưu đúng đầu ghi, đang là %q:%d %q", st.NvrIP, st.NvrPort, st.NvrUser)
+	if len(ghis) != 1 {
+		t.Fatalf("phải lưu đúng 1 đầu ghi, đang có %d", len(ghis))
 	}
-	if !strings.Contains(st.NvrTen, "DS-7616NI-K2") || st.NvrKenh != 16 || st.NvrAt.IsZero() {
-		t.Fatalf("phải nhớ tên/số kênh/lúc đăng nhập, đang là %q %d %v", st.NvrTen, st.NvrKenh, st.NvrAt)
+	g := ghis[0]
+	if g.IP != ip || g.User != "admin" || g.Pass != "dung123" || g.Port != port {
+		t.Fatalf("phải lưu đúng đầu ghi, đang là %q:%d %q", g.IP, g.Port, g.User)
+	}
+	if !strings.Contains(g.Ten, "DS-7616NI-K2") || g.Kenh != 16 || g.At.IsZero() {
+		t.Fatalf("phải nhớ tên/số kênh/lúc đăng nhập, đang là %q %d %v", g.Ten, g.Kenh, g.At)
 	}
 
-	// GET /api/settings không được trả mật khẩu đầu ghi về Console
+	// khai lại đúng đầu ghi đó thì ghi đè, không đẻ thêm dòng
+	code, _, _ = f.super.do("POST", "/api/nvr", map[string]interface{}{"ip": ip, "port": port, "user": "admin", "pass": "dung123"}, nil)
+	expect(t, code, 200, "khai lại")
+	f.s.mu.RLock()
+	n := len(f.s.st.Settings.Nvrs)
+	f.s.mu.RUnlock()
+	if n != 1 {
+		t.Fatalf("khai lại cùng một IP thì vẫn phải là 1 đầu ghi, đang có %d", n)
+	}
+
+	// GET /api/settings không được trả mật khẩu đầu ghi về Console, và phải giữ nguyên mật khẩu thật
 	code, m, _ = f.super.do("GET", "/api/settings", nil, nil)
 	expect(t, code, 200, "đọc cài đặt")
-	if m["nvrPass"] != "" {
-		t.Fatalf("không được trả mật khẩu đầu ghi về client, đang là %v", m["nvrPass"])
+	ds, _ := m["nvrs"].([]interface{})
+	if len(ds) != 1 {
+		t.Fatalf("phải trả về 1 đầu ghi, đang là %v", m["nvrs"])
+	}
+	if p, _ := ds[0].(map[string]interface{})["pass"].(string); p != "" {
+		t.Fatalf("không được trả mật khẩu đầu ghi về client, đang là %q", p)
+	}
+	f.s.mu.RLock()
+	defer f.s.mu.RUnlock()
+	if f.s.st.Settings.Nvrs[0].Pass != "dung123" {
+		t.Fatalf("xóa mật khẩu lúc trả về KHÔNG được đụng tới mật khẩu thật, đang là %q", f.s.st.Settings.Nvrs[0].Pass)
 	}
 }
 
@@ -81,9 +104,7 @@ func TestKhaiDauGhiDungMoiLuu(t *testing.T) {
 func TestLuuCaiDatKhongXoaDauGhi(t *testing.T) {
 	f := setup(t)
 	f.s.mu.Lock()
-	f.s.st.Settings.NvrIP, f.s.st.Settings.NvrPort = "172.20.1.10", 80
-	f.s.st.Settings.NvrUser, f.s.st.Settings.NvrPass = "admin", "bimat"
-	f.s.st.Settings.NvrTen, f.s.st.Settings.NvrKenh = "Net DVR DS-7616", 16
+	f.s.st.Settings.Nvrs = []DauGhi{{IP: "172.20.1.10", Port: 80, User: "admin", Pass: "bimat", Ten: "Net DVR DS-7616", Kenh: 16}}
 	f.s.mu.Unlock()
 
 	code, _, _ := f.super.do("PUT", "/api/settings", map[string]interface{}{
@@ -92,30 +113,82 @@ func TestLuuCaiDatKhongXoaDauGhi(t *testing.T) {
 
 	f.s.mu.RLock()
 	defer f.s.mu.RUnlock()
-	st := f.s.st.Settings
-	if st.NvrIP != "172.20.1.10" || st.NvrPass != "bimat" || st.NvrUser != "admin" || st.NvrPort != 80 {
-		t.Fatalf("lưu cài đặt khác không được đụng tới đầu ghi, đang là %q:%d %q/%q", st.NvrIP, st.NvrPort, st.NvrUser, st.NvrPass)
+	ghis := f.s.st.Settings.Nvrs
+	if len(ghis) != 1 {
+		t.Fatalf("lưu cài đặt khác không được làm mất đầu ghi, còn %d", len(ghis))
 	}
-	if st.NvrTen != "Net DVR DS-7616" || st.NvrKenh != 16 {
-		t.Fatalf("phải giữ cả tên và số kênh, đang là %q %d", st.NvrTen, st.NvrKenh)
+	g := ghis[0]
+	if g.IP != "172.20.1.10" || g.Pass != "bimat" || g.User != "admin" || g.Port != 80 {
+		t.Fatalf("lưu cài đặt khác không được đụng tới đầu ghi, đang là %q:%d %q/%q", g.IP, g.Port, g.User, g.Pass)
+	}
+	if g.Ten != "Net DVR DS-7616" || g.Kenh != 16 {
+		t.Fatalf("phải giữ cả tên và số kênh, đang là %q %d", g.Ten, g.Kenh)
 	}
 }
 
-// Xóa đầu ghi thì xóa sạch cả mật khẩu.
+// Xóa một đầu ghi thì chỉ mất đúng cái đó, mấy cái kia còn nguyên.
 func TestXoaDauGhi(t *testing.T) {
 	f := setup(t)
 	f.s.mu.Lock()
-	f.s.st.Settings.NvrIP, f.s.st.Settings.NvrUser, f.s.st.Settings.NvrPass = "172.20.1.10", "admin", "bimat"
-	f.s.st.Settings.NvrKenh = 16
+	f.s.st.Settings.Nvrs = []DauGhi{
+		{IP: "172.20.1.10", User: "admin", Pass: "bimat", Kenh: 16},
+		{IP: "172.20.1.11", User: "admin", Pass: "bimat2", Kenh: 32}}
+	f.s.st.Devices = append(f.s.st.Devices,
+		&NetDev{ID: "camA", IP: "10.0.0.1", Kind: "camera", NvrID: "172.20.1.10", NvrCh: 3},
+		&NetDev{ID: "camB", IP: "10.0.0.2", Kind: "camera", NvrID: "172.20.1.11", NvrCh: 5})
 	f.s.mu.Unlock()
 
-	code, _, _ := f.super.do("DELETE", "/api/nvr", nil, nil)
+	code, _, _ := f.super.do("DELETE", "/api/nvr?ip=172.20.1.99", nil, nil)
+	expect(t, code, 404, "xóa đầu ghi không có thật")
+
+	code, _, _ = f.super.do("DELETE", "/api/nvr?ip=172.20.1.10", nil, nil)
 	expect(t, code, 200, "xóa đầu ghi")
 	f.s.mu.RLock()
 	defer f.s.mu.RUnlock()
-	st := f.s.st.Settings
-	if st.NvrIP != "" || st.NvrUser != "" || st.NvrPass != "" || st.NvrKenh != 0 {
-		t.Fatalf("phải xóa sạch, đang là %q %q %q %d", st.NvrIP, st.NvrUser, st.NvrPass, st.NvrKenh)
+	ghis := f.s.st.Settings.Nvrs
+	if len(ghis) != 1 || ghis[0].IP != "172.20.1.11" || ghis[0].Pass != "bimat2" {
+		t.Fatalf("chỉ được xóa đúng cái đó, còn lại %v", ghis)
+	}
+	for _, d := range f.s.st.Devices {
+		if d.ID == "camA" && (d.NvrID != "" || d.NvrCh != 0) {
+			t.Fatalf("camera của đầu ghi vừa xóa phải được gỡ kênh, đang là %q/%d", d.NvrID, d.NvrCh)
+		}
+		if d.ID == "camB" && (d.NvrID != "172.20.1.11" || d.NvrCh != 5) {
+			t.Fatalf("camera của đầu ghi khác phải còn nguyên, đang là %q/%d", d.NvrID, d.NvrCh)
+		}
+	}
+}
+
+// Đầu ghi khai từ bản chỉ cho một cái phải được chuyển vào danh sách, không mất.
+func TestChuyenDauGhiCuSangDanhSach(t *testing.T) {
+	f := setup(t)
+	f.s.mu.Lock()
+	st := &f.s.st.Settings
+	st.NvrIP, st.NvrPort, st.NvrUser, st.NvrPass = "172.20.1.10", 80, "admin", "bimat"
+	st.NvrTen, st.NvrKenh = "Net DVR", 16
+	f.s.st.Devices = append(f.s.st.Devices, &NetDev{ID: "camA", IP: "10.0.0.1", Kind: "camera", NvrCh: 3})
+	co := f.s.chuyenDauGhiCu()
+	f.s.mu.Unlock()
+	if !co {
+		t.Fatal("phải báo là có chuyển")
+	}
+	f.s.mu.RLock()
+	defer f.s.mu.RUnlock()
+	ghis := f.s.st.Settings.Nvrs
+	if len(ghis) != 1 || ghis[0].IP != "172.20.1.10" || ghis[0].Pass != "bimat" || ghis[0].Kenh != 16 {
+		t.Fatalf("phải chuyển nguyên đầu ghi cũ vào danh sách, đang là %v", ghis)
+	}
+	if f.s.st.Settings.NvrIP != "" {
+		t.Fatal("chuyển xong phải xóa ô cũ, không thì lần sau chuyển lại lần nữa")
+	}
+	for _, d := range f.s.st.Devices {
+		if d.ID == "camA" && d.NvrID != "172.20.1.10" {
+			t.Fatalf("camera đã gắn kênh hồi đó phải thuộc về đầu ghi đó, đang là %q", d.NvrID)
+		}
+	}
+	// chạy lại lần nữa thì không làm gì cả
+	if f.s.chuyenDauGhiCu() {
+		t.Fatal("chạy lại không được chuyển thêm lần nào")
 	}
 }
 

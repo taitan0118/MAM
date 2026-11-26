@@ -431,7 +431,8 @@ func (s *Server) hDeviceVideo(w http.ResponseWriter, r *http.Request, me *Accoun
 	if cp.User == "" {
 		cp.User, cp.Pass = s.st.Settings.CamUser, s.st.Settings.CamPass
 	}
-	nvrIP, nvrUser, nvrPass, ch := s.st.Settings.NvrIP, s.st.Settings.NvrUser, s.st.Settings.NvrPass, d.NvrCh
+	ghi, ch := s.dauGhiCua(d)
+	soGhi := len(s.st.Settings.Nvrs)
 	s.mu.RUnlock()
 
 	// ?tua=2026-11-26T14:30 — xem lại từ mốc đó, lấy hình từ đầu ghi chứ không phải từ camera:
@@ -439,12 +440,12 @@ func (s *Server) hDeviceVideo(w http.ResponseWriter, r *http.Request, me *Accoun
 	var t0 time.Time
 	tua := r.URL.Query().Get("tua")
 	if tua != "" {
-		if nvrIP == "" {
+		if soGhi == 0 {
 			jerr(w, 400, "Chưa khai đầu ghi nên không tua lại được. Vào Cài đặt → Đầu ghi camera để khai.")
 			return
 		}
 		if ch == 0 {
-			jerr(w, 400, "Đầu ghi không kéo hình camera này về nên không có gì để tua lại")
+			jerr(w, 400, "Không đầu ghi nào kéo hình camera này về nên không có gì để tua lại")
 			return
 		}
 		var e error
@@ -470,7 +471,7 @@ func (s *Server) hDeviceVideo(w http.ResponseWriter, r *http.Request, me *Accoun
 	var l *luongH264
 	var err error
 	if tua != "" {
-		l, err = moTua(ctx, nvrIP, nvrUser, nvrPass, ch, t0)
+		l, err = moTua(ctx, ghi.IP, ghi.User, ghi.Pass, ch, t0)
 	} else {
 		l, err = moLuong(ctx, cp.IP, cp.Port, cp.Path, cp.User, cp.Pass)
 	}
