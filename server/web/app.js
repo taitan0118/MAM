@@ -1532,6 +1532,7 @@ function khungHinh(d) {
   const bao = el('div', { style: 'font-size:12.5px;color:var(--muted);margin-top:6px' }, t('Đang mở video…'));
   const oTK = el('div', { style: 'display:none;margin-top:8px' });
   let chay = true, lan = 0, dut = 0, huy = null, daLui = false, viAnh = '';
+  let tuaLuc = ''; // rỗng = xem trực tiếp; có giờ = xem lại đoạn đã lưu trong đầu ghi
 
   const veGio = () => { const n = new Date(); gio.textContent = hai(n.getHours()) + ':' + hai(n.getMinutes()) + ':' + hai(n.getSeconds()); };
   veGio();
@@ -1574,7 +1575,7 @@ function khungHinh(d) {
     ms.addEventListener('sourceopen', async () => {
       try {
         huy = new AbortController();
-        const rp = await fetch('/api/devices/video?id=' + encodeURIComponent(d.id), { credentials: 'same-origin', signal: huy.signal });
+        const rp = await fetch('/api/devices/video?id=' + encodeURIComponent(d.id) + (tuaLuc ? '&tua=' + encodeURIComponent(tuaLuc) : ''), { credentials: 'same-origin', signal: huy.signal });
         if (!rp.ok) throw new Error((await rp.json().catch(() => ({}))).error || rp.status);
         const ma = 'video/mp4; codecs="' + (rp.headers.get('X-Codec') || 'avc1.42E01E') + '"';
         if (!MediaSource.isTypeSupported(ma)) throw new Error(t('trình duyệt không phát được {0}', ma));
@@ -1590,7 +1591,7 @@ function khungHinh(d) {
             const dau = sb.buffered.start(0), cuoi = sb.buffered.end(0);
             if (cuoi - dau > 30) { sb.remove(dau, cuoi - 10); return; }
             // tụt lại (tab bị ẩn chẳng hạn) thì nhảy tới chỗ mới nhất, đây là xem trực tiếp
-            if (cuoi - vid.currentTime > 2) vid.currentTime = cuoi - 0.3;
+            if (!tuaLuc && cuoi - vid.currentTime > 2) vid.currentTime = cuoi - 0.3;
             if (vid.paused) vid.play().catch(() => {});
           }
           if (hang.length) { doi -= hang[0].length; try { sb.appendBuffer(hang.shift()); } catch (e) { lui(trErr(String(e.message || e))); } }
@@ -1600,7 +1601,7 @@ function khungHinh(d) {
         for (;;) {
           const r = await rd.read();
           if (r.done || !chay) break;
-          if (!lan++) { dut = 0; bao.textContent = t('Video trực tiếp'); }
+          if (!lan++) { dut = 0; bao.textContent = tuaLuc ? t('Đang xem lại từ {0}', tuaLuc.replace('T', ' ')) : t('Video trực tiếp'); }
           hang.push(r.value); doi += r.value.length;
           // Khúc dữ liệu không cắt theo ranh giới khung hình nên bỏ bớt là hỏng luồng; dồn quá
           // nhiều thì bỏ hẳn video chứ không ôm tiếp cho tới lúc hết bộ nhớ.
@@ -1608,6 +1609,8 @@ function khungHinh(d) {
           day();
         }
         if (!chay) return;
+        // Hết đoạn đã tua thì DỪNG HẲN: nối lại là đầu ghi phát lại đúng từ mốc cũ, thành vòng lặp vô tận.
+        if (tuaLuc) { bao.textContent = t('Hết đoạn đã xem lại'); return; }
         // server cắt luồng sau 10 phút, hoặc camera tự ngắt: nối lại vài lần rồi mới chịu thua
         if (++dut > 3) return lui(t('video đứt nhiều lần'));
         bao.textContent = t('Nối lại video…');
@@ -1624,6 +1627,8 @@ function khungHinh(d) {
   // ---- đường 2: ảnh mỗi giây ----
   const lui = vi => {
     if (daLui || !chay) return;
+    // đang xem lại thì không lùi về ảnh: ảnh là hình HIỆN TẠI, đưa ra lúc này là đánh lừa người xem
+    if (tuaLuc) { chay = false; bao.textContent = t('Không xem lại được: {0}', vi); return; }
     daLui = true; viAnh = vi; lan = 0;
     if (huy) { try { huy.abort(); } catch (e) {} huy = null; }
     try { vid.pause(); } catch (e) {}
@@ -1655,8 +1660,23 @@ function khungHinh(d) {
     if (chay) setTimeout(lay, Math.max(300, 1000 - (Date.now() - t0)));
   };
 
+  // ---- tua lại: hình lấy từ đầu ghi, camera không lưu gì cả ----
+  const datTua = v => {
+    tuaLuc = v;
+    chay = true; daLui = false; dut = 0; lan = 0; viAnh = '';
+    if (huy) { try { huy.abort(); } catch (e) {} huy = null; }
+    bao.textContent = v ? t('Đang mở đoạn đã lưu…') : t('Đang mở video…');
+    video();
+  };
+  const oGio = el('input', { class: 'input', type: 'datetime-local', style: 'max-width:215px' });
+  const truoc = phut => { const n = new Date(Date.now() - phut * 60000); return n.getFullYear() + '-' + hai(n.getMonth() + 1) + '-' + hai(n.getDate()) + 'T' + hai(n.getHours()) + ':' + hai(n.getMinutes()); };
+  const nhanh = (nhan, phut) => el('button', { class: 'btn', style: 'padding:5px 11px;font-size:12.5px', onclick: () => { oGio.value = truoc(phut); datTua(oGio.value); } }, nhan);
+  const thanhTua = d.nvrCh ? el('div', { class: 'filters', style: 'margin:8px 0 0' },
+    el('b', { style: 'font-size:12.5px' }, t('Tua lại')), nhanh(t('5 phút trước'), 5), nhanh(t('15 phút trước'), 15), nhanh(t('1 giờ trước'), 60),
+    oGio, el('button', { class: 'btn', style: 'padding:5px 11px;font-size:12.5px', onclick: () => { if (oGio.value) datTua(oGio.value.slice(0, 16)); } }, 'Xem từ giờ này'),
+    el('button', { class: 'btn primary', style: 'padding:5px 11px;font-size:12.5px', onclick: () => { oGio.value = ''; datTua(''); } }, 'Về trực tiếp')) : null;
   video();
-  return { el: el('div', {}, khung, bao, oTK), dung: () => {
+  return { el: el('div', {}, khung, bao, thanhTua, oTK), dung: () => {
     chay = false;
     clearInterval(nhipGio);
     if (huy) { try { huy.abort(); } catch (e) {} huy = null; } // không thì server còn kéo RTSP cả 10 phút
@@ -2378,8 +2398,8 @@ VIEWS.settings = async v => {
       e.target.disabled = true;
       toast(t('Đang kết nối đầu ghi…'));
       try {
-        await api('POST', '/api/nvr', { ip: nip.value.trim(), port: +npo.value || 80, user: nus.value.trim(), pass: npw.value });
-        toast(t('Đã kết nối đầu ghi'));
+        const r2 = await api('POST', '/api/nvr', { ip: nip.value.trim(), port: +npo.value || 80, user: nus.value.trim(), pass: npw.value });
+        toast(r2.gan ? t('Đã kết nối đầu ghi, gắn được {0} camera để tua lại', r2.gan) : t('Đã kết nối đầu ghi'));
         render();
       } catch (x) { nerr.textContent = trErr(x.message); e.target.disabled = false; }
     };
@@ -2388,7 +2408,7 @@ VIEWS.settings = async v => {
         field('Tài khoản', nus), field('Mật khẩu', npw)),
         settings.nvrTen ? el('div', { style: 'font-size:13px;color:var(--muted);margin-top:4px' }, t('Đang khai: {0} · đăng nhập được lúc {1}', settings.nvrTen, fmtDT(settings.nvrAt))) : null,
         infoNote('Server gọi thật vào đầu ghi để đọc tên máy và số kênh: đăng nhập được mới lưu, sai thì không ghi gì. Khai được đầu ghi là sau này chỉ cần một tài khoản cho cả dàn camera thay vì mỗi dải một mật khẩu.'),
-        infoNote('Bản này mới làm phần kết nối và đăng nhập. Xem hình và tua lại qua đầu ghi là việc sau — camera vẫn đang xem trực tiếp từng con như cũ. Hiện chỉ nói chuyện được với đầu ghi Hikvision.'),
+        infoNote('Khai xong, MAM tự gắn camera vào kênh đầu ghi theo IP — camera nào gắn được thì trong khung xem có thêm thanh Tua lại để coi lại đoạn đã lưu. Hiện chỉ nói chuyện được với đầu ghi Hikvision.'),
         nerr,
         el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
           el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: nvrLuu }, 'Kết nối và lưu'),

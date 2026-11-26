@@ -431,7 +431,32 @@ func (s *Server) hDeviceVideo(w http.ResponseWriter, r *http.Request, me *Accoun
 	if cp.User == "" {
 		cp.User, cp.Pass = s.st.Settings.CamUser, s.st.Settings.CamPass
 	}
+	nvrIP, nvrUser, nvrPass, ch := s.st.Settings.NvrIP, s.st.Settings.NvrUser, s.st.Settings.NvrPass, d.NvrCh
 	s.mu.RUnlock()
+
+	// ?tua=2026-11-26T14:30 — xem lại từ mốc đó, lấy hình từ đầu ghi chứ không phải từ camera:
+	// camera không lưu gì cả, chỉ đầu ghi mới có băng để tua.
+	var t0 time.Time
+	tua := r.URL.Query().Get("tua")
+	if tua != "" {
+		if nvrIP == "" {
+			jerr(w, 400, "Chưa khai đầu ghi nên không tua lại được. Vào Cài đặt → Đầu ghi camera để khai.")
+			return
+		}
+		if ch == 0 {
+			jerr(w, 400, "Đầu ghi không kéo hình camera này về nên không có gì để tua lại")
+			return
+		}
+		var e error
+		if t0, e = time.ParseInLocation("2006-01-02T15:04", tua, time.Local); e != nil {
+			jerr(w, 400, "Giờ muốn tua lại không đúng dạng")
+			return
+		}
+		if t0.After(time.Now()) {
+			jerr(w, 400, "Giờ muốn tua lại nằm ở tương lai")
+			return
+		}
+	}
 
 	if atomic.AddInt32(&videoDang, 1) > videoToiDa {
 		atomic.AddInt32(&videoDang, -1)
@@ -442,7 +467,13 @@ func (s *Server) hDeviceVideo(w http.ResponseWriter, r *http.Request, me *Accoun
 
 	ctx, thoi := context.WithTimeout(r.Context(), videoLau)
 	defer thoi()
-	l, err := moLuong(ctx, cp.IP, cp.Port, cp.Path, cp.User, cp.Pass)
+	var l *luongH264
+	var err error
+	if tua != "" {
+		l, err = moTua(ctx, nvrIP, nvrUser, nvrPass, ch, t0)
+	} else {
+		l, err = moLuong(ctx, cp.IP, cp.Port, cp.Path, cp.User, cp.Pass)
+	}
 	if err != nil {
 		jerr(w, 502, "Không xem được video: "+err.Error())
 		return

@@ -1376,6 +1376,24 @@ var EN = {
 "Trả lời tin nhắn": "Reply to message",
 "Trả lời {0}": "Replying to {0}",
 "Bỏ trả lời": "Cancel reply",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"Tua lại": "Rewind",
+"5 phút trước": "5 min ago",
+"15 phút trước": "15 min ago",
+"1 giờ trước": "1 hour ago",
+"Xem từ giờ này": "Play from this time",
+"Về trực tiếp": "Back to live",
+"Đang mở đoạn đã lưu…": "Opening the recording…",
+"Đang xem lại từ {0}": "Playing back from {0}",
+"Hết đoạn đã xem lại": "End of the segment played back",
+"Không xem lại được: {0}": "Could not play back: {0}",
+"Đã kết nối đầu ghi, gắn được {0} camera để tua lại": "Connected to the NVR; {0} cameras matched a channel and can be rewound",
+"Chưa khai đầu ghi nên không tua lại được. Vào Cài đặt → Đầu ghi camera để khai.": "No NVR is configured, so there is nothing to rewind. Set one up in Settings → Camera NVR.",
+"Đầu ghi không kéo hình camera này về nên không có gì để tua lại": "The NVR does not pull this camera, so there is nothing to rewind",
+"Giờ muốn tua lại không đúng dạng": "The rewind time is not in a valid format",
+"Giờ muốn tua lại nằm ở tương lai": "The rewind time is in the future",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"Khai xong, MAM tự gắn camera vào kênh đầu ghi theo IP — camera nào gắn được thì trong khung xem có thêm thanh Tua lại để coi lại đoạn đã lưu. Hiện chỉ nói chuyện được với đầu ghi Hikvision.": "Once configured, MAM matches cameras to NVR channels by IP — a matched camera gets a Rewind bar in its view for replaying the recording. Only Hikvision NVRs are supported for now.",
 };
 var ZH = {
 "Tìm máy, IP, model, serial, bản quyền…": "搜索设备、IP、型号、序列号、授权…",
@@ -2758,6 +2776,24 @@ var ZH = {
 "Trả lời tin nhắn": "回复消息",
 "Trả lời {0}": "正在回复 {0}",
 "Bỏ trả lời": "取消回复",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"Tua lại": "回放",
+"5 phút trước": "5 分钟前",
+"15 phút trước": "15 分钟前",
+"1 giờ trước": "1 小时前",
+"Xem từ giờ này": "从此时间播放",
+"Về trực tiếp": "回到实时",
+"Đang mở đoạn đã lưu…": "正在打开录像…",
+"Đang xem lại từ {0}": "正在回放 {0}",
+"Hết đoạn đã xem lại": "回放片段已结束",
+"Không xem lại được: {0}": "无法回放：{0}",
+"Đã kết nối đầu ghi, gắn được {0} camera để tua lại": "已连接录像机；{0} 台摄像机匹配到通道，可以回放",
+"Chưa khai đầu ghi nên không tua lại được. Vào Cài đặt → Đầu ghi camera để khai.": "尚未配置录像机，因此无法回放。请在设置 → 摄像机录像机中配置。",
+"Đầu ghi không kéo hình camera này về nên không có gì để tua lại": "录像机未接入此摄像机，因此没有可回放的内容",
+"Giờ muốn tua lại không đúng dạng": "回放时间格式不正确",
+"Giờ muốn tua lại nằm ở tương lai": "回放时间位于未来",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"Khai xong, MAM tự gắn camera vào kênh đầu ghi theo IP — camera nào gắn được thì trong khung xem có thêm thanh Tua lại để coi lại đoạn đã lưu. Hiện chỉ nói chuyện được với đầu ghi Hikvision.": "配置完成后，MAM 会按 IP 将摄像机匹配到录像机通道——匹配成功的摄像机在查看窗口中会出现回放栏，可重看已录内容。目前仅支持海康录像机。",
 };
 var PAT = [
 [
