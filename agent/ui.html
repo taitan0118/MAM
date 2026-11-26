@@ -18,6 +18,15 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Segoe UI",syst
 .col{display:flex;flex-direction:column;max-width:84%;min-width:0}.r.me .col{align-items:flex-end}.col .m{max-width:100%}
 .av{width:32px;height:32px;border-radius:50%;background-size:cover;background-position:center top;background-repeat:no-repeat;overflow:hidden;display:inline-grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none;box-shadow:0 0 0 1px rgba(15,23,42,.08)}.sp{width:32px;flex:none}.r>.av{margin-bottom:21px}
 .ts{font-size:11px;color:var(--muted);padding:2px 4px}
+.bact{display:flex;align-items:center;gap:1px;opacity:0;transition:opacity .12s;flex:none}
+.r:hover .bact{opacity:1}.r.me .bact{order:-1}
+.bact button{border:0;background:transparent;cursor:pointer;font-size:13px;line-height:1;padding:3px 2px;border-radius:7px;color:var(--muted);font-family:inherit}
+.bact button:hover{background:rgba(15,23,42,.07)}
+.cams{display:flex;gap:3px;margin-top:2px}.r.me .cams{justify-content:flex-end}
+.cam{background:var(--in);border:1px solid var(--line);border-radius:999px;padding:0 7px;font-size:12px;line-height:19px}
+.ed{font-size:11px;opacity:.6}
+.thu{opacity:.7;font-style:italic}
+@media (hover:none){.bact{opacity:.75}}
 .empty{margin:auto;text-align:center;color:var(--muted);max-width:260px}
 .empty i{display:block;font-style:normal;font-size:38px;margin-bottom:6px}
 .m{max-width:84%;padding:10px 13px;border-radius:16px;background:var(--in);border:1px solid var(--line);box-shadow:0 2px 8px rgba(15,23,42,.06);animation:up .3s ease both;word-wrap:break-word;white-space:pre-wrap}
@@ -70,6 +79,7 @@ body.mini #list,body.mini form,body.mini .err,body.mini .sup{display:none}
 <input id="rname" class="rin" maxlength="60"><input id="rphone" class="rin" maxlength="30"><input id="remp" class="rin" maxlength="30"><input id="rpc" class="rin" maxlength="60">
 <textarea id="rtx" rows="3" maxlength="500"></textarea><label style="justify-content:flex-start"><input type="checkbox" id="rurgent">&nbsp;<span id="rurgentTxt"></span></label><div id="rerr" style="color:var(--off);font-size:12px;min-height:16px;margin-bottom:8px"></div><div class="row"><button class="deny" id="rcancel"></button><button id="rsend"></button></div></div></div>
 <div class="ovl" id="novl"><div class="box" style="text-align:left;max-width:340px"><h4 id="nTitle"></h4><input id="nin" class="rin" maxlength="40"><input id="npw" class="rin" type="password" maxlength="100" autocomplete="off"><div id="nerr" style="color:var(--off);font-size:12px;min-height:16px;margin-bottom:8px"></div><div class="row"><button class="deny" id="ncancel"></button><button id="nsave"></button></div></div></div>
+<div class="ovl" id="sovl"><div class="box" style="text-align:left;max-width:340px"><h4 id="sTitle"></h4><textarea id="sin" class="rin" maxlength="300" rows="3" style="resize:none"></textarea><div class="row"><button class="deny" id="scancel"></button><button id="ssave"></button></div></div></div>
 <div class="ovl" id="fovl"><div class="box" style="text-align:left;max-width:340px"><h4 id="fTitle"></h4><p id="fHint" style="font-size:12.5px;color:var(--muted);margin:0 0 12px;line-height:1.5"></p><div class="row" style="margin-bottom:10px"><button id="fClean"></button><button id="fRam"></button></div><div id="fOut" style="font-size:12.5px;min-height:34px;margin-bottom:10px"></div><div class="row"><button class="deny" id="fClose"></button></div></div></div>
 <div class="ovl" id="iovl"><div class="box" style="text-align:left;max-width:360px;width:100%"><h4 id="iTitle"></h4><div style="display:flex;align-items:center;gap:8px;margin:0 0 10px"><span id="iLangL" style="font-size:12.5px;color:var(--muted);white-space:nowrap"></span><select id="iLang" class="rin" style="margin:0;flex:1"><option value="vi">Tiếng Việt</option><option value="en">English</option><option value="zh">简体中文</option></select></div><div id="iBody" style="font-size:12.5px;max-height:300px;overflow:auto;margin-bottom:10px"></div><div class="row"><button class="deny" id="iClose"></button></div></div></div>
 <div class="toast" id="toast"></div>
@@ -82,19 +92,19 @@ body.mini #list,body.mini form,body.mini .err,body.mini .sup{display:none}
 <script>
 // Chỉ một tab: tab mở sau thấy đã có tab MAM khác thì tự đóng (hoặc báo), không chạy tiếp.
 (function(){try{var bc=new BroadcastChannel("mam-ui"),t0=Date.now();bc.onmessage=function(e){if(e.data==="hi"&&Date.now()-t0>800)bc.postMessage("here");else if(e.data==="here"){document.body.innerHTML='<p style="padding:24px;font:14px sans-serif">MAM đã mở ở cửa sổ khác. / MAM is already open in another window.</p>';window.__dup=1;setTimeout(function(){window.close()},300)}};bc.postMessage("hi")}catch(e){}})();
-var L={vi:{on:"Đã kết nối với quản trị viên",off:"Mất kết nối server",none:"Chưa có tin nhắn nào",hint:"Khi quản trị viên nhắn, tin sẽ hiện ở đây.",ph:"Nhập tin trả lời…",send:"Gửi",admin:"Quản trị viên",fail:"Chưa gửi được, thử lại sau",
+var L={vi:{on:"Đã kết nối với quản trị viên",off:"Mất kết nối server",none:"Chưa có tin nhắn nào",hint:"Khi quản trị viên nhắn, tin sẽ hiện ở đây.",ph:"Nhập tin trả lời…",send:"Gửi",admin:"Quản trị viên",fail:"Chưa gửi được, thử lại sau",camT:"Thả cảm xúc",suaT:"Sửa tin nhắn",thuT:"Thu hồi",daThu:"Tin nhắn đã được thu hồi",daSua:"đã sửa",thuHoi:"Thu hồi tin này? Quản trị viên sẽ không đọc được nội dung nữa.",
 ask:"{0} xin xem và điều khiển màn hình máy này. Cho phép không?",allow:"Đồng ý",deny:"Từ chối",live:"Đang được {0} xem/điều khiển từ xa",stop:"Dừng ngay",
 trust:"Luôn đồng ý với {0}, khỏi hỏi lại",untrust:"Bỏ tin tưởng",ren:"Đổi tên máy",fix:"Tự sửa chữa",fixHint:"Dọn file tạm cũ để máy đỡ chậm, hoặc giải phóng RAM đang bị chiếm không cần thiết. Không xóa tài liệu của bạn.",fixClean:"Dọn file rác",fixRam:"Giải phóng RAM",fixBusy:"Đang xử lý…",fixFail:"Chưa làm được, thử lại sau",fixClose:"Đóng",renPh:"Tên máy",renSave:"Lưu",renFail:"Chưa đổi được, thử lại sau",renPw:"Mật khẩu gỡ agent (quản trị viên cấp)",lang:"Ngôn ngữ",
 reqBtn:"Báo cần hỗ trợ",reqTitle:"Gửi yêu cầu hỗ trợ cho quản trị viên",reqPh:"Mô tả sự cố, ví dụ: Máy in không in được, màn hình bị nhòe…",urgent:"Gấp (cần hỗ trợ ngay)",reqSend:"Gửi",reqCancel:"Hủy",reqEmpty:"Nhập nội dung cần hỗ trợ",reqSent:"✓ Đã gửi yêu cầu, quản trị viên sẽ xử lý.",reqFail:"Chưa gửi được, thử lại sau",
 info:"Thông tin máy",iL:["Tên máy","Người dùng","Hệ điều hành","Địa chỉ IP","Địa chỉ MAC","Model","CPU","RAM","Đang dùng","Ổ đĩa","Đã chạy","Số serial","Server","Phiên bản agent"],iFree:"trống",iDay:"ngày",
 reporterPh:"Tên người báo",phonePh:"Số điện thoại / Zalo",empPh:"Mã nhân viên",pcPh:"Mã máy hư",reqNeed:"Vui lòng điền đủ các ô",types:{}},
-en:{on:"Connected to the administrator",off:"Server unreachable",none:"No messages yet",hint:"Messages from the administrator appear here.",ph:"Type a reply…",send:"Send",admin:"Administrator",fail:"Could not send, try again",
+en:{on:"Connected to the administrator",off:"Server unreachable",none:"No messages yet",hint:"Messages from the administrator appear here.",ph:"Type a reply…",send:"Send",admin:"Administrator",fail:"Could not send, try again",camT:"React",suaT:"Edit message",thuT:"Unsend",daThu:"Message unsent",daSua:"edited",thuHoi:"Unsend this message? The administrator will no longer be able to read it.",
 ask:"{0} is requesting to view and control this screen. Allow it?",allow:"Allow",deny:"Deny",live:"{0} is viewing/controlling this screen remotely",stop:"Stop now",
 trust:"Always allow {0}, don't ask again",untrust:"Revoke trust",ren:"Rename this computer",fix:"Self repair",fixHint:"Clear old temporary files so the PC runs lighter, or free RAM that is held without need. Your documents are never deleted.",fixClean:"Clean junk files",fixRam:"Free up RAM",fixBusy:"Working…",fixFail:"Could not do it, try again",fixClose:"Close",renPh:"Computer name",renSave:"Save",renFail:"Could not rename, try again",renPw:"Agent uninstall password (from your administrator)",lang:"Language",
 reqBtn:"Request help",reqTitle:"Send a help request to the administrator",reqPh:"Describe the problem, e.g. printer not printing, blurry screen…",urgent:"Urgent (need help now)",reqSend:"Send",reqCancel:"Cancel",reqEmpty:"Enter what you need help with",reqSent:"✓ Request sent, the administrator will handle it.",reqFail:"Could not send, try again",
 info:"Computer info",iL:["Computer name","User","Operating system","IP address","MAC address","Model","CPU","RAM","In use","Disks","Uptime","Serial number","Server","Agent version"],iFree:"free",iDay:"d",
 reporterPh:"Your name",phonePh:"Phone / Zalo",empPh:"Employee ID",pcPh:"Faulty PC code",reqNeed:"Please fill in all fields",types:{"Máy tính":"Computer","Máy in":"Printer","Máy photo":"Photocopier","Máy scan":"Scanner","Server":"Server","Khác":"Other"}},
-zh:{on:"已连接管理员",off:"无法连接服务器",none:"暂无消息",hint:"管理员发来的消息会显示在这里。",ph:"输入回复…",send:"发送",admin:"管理员",fail:"发送失败，请稍后再试",
+zh:{on:"已连接管理员",off:"无法连接服务器",none:"暂无消息",hint:"管理员发来的消息会显示在这里。",ph:"输入回复…",send:"发送",admin:"管理员",fail:"发送失败，请稍后再试",camT:"添加表情",suaT:"编辑消息",thuT:"撤回",daThu:"消息已撤回",daSua:"已编辑",thuHoi:"要撤回这条消息吗？管理员将无法再阅读其内容。",
 ask:"{0} 请求查看并控制此屏幕，是否允许？",allow:"允许",deny:"拒绝",live:"{0} 正在远程查看/控制此屏幕",stop:"立即停止",
 trust:"总是允许 {0}，不再询问",untrust:"取消信任",ren:"重命名此电脑",fix:"自助修复",fixHint:"清理旧的临时文件让电脑更流畅，或释放不必要占用的内存。不会删除您的文档。",fixClean:"清理垃圾文件",fixRam:"释放内存",fixBusy:"处理中…",fixFail:"操作失败，请稍后再试",fixClose:"关闭",renPh:"电脑名称",renSave:"保存",renFail:"重命名失败，请稍后再试",renPw:"代理卸载密码（由管理员提供）",lang:"语言",
 reqBtn:"请求帮助",reqTitle:"向管理员发送帮助请求",reqPh:"描述问题，例如：打印机无法打印、屏幕模糊…",urgent:"紧急（需立即处理）",reqSend:"发送",reqCancel:"取消",reqEmpty:"请输入需要帮助的内容",reqSent:"✓ 已发送请求，管理员将处理。",reqFail:"发送失败，请稍后再试",
@@ -124,10 +134,22 @@ var row=document.createElement("div");row.className="r"+(m.mine?" me":"")+(first
 if(!m.mine){if(lastg)row.appendChild(avEl(m.fromId?"/av/u/"+m.fromId+"?v="+hb:"",m.from||T.admin));else{var sp=document.createElement("span");sp.className="sp";row.appendChild(sp)}}
 var col=document.createElement("div");col.className="col";var d=document.createElement("div");d.className="m"+(m.mine?" me":"")+(m.kind?" "+m.kind:"");
 if(!m.mine&&first){var f=document.createElement("div");f.className="f";f.textContent=(m.kind==="alert"?"⚠ ":m.kind==="req"?"🛠 ":"")+(m.from||T.admin);d.appendChild(f)}
-d.appendChild(document.createTextNode(m.text));col.appendChild(d);
+if(m.thu){var ti=document.createElement("i");ti.className="thu";ti.textContent=T.daThu;d.appendChild(ti)}else{d.appendChild(document.createTextNode(m.text));if(m.sua){var ed=document.createElement("span");ed.className="ed";ed.textContent=" · "+T.daSua;d.appendChild(ed)}}col.appendChild(d);
+var dem={};[m.cam,m.camMay].forEach(function(c){if(c)dem[c]=(dem[c]||0)+1});var ks=Object.keys(dem);
+if(ks.length){var cr=document.createElement("div");cr.className="cams";ks.forEach(function(c){var cs=document.createElement("span");cs.className="cam";cs.textContent=c+(dem[c]>1?" "+dem[c]:"");cr.appendChild(cs)});col.appendChild(cr)}
 if(lastg){var ts=document.createElement("div");ts.className="ts";ts.textContent=new Date(m.at*1e3).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});col.appendChild(ts)}
-row.appendChild(col);l.appendChild(row)});
+row.appendChild(col);if(m.sid&&!m.thu)row.appendChild(actBar(m));l.appendChild(row)});
 l.scrollTop=l.scrollHeight;}
+var CAMS=["👍","❤️","😂","😮","😢","😡"];
+// Tha cam xuc / thu hoi / sua: bao server truoc, server gat dau moi doi tai cho.
+function chatAct(sid,lam,cam,text){fetch("/api/chat-act",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid:sid,lam:lam,cam:cam||"",text:text||""})}).then(function(r){if(!r.ok)throw 0;last="";poll()}).catch(function(){notify("MAM",T.fail)})}
+function actBar(m){var b=document.createElement("div");b.className="bact";
+var nut=function(txt,title,fn){var x=document.createElement("button");x.textContent=txt;x.title=title;x.onclick=fn;b.appendChild(x)};
+CAMS.forEach(function(c){nut(c,T.camT,function(){chatAct(m.sid,"cam",m.camMay===c?"":c)})});
+if(m.mine){nut("✏️",T.suaT,function(){suaTin(m)});nut("↩︎",T.thuT,function(){if(confirm(T.thuHoi))chatAct(m.sid,"thu")})}
+return b}
+var suaSID="";
+function suaTin(m){suaSID=m.sid;$("sTitle").textContent=T.suaT;$("sin").value=m.text;$("scancel").textContent=T.reqCancel;$("ssave").textContent=T.renSave;$("sovl").style.display="flex";$("sin").focus()}
 var AVC=["#2563EB","#0891B2","#059669","#D97706","#DC2626","#7C3AED","#DB2777","#4F46E5"],hb=Math.floor(Date.now()/36e5);
 function avEl(src,name){var w=document.createElement("span");w.className="av";var h=0;name=name||"?";for(var i=0;i<name.length;i++)h=(h*31+name.charCodeAt(i))>>>0;w.style.backgroundColor=AVC[h%8];var p=name.trim().split(/\s+/);w.textContent=((p[0][0]||"")+(p.length>1?p[p.length-1][0]:"")).toUpperCase();if(src){var im=new Image();im.onload=function(){w.textContent="";w.style.backgroundImage="url("+src+")"};im.src=src}return w}
 var AVT={vi:{t:"Đổi ảnh đại diện",off:"Quản trị viên không cho phép máy đổi ảnh",bad:"Không đọc được ảnh này",net:"Chưa kết nối server nên chưa đổi được ảnh"},en:{t:"Change profile picture",off:"The administrator does not allow changing the picture",bad:"Could not read this image",net:"Server unreachable, picture not changed"},zh:{t:"更换头像",off:"管理员不允许更换头像",bad:"无法读取该图片",net:"无法连接服务器，头像未更改"}},selfV=Date.now();
@@ -169,6 +191,8 @@ var rows=[j.name,r.user,j.os,j.ip,j.mac,h.model,h.cpu,h.ramGB?h.ramGB+" GB":"",r
 var t="<table style='width:100%;border-collapse:collapse'>";rows.forEach(function(v,i){if(v)t+="<tr><td style='color:var(--muted);padding:3px 10px 3px 0;vertical-align:top;white-space:nowrap'>"+esc(L2[i])+"</td><td style='padding:3px 0;white-space:pre-line;word-break:break-all'>"+esc(v)+"</td></tr>"});
 $("iBody").innerHTML=t+"</table>"}).catch(function(){})}
 $("infoBtn").onclick=showInfo;$("iLang").onchange=function(){var l=this.value;fetch("/api/lang",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({lang:l})}).then(function(r){if(!r.ok)throw 0;window.__lang=l;T=L[l]||L.en;showInfo();poll()}).catch(function(){$("iLang").value=window.__lang||"en"})};$("iClose").onclick=function(){$("iovl").style.display="none"};
+$("scancel").onclick=function(){$("sovl").style.display="none"};
+$("ssave").onclick=function(){var v=$("sin").value.trim();if(!v)return;$("sovl").style.display="none";chatAct(suaSID,"sua","",v)};
 $("fixBtn").onclick=function(){$("fOut").textContent="";$("fovl").style.display="flex"};
 $("fClose").onclick=function(){$("fovl").style.display="none"};
 function fixDo(w){$("fClean").disabled=$("fRam").disabled=true;$("fOut").style.color="";$("fOut").textContent=T.fixBusy;fetch("/api/maint",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({do:w})}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){$("fOut").style.color=j.ok?"var(--ok)":"var(--off)";$("fOut").textContent=fixTr(j.out)}).catch(function(){$("fOut").style.color="var(--off)";$("fOut").textContent=T.fixFail}).then(function(){$("fClean").disabled=$("fRam").disabled=false})}

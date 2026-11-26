@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.107"
+const Version = "1.1.108"
 
 //go:embed web
 var webFS embed.FS
@@ -101,6 +101,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/report", s.hReport)
 	mux.HandleFunc("/api/agent/result", s.hResult)
 	mux.HandleFunc("/api/agent/reply", s.hReply)
+	mux.HandleFunc("/api/agent/chat-act", s.hAgentChatAct)
 	mux.HandleFunc("/api/agent/wait", s.hAgentWait)
 	mux.HandleFunc("/api/chat-wait", s.authed("", s.hChatWait))
 	mux.HandleFunc("/api/agent/rename", s.hAgentRename)
@@ -174,10 +175,15 @@ func main() {
 	}
 	// đính chính cảnh báo "không ra hình" do lỗi kết luận của bản cũ — một lần duy nhất
 	nHinh := s.donCanhBaoHinhGia()
-	if nHinh > 0 {
+	// tin nhắn cũ chưa có ID thì không thả cảm xúc hay thu hồi được — vá luôn lúc khởi động
+	nTin := s.vaIDChat()
+	if nHinh > 0 || nTin > 0 {
 		s.save()
 	}
 	s.mu.Unlock()
+	if nTin > 0 {
+		log.Printf(T("Đã đánh số %d tin nhắn cũ để thả cảm xúc và thu hồi được"), nTin)
+	}
 	if nHinh > 0 {
 		log.Printf(T("Đã đính chính %d cảnh báo \"không ra hình\" của bản cũ"), nHinh)
 		s.audit(AuditEntry{User: "system", Name: T("Hệ thống"), Role: "system", Kind: T("Cảnh báo"),

@@ -273,7 +273,7 @@ func (s *Server) hReply(w http.ResponseWriter, r *http.Request) {
 		jerr(w, 401, "Token không hợp lệ")
 		return
 	}
-	s.addChat(m.ID, m.Name, t, true)
+	l := s.addChat(m.ID, m.Name, t, true)
 	s.save()
 	s.audit(AuditEntry{User: "system", Name: "Hệ thống", Role: "sys", IP: clientIP(r), Kind: "Tin nhắn", Msg: "Máy " + m.Name + " trả lời: " + t, Target: m.Name})
 	for _, sc := range s.screens {
@@ -285,6 +285,66 @@ func (s *Server) hReply(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+	jok(w, map[string]string{"id": l.ID}) // máy giữ ID này để sau còn thu hồi hay sửa chính tin đó
+}
+
+// hAgentChatAct: người ngồi máy thả cảm xúc / thu hồi / sửa tin nhắn. Chỉ đụng được tin của CHÍNH
+// họ — tin của admin là lời admin, không ai sửa miệng người khác.
+func (s *Server) hAgentChatAct(w http.ResponseWriter, r *http.Request) {
+	var in struct{ ID, Lam, Cam, Text string }
+	if r.Method != "POST" || readJSON(r, &in) != nil {
+		jerr(w, 400, "Dữ liệu không hợp lệ")
+		return
+	}
+	text := strings.TrimSpace(in.Text)
+	if in.Lam == "sua" && (len([]rune(text)) < 1 || len([]rune(text)) > 300) {
+		jerr(w, 400, "Nội dung 1 đến 300 ký tự")
+		return
+	}
+	if in.Lam == "cam" && in.Cam != "" && !camCho[in.Cam] {
+		jerr(w, 400, "Cảm xúc không hợp lệ")
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.agentMachine(r)
+	if m == nil {
+		jerr(w, 401, "Token không hợp lệ")
+		return
+	}
+	var l *ChatLine
+	for _, c := range s.st.Chat {
+		if c.Machine == m.ID && c.ID == in.ID {
+			l = c
+		}
+	}
+	if l == nil {
+		jerr(w, 404, "Không có tin nhắn này")
+		return
+	}
+	switch in.Lam {
+	case "cam":
+		l.CamMay = in.Cam
+	case "thu", "sua":
+		if !l.Client {
+			jerr(w, 403, "Đây là tin của quản trị viên")
+			return
+		}
+		if l.Thu {
+			jerr(w, 400, "Tin này đã thu hồi rồi")
+			return
+		}
+		if in.Lam == "thu" {
+			l.Thu, l.Text, l.Sua = true, "", false
+		} else {
+			l.Text, l.Sua = text, true
+		}
+	default:
+		jerr(w, 400, "Không hiểu muốn làm gì với tin này")
+		return
+	}
+	chatBump()
+	s.save()
 	jok(w, map[string]bool{"ok": true})
 }
 

@@ -33,6 +33,13 @@ type inMsg struct {
 	Mine   bool   `json:"mine,omitempty"`   // tin do người ngồi máy gửi đi
 	Kind   string `json:"kind,omitempty"`   // "" = tin nhắn | req = yêu cầu hỗ trợ | alert = cảnh báo máy
 	FromID string `json:"fromId,omitempty"` // id tài khoản quản trị gửi (để lấy ảnh đại diện)
+	// SID: id dòng chat bên server. Có nó mới thả cảm xúc / thu hồi / sửa đúng tin được. Thông báo
+	// máy tự sinh (cảnh báo, yêu cầu hỗ trợ) không có SID nên không thao tác được — đúng vậy.
+	SID    string `json:"sid,omitempty"`
+	Cam    string `json:"cam,omitempty"`    // cảm xúc quản trị viên thả
+	CamMay string `json:"camMay,omitempty"` // cảm xúc người ngồi máy thả
+	Thu    bool   `json:"thu,omitempty"`    // đã thu hồi
+	Sua    bool   `json:"sua,omitempty"`    // đã sửa
 }
 
 var inbox struct {
@@ -46,12 +53,35 @@ var inbox struct {
 
 func addMsg(from, text string, mine bool) { addNotice("", from, text, mine) }
 
-// addMsgFrom: như addMsg nhưng gắn id người gửi để cửa sổ hiện ảnh đại diện của họ.
-func addMsgFrom(fromID, from, text string) {
+// addMsgFrom: như addMsg nhưng gắn id người gửi để cửa sổ hiện ảnh đại diện của họ, và id dòng chat
+// bên server để sau còn thả cảm xúc hay thấy admin thu hồi.
+func addMsgFrom(fromID, from, text, sid string) {
 	addNotice("", from, text, false)
 	inbox.Lock()
 	inbox.msgs[len(inbox.msgs)-1].FromID = fromID
+	inbox.msgs[len(inbox.msgs)-1].SID = sid
 	inbox.Unlock()
+}
+
+// chatAct: áp một thay đổi do bên kia làm (admin thả cảm xúc, thu hồi, sửa) lên tin tương ứng.
+func chatAct(sid, lam, cam, text string) {
+	inbox.Lock()
+	defer inbox.Unlock()
+	for i := range inbox.msgs {
+		if inbox.msgs[i].SID == "" || inbox.msgs[i].SID != sid {
+			continue
+		}
+		m := &inbox.msgs[i]
+		switch lam {
+		case "cam":
+			m.Cam = cam
+		case "thu":
+			m.Thu, m.Text, m.Sua = true, "", false
+		case "sua":
+			m.Text, m.Sua = text, true
+		}
+		return
+	}
 }
 
 // addNotice: thêm một thông báo vào hộp thư; cửa sổ MAM sẽ tự bật lên, kêu "ting" và hiện nổi bật.
@@ -171,11 +201,54 @@ func startLocal() {
 			http.Error(w, "1-300", 400)
 			return
 		}
-		if resp, err := post("/api/agent/reply", map[string]string{"text": in.Text}, cfg.Token); err != nil || resp.code != 200 {
+		resp, err := post("/api/agent/reply", map[string]string{"text": in.Text}, cfg.Token)
+		if err != nil || resp.code != 200 {
 			http.Error(w, "server", 502)
 			return
 		}
+		var ra struct{ ID string }
+		json.Unmarshal(resp.body, &ra) // server trả id dòng chat; không có thì tin này không thu hồi được
 		addMsg("", in.Text, true)
+		if ra.ID != "" {
+			inbox.Lock()
+			inbox.msgs[len(inbox.msgs)-1].SID = ra.ID
+			inbox.Unlock()
+		}
+		w.Write([]byte("{}"))
+	})
+	// Người ngồi máy thả cảm xúc / thu hồi / sửa tin: báo server trước, server gật đầu mới đổi tại chỗ.
+	mux.HandleFunc("/api/chat-act", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ SID, Lam, Cam, Text string }
+		if r.Method != "POST" || json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in) != nil || in.SID == "" {
+			http.Error(w, "bad", 400)
+			return
+		}
+		if n := len([]rune(in.Text)); in.Lam == "sua" && (n < 1 || n > 300) {
+			http.Error(w, "1-300", 400)
+			return
+		}
+		resp, err := post("/api/agent/chat-act", map[string]string{"id": in.SID, "lam": in.Lam, "cam": in.Cam, "text": in.Text}, cfg.Token)
+		if err != nil || resp.code != 200 {
+			http.Error(w, "server", 502)
+			return
+		}
+		inbox.Lock()
+		for i := range inbox.msgs {
+			if inbox.msgs[i].SID != in.SID {
+				continue
+			}
+			m := &inbox.msgs[i]
+			switch in.Lam {
+			case "cam":
+				m.CamMay = in.Cam
+			case "thu":
+				m.Thu, m.Text, m.Sua = true, "", false
+			case "sua":
+				m.Text, m.Sua = in.Text, true
+			}
+			break
+		}
+		inbox.Unlock()
 		w.Write([]byte("{}"))
 	})
 	mux.HandleFunc("/api/rename", func(w http.ResponseWriter, r *http.Request) {

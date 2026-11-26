@@ -28,8 +28,11 @@ func fail(msg string) Result { return Result{Out: msg} }
 func handleCommand(typ string, a map[string]string) Result {
 	switch typ {
 	case "message":
-		addMsgFrom(a["fromId"], a["from"], a["text"])
+		addMsgFrom(a["fromId"], a["from"], a["text"], a["mid"])
 		return Result{OK: true, Out: "Đã chuyển tới máy"}
+	case "chatact": // admin thả cảm xúc / thu hồi / sửa một tin đã gửi
+		chatAct(a["mid"], a["lam"], a["cam"], a["text"])
+		return Result{OK: true, Out: "Đã cập nhật tin nhắn"}
 	case "procs":
 		p, err := osProcs()
 		if err != nil {

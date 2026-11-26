@@ -636,3 +636,16 @@ img.av{display:block}
 /* Số liệu trong hộp: nhỏ hơn ngoài trang, không thì "13 giờ 10 phút" bị xuống dòng. */
 .kpis.gon .kpi{padding:10px 12px}
 .kpis.gon .val{font-size:20px;line-height:1.25}
+
+/* Thả cảm xúc / sửa / thu hồi tin nhắn: thanh nút nhỏ nằm cạnh bong bóng, hiện khi rê chuột.
+   Máy cảm ứng không có "rê chuột" nên cho hiện luôn. */
+.bact{display:flex;align-items:center;gap:1px;opacity:0;transition:opacity .12s;flex:none}
+.brow:hover .bact,.bact:focus-within{opacity:1}
+.bact button{border:0;background:transparent;cursor:pointer;font-size:13px;line-height:1;padding:3px 2px;border-radius:7px;color:var(--muted);font-family:inherit}
+.bact button:hover{background:var(--surface-3)}
+.brow.out .bact{order:-1}
+.cams{display:flex;gap:3px;margin-top:2px}
+.brow.out .cams{justify-content:flex-end}
+.cam{background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:0 7px;font-size:12px;line-height:19px}
+.bub-ed{font-size:11px;opacity:.6;white-space:nowrap}
+@media (hover:none){.bact{opacity:.75}}

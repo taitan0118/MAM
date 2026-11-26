@@ -395,7 +395,14 @@ func (s *Server) issue(me *Account, r *http.Request, ids []string, typ string, a
 		cmdIDs[m.ID] = c.ID
 		done = append(done, m.Name)
 		if typ == "message" {
-			s.addChat(m.ID, me.Name, args["text"], false, me.ID)
+			// máy phải biết ID dòng chat thì sau này mới thu hồi/sửa đúng tin được; mỗi máy một ID
+			// nên phải chép riêng map args, dùng chung là máy nào cũng nhận ID của máy cuối
+			l := s.addChat(m.ID, me.Name, args["text"], false, me.ID)
+			ar := map[string]string{"mid": l.ID}
+			for k, v := range args {
+				ar[k] = v
+			}
+			c.Args = ar
 		}
 	}
 	if len(s.st.Commands) > 3000 {

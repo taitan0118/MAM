@@ -902,6 +902,19 @@ const chatLen = {};
 const CQ = { q: '' };
 
 // Tin nhắn kiểu Messenger: tin liền nhau của một người gom thành cụm; ảnh tròn và giờ chỉ hiện ở tin cuối cụm.
+// Thả cảm xúc / thu hồi / sửa tin nhắn — giống Messenger. Chỉ thu hồi và sửa được tin của chính
+// Console gửi; tin của người ngồi máy là lời của họ, admin không sửa miệng người khác.
+const CAMS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
+async function chatTin(mid, body) {
+  try { await api('POST', '/api/chat/' + encodeURIComponent(mid) + '/tin', body); render(); } catch (e) { fail(e); }
+}
+function suaTin(mid, l) {
+  const ta = el('textarea', { class: 'input', rows: 3, maxlength: 300 });
+  ta.value = l.text;
+  modal(t('Sửa tin nhắn'), el('div', {}, ta, infoNote('Người ngồi máy sẽ thấy nội dung mới kèm chữ "đã sửa".')),
+    [{ label: 'Hủy', on: c => c() },
+     { label: 'Lưu', cls: 'primary', on: c => { const x = ta.value.trim(); if (!x) return; c(); chatTin(mid, { id: l.id, lam: 'sua', text: x }); } }]);
+}
 function chatRows(d) {
   const L = d.lines, key = l => (l.client ? 'm' : 'u') + '|' + (l.byId || l.by), out = [];
   L.forEach((l, i) => {
@@ -909,8 +922,22 @@ function chatRows(d) {
     const last = !(i < L.length - 1 && key(L[i + 1]) === k && Date.parse(L[i + 1].at) - t0 < 5 * 60e3);
     const inc = l.client, who = inc ? d.name : l.by;
     const av = inc ? (last ? avatarEl('m', d.id, d.av, d.name, 32) : el('span', { class: 'av-sp' })) : null;
-    const bub = el('div', { class: 'bub ' + (inc ? 'in' : 'out') + (first ? ' gfirst' : '') }, (first && (inc || l.by !== me.name)) ? el('div', { class: 'bub-w' }, who) : null, el('div', {}, l.text));
-    out.push(el('div', { class: 'brow ' + (inc ? 'in' : 'out') + (first ? ' gfirst' : '') }, av, el('div', { class: 'bcol' }, bub, last ? el('div', { class: 'bub-t' }, fmtDT(l.at)) : null)));
+    const than = l.thu ? el('i', { style: 'opacity:.7' }, t('Tin nhắn đã được thu hồi'))
+      : el('div', {}, l.text, l.sua ? el('span', { class: 'bub-ed' }, ' · ' + t('đã sửa')) : null);
+    const bub = el('div', { class: 'bub ' + (inc ? 'in' : 'out') + (first ? ' gfirst' : '') }, (first && (inc || l.by !== me.name)) ? el('div', { class: 'bub-w' }, who) : null, than);
+    // gộp cảm xúc trùng nhau lại thành một cái kèm số lượng
+    const dem = {};
+    [l.cam, l.camMay].forEach(c => { if (c) dem[c] = (dem[c] || 0) + 1; });
+    const cams = Object.keys(dem);
+    const nut = (nhan, title, on) => el('button', { title: t(title), onclick: on }, nhan);
+    const act = l.id && !l.thu ? el('div', { class: 'bact' },
+      ...CAMS.map(c => nut(c, 'Thả cảm xúc', () => chatTin(d.id, { id: l.id, lam: 'cam', cam: l.cam === c ? '' : c }))),
+      !inc ? nut('✏️', 'Sửa tin nhắn', () => suaTin(d.id, l)) : null,
+      !inc ? nut('↩︎', 'Thu hồi tin nhắn', () => confirmBox(t('Thu hồi tin nhắn'), t('Thu hồi tin này? Người ngồi máy sẽ không đọc được nội dung nữa.'), t('Thu hồi'), true, () => chatTin(d.id, { id: l.id, lam: 'thu' }))) : null) : null;
+    out.push(el('div', { class: 'brow ' + (inc ? 'in' : 'out') + (first ? ' gfirst' : '') }, av,
+      el('div', { class: 'bcol' }, bub,
+        cams.length ? el('div', { class: 'cams' }, cams.map(c => el('span', { class: 'cam' }, c + (dem[c] > 1 ? ' ' + dem[c] : '')))) : null,
+        last ? el('div', { class: 'bub-t' }, fmtDT(l.at)) : null), act));
   });
   return out;
 }
@@ -2196,9 +2223,17 @@ function avatarEl(kind, id, ver, name, size) {
   let h = 0; for (const c of String(name || id)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   const ph = el('span', { class: 'av', style: st + 'background:' + AVCOL[h % AVCOL.length] + ';font-size:' + Math.round((size || 32) * .38) + 'px' }, ini);
   if (!ver) return ph;
-  const img = el('img', { class: 'av', alt: '', style: st, src: '/api/avatar/' + kind + '/' + id + '?v=' + ver });
+  const u = '/api/avatar/' + kind + '/' + id + '?v=' + ver;
+  const img = el('img', { class: 'av', alt: '', style: st + 'cursor:zoom-in', title: t('Bấm để xem ảnh lớn'), src: u });
   img.onerror = () => img.replaceWith(ph);
+  img.onclick = e => { e.stopPropagation(); xemAnh(u, name); };
   return img;
+}
+// Bấm vào ảnh đại diện là xem ảnh lớn, khỏi phải vào trang riêng của máy/người đó.
+function xemAnh(src, ten) {
+  modal(ten || t('Ảnh đại diện'), el('div', { style: 'display:flex;justify-content:center' },
+    el('img', { src: src, alt: '', style: 'max-width:100%;max-height:70vh;border-radius:14px;display:block' })),
+    [{ label: 'Đóng', cls: 'primary', on: c => c() }]);
 }
 // Chọn ảnh, cắt vuông ở giữa và thu về 256px ngay trên máy (ảnh điện thoại vài MB thành vài chục KB trước khi gửi)
 function pickImage(cb) {

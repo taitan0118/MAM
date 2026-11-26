@@ -1355,6 +1355,22 @@ var EN = {
 "Xóa đầu ghi camera": "Removed the camera NVR",
 "Khai đầu ghi camera %s (%s)": "Configured camera NVR %s (%s)",
 "Mở trang máy này": "Open this machine page",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"Tin nhắn đã được thu hồi": "Message unsent",
+"đã sửa": "edited",
+"Thả cảm xúc": "React",
+"Sửa tin nhắn": "Edit message",
+"Thu hồi tin nhắn": "Unsend message",
+"Thu hồi tin này? Người ngồi máy sẽ không đọc được nội dung nữa.": "Unsend this message? The person at the machine will no longer be able to read it.",
+"Người ngồi máy sẽ thấy nội dung mới kèm chữ \"đã sửa\".": "The person at the machine will see the new text marked \"edited\".",
+"Bấm để xem ảnh lớn": "Click to view the full picture",
+"Đây là tin của người ngồi máy, không sửa hay thu hồi được": "This message belongs to the person at the machine; it cannot be edited or unsent",
+"Đây là tin của quản trị viên": "This message belongs to the administrator",
+"Tin này đã thu hồi rồi": "This message has already been unsent",
+"Cảm xúc không hợp lệ": "That reaction is not allowed",
+"Không có tin nhắn này": "No such message",
+"Không hiểu muốn làm gì với tin này": "Unclear what to do with this message",
+"Đã đánh số %d tin nhắn cũ để thả cảm xúc và thu hồi được": "Numbered %d older messages so they can be reacted to and unsent",
 };
 var ZH = {
 "Tìm máy, IP, model, serial, bản quyền…": "搜索设备、IP、型号、序列号、授权…",
@@ -2716,6 +2732,22 @@ var ZH = {
 "Xóa đầu ghi camera": "已删除摄像机录像机",
 "Khai đầu ghi camera %s (%s)": "已配置摄像机录像机 %s（%s）",
 "Mở trang máy này": "打开此电脑页面",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"Tin nhắn đã được thu hồi": "消息已撤回",
+"đã sửa": "已编辑",
+"Thả cảm xúc": "添加表情",
+"Sửa tin nhắn": "编辑消息",
+"Thu hồi tin nhắn": "撤回消息",
+"Thu hồi tin này? Người ngồi máy sẽ không đọc được nội dung nữa.": "要撤回这条消息吗？使用该电脑的人将无法再阅读其内容。",
+"Người ngồi máy sẽ thấy nội dung mới kèm chữ \"đã sửa\".": "使用该电脑的人会看到新内容，并标注“已编辑”。",
+"Bấm để xem ảnh lớn": "点击查看大图",
+"Đây là tin của người ngồi máy, không sửa hay thu hồi được": "这是使用该电脑的人发送的消息，无法编辑或撤回",
+"Đây là tin của quản trị viên": "这是管理员发送的消息",
+"Tin này đã thu hồi rồi": "该消息已撤回",
+"Cảm xúc không hợp lệ": "该表情不被允许",
+"Không có tin nhắn này": "没有该消息",
+"Không hiểu muốn làm gì với tin này": "无法识别对该消息的操作",
+"Đã đánh số %d tin nhắn cũ để thả cảm xúc và thu hồi được": "已为 %d 条旧消息编号，使其可添加表情和撤回",
 };
 var PAT = [
 [
