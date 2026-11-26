@@ -635,6 +635,72 @@ func (s *Server) hDevices(w http.ResponseWriter, r *http.Request, me *Account) {
 	}
 }
 
+// hDeviceTK thử một tài khoản lên đúng một camera, ĐÚNG MỚI LƯU vào camera đó. Lưu rồi thì
+// lần sau khỏi gõ lại, và không đụng tới tài khoản chung — mỗi dải camera một mật khẩu khác nhau,
+// ghi đè tài khoản chung là mất luôn những camera đang xem được.
+func (s *Server) hDeviceTK(w http.ResponseWriter, r *http.Request, me *Account) {
+	if r.Method != "POST" {
+		jerr(w, 405, "Phương thức không hỗ trợ")
+		return
+	}
+	var in struct {
+		ID, User, Pass string
+	}
+	if err := readJSON(r, &in); err != nil || strings.TrimSpace(in.User) == "" {
+		jerr(w, 400, "Chưa nhập tài khoản")
+		return
+	}
+	in.User = strings.TrimSpace(in.User)
+	s.mu.RLock()
+	var d *NetDev
+	for _, x := range s.st.Devices {
+		if x.ID == in.ID {
+			d = x
+		}
+	}
+	if d == nil {
+		s.mu.RUnlock()
+		jerr(w, 404, "Không có thiết bị này")
+		return
+	}
+	cp := *d
+	s.mu.RUnlock()
+	cp.User, cp.Pass = in.User, in.Pass
+
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	// thử đường hình trước vì đó là thứ đại ca muốn xem; không được vì lý do khác thì thử đường ảnh
+	cach := "video"
+	l, err := moLuong(ctx, cp.IP, cp.Port, cp.Path, cp.User, cp.Pass)
+	if err == nil {
+		l.dong()
+	} else if !errors.Is(err, errSaiMatKhau) && !errors.Is(err, errChuaKhai) {
+		if _, duong, e2 := layAnh(ctx, cp, cp.User, cp.Pass); e2 == nil {
+			cach, err = "ảnh", nil
+			cp.SnapPath = duong
+		}
+	}
+	if err != nil {
+		jerr(w, 400, TErr(err.Error()))
+		return
+	}
+
+	s.mu.Lock()
+	for _, x := range s.st.Devices {
+		if x.ID == in.ID {
+			x.User, x.Pass = cp.User, cp.Pass
+			if cp.SnapPath != "" {
+				x.SnapPath = cp.SnapPath
+			}
+			x.SaiTK = false
+		}
+	}
+	s.save()
+	s.mu.Unlock()
+	s.auditBy(me, r, "Thiết bị mạng", T("Khai tài khoản riêng cho %s (%s)", cp.Name, cp.IP), cp.Name, false)
+	jok(w, map[string]string{"cach": cach})
+}
+
 // hDeviceCheck: bấm "Kiểm lại" trên Console. Không id = kiểm tất cả, kèm đo hình ngay.
 func (s *Server) hDeviceCheck(w http.ResponseWriter, r *http.Request, me *Account) {
 	if r.Method != "POST" {

@@ -1492,7 +1492,8 @@ function khungHinh(d) {
   const nhipGio = setInterval(veGio, 1000);
   const doiTK = m => /đăng nhập|mật khẩu|login|password|登录|密码/i.test(String(m));
 
-  // Camera đòi đăng nhập thì khai ngay tại đây, khỏi đi tìm nút "Tài khoản camera chung" ở trang khác.
+  // Camera đòi đăng nhập thì khai ngay tại đây. Lưu RIÊNG cho camera này chứ không đụng tài khoản
+  // chung: mỗi dải camera một mật khẩu, ghi đè tài khoản chung là mất luôn những camera đang xem được.
   const moTK = () => {
     if (!isSuper() || oTK.dataset.mo) return;
     oTK.dataset.mo = '1';
@@ -1501,17 +1502,20 @@ function khungHinh(d) {
     const loi = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
     const nut = el('button', { class: 'btn primary', onclick: async () => {
       nut.disabled = true;
+      loi.textContent = '';
+      bao.textContent = t('Đang thử tài khoản…');
       try {
-        const st = await api('GET', '/api/settings');
-        await api('PUT', '/api/settings', Object.assign({}, st, { camUser: us.value.trim(), camPass: pw.value }));
+        // server thử thật trước, ĐÚNG MỚI LƯU — sai thì không ghi gì vào camera cả
+        await api('POST', '/api/devices/tai-khoan', { id: d.id, user: us.value.trim(), pass: pw.value });
+        toast(t('Đã nhớ tài khoản cho camera này, lần sau khỏi nhập'));
         oTK.style.display = 'none'; delete oTK.dataset.mo;
         chay = true; dut = 0; daLui = false; viAnh = '';
         bao.textContent = t('Đang mở video…'); video();
       } catch (e) { loi.textContent = trErr(e.message); nut.disabled = false; }
-    } }, 'Lưu và xem lại');
+    } }, 'Thử và nhớ cho camera này');
     oTK.replaceChildren(el('div', { class: 'filters', style: 'margin:0' },
       field('Tài khoản camera', us), field('Mật khẩu', pw), nut), loi,
-      infoNote('Dùng chung cho mọi camera chưa khai tài khoản riêng. Camera Hikvision mặc định là admin kèm mật khẩu đặt lúc lắp.'));
+      infoNote('Chỉ lưu cho riêng camera này, không ảnh hưởng camera khác. Server thử trước, đúng mới nhớ; từ lần sau mở là xem được ngay.'));
   };
 
   // ---- đường 1: video mượt ----
