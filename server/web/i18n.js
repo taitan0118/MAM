@@ -1354,6 +1354,7 @@ var EN = {
 "Dữ liệu không đọc được": "Could not read the data",
 "Xóa đầu ghi camera": "Removed the camera NVR",
 "Khai đầu ghi camera %s (%s)": "Configured camera NVR %s (%s)",
+"Mở trang máy này": "Open this machine page",
 };
 var ZH = {
 "Tìm máy, IP, model, serial, bản quyền…": "搜索设备、IP、型号、序列号、授权…",
@@ -2714,6 +2715,7 @@ var ZH = {
 "Dữ liệu không đọc được": "无法读取数据",
 "Xóa đầu ghi camera": "已删除摄像机录像机",
 "Khai đầu ghi camera %s (%s)": "已配置摄像机录像机 %s（%s）",
+"Mở trang máy này": "打开此电脑页面",
 };
 var PAT = [
 [

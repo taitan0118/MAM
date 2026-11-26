@@ -955,7 +955,9 @@ VIEWS.chat = async (v, quiet) => {
     const ta = el('textarea', { class: 'input', rows: 2, maxlength: 300, placeholder: t('Nhập tin nhắn… (Enter để gửi)') });
     const send = async () => { const x = ta.value.trim(); if (!x) return; try { await api('POST', '/api/chat/' + sel, { text: x }); ta.value = ''; render(); } catch (e) { fail(e); } };
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
-    main.append(el('div', { class: 'chat-head' }, el('b', {}, d.name), ipEl(sel, 'font-size:12.5px'), el('span', { style: 'color:var(--faint);font-size:12.5px' }, d.online ? 'Online' : 'Offline, chưa gửi được')), log,
+    // bấm vào tên máy là sang thẳng trang máy đó (xem thông tin, điều khiển màn hình)
+    const tenMay = el('b', { style: 'cursor:pointer', title: t('Mở trang máy này'), onclick: () => go('detail', sel) }, d.name);
+    main.append(el('div', { class: 'chat-head' }, tenMay, ipEl(sel, 'font-size:12.5px'), el('span', { style: 'color:var(--faint);font-size:12.5px' }, d.online ? 'Online' : 'Offline, chưa gửi được')), log,
       el('div', { class: 'chat-in' }, ta, el('button', { class: 'btn primary', disabled: !d.online, onclick: send }, 'Gửi')));
     // tự kéo xuống cuối khi mở hoặc có tin mới; làm mới định kỳ thì giữ nguyên chỗ đang đọc
     const grew = chatLen[sel] !== d.lines.length; chatLen[sel] = d.lines.length;
