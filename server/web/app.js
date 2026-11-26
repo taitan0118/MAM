@@ -910,11 +910,19 @@ async function chatTin(mid, body) {
   try { await api('POST', '/api/chat/' + encodeURIComponent(mid) + '/tin', body); render(); } catch (e) { fail(e); }
 }
 function suaTin(mid, l) {
-  const ta = el('textarea', { class: 'input', rows: 3, maxlength: 300 });
+  // textarea ngoài .field thì không có width, trình duyệt cho đúng 20 cột — phải tự đặt 100%
+  const ta = el('textarea', { class: 'input', rows: 4, maxlength: 300, style: 'width:100%;box-sizing:border-box;resize:vertical;line-height:1.5' });
   ta.value = l.text;
-  modal(t('Sửa tin nhắn'), el('div', {}, ta, infoNote('Người ngồi máy sẽ thấy nội dung mới kèm chữ "đã sửa".')),
-    [{ label: 'Hủy', on: c => c() },
-     { label: 'Lưu', cls: 'primary', on: c => { const x = ta.value.trim(); if (!x) return; c(); chatTin(mid, { id: l.id, lam: 'sua', text: x }); } }]);
+  const dem = el('div', { style: 'font-size:11.5px;color:var(--muted);text-align:right' });
+  const veDem = () => { dem.textContent = ta.value.length + '/300'; };
+  veDem();
+  ta.oninput = veDem;
+  const luu = c => { const x = ta.value.trim(); if (!x) return; c(); chatTin(mid, { id: l.id, lam: 'sua', text: x }); };
+  ta.onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.closest('.modal').querySelector('.modal-f .primary').click(); } };
+  modal(t('Sửa tin nhắn'), el('div', { style: 'display:flex;flex-direction:column;gap:6px' }, ta, dem,
+    infoNote('Người ngồi máy sẽ thấy nội dung mới kèm chữ "đã sửa".')),
+    [{ label: 'Hủy', on: c => c() }, { label: 'Lưu', cls: 'primary', on: luu }]);
+  setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
 }
 function chatRows(d) {
   const L = d.lines, key = l => (l.client ? 'm' : 'u') + '|' + (l.byId || l.by), out = [];
@@ -1297,8 +1305,14 @@ VIEWS.devices = async v => {
   // Thanh tab theo nhóm: mỗi danh sách thiết bị của công ty là một nhóm, bấm một cái là lọc ngay.
   if (grps.length) v.append(el('div', { class: 'tabs', style: 'margin-top:12px' },
     [['all', t('Tất cả')], ...grps.map(g => [g, t(g)]), ...(list.some(d => !nhomCua(d).length) ? [['__none', t('Chưa phân nhóm')]] : [])]
-      .map(([k, l]) => el('button', { class: 'tab' + (DEVF.g === k ? ' on' : ''), onclick: () => { DEVF.g = k; render(); } },
-        l + (k === 'all' ? ' (' + list.length + ')' : k === '__none' ? dem(d => !nhomCua(d).length) : dem(d => coNhom(d, k)))))));
+      .map(([k, l]) => {
+        const thuoc = k === 'all' ? () => true : k === '__none' ? d => !nhomCua(d).length : d => coNhom(d, k);
+        // Số thiết bị đang đỏ/vàng, dán ngay lên tab: khỏi phải bấm từng nhóm mới biết nhóm nào đang hỏng
+        const nLoi = list.filter(d => thuoc(d) && ['crit', 'warn'].includes(devState(d)[0])).length;
+        return el('button', { class: 'tab' + (DEVF.g === k ? ' on' : ''), onclick: () => { DEVF.g = k; render(); } },
+          l + ' (' + list.filter(thuoc).length + ')',
+          nLoi ? el('span', { class: 'count badge-red', style: 'margin-left:6px', title: t('{0} thiết bị đang lỗi', nLoi) }, String(nLoi)) : null);
+      })));
   v.append(el('div', { class: 'filters', style: 'margin-top:12px' },
     field('Nhóm', select([['all', t('Tất cả nhóm') + dem(() => true)], ...grps.map(g => [g, t(g) + dem(d => coNhom(d, g))]), ['__none', t('Chưa phân nhóm') + dem(d => !nhomCua(d).length)]], DEVF.g, x => { DEVF.g = x; render(); })),
     field('Loại', select([['all', t('Tất cả loại') + dem(() => true)], ...DEVK.map(([k, l]) => [k, t(l) + dem(d => d.kind === k)])], DEVF.k, x => { DEVF.k = x; render(); })),
@@ -1533,6 +1547,7 @@ function khungHinh(d) {
   const oTK = el('div', { style: 'display:none;margin-top:8px' });
   let chay = true, lan = 0, dut = 0, huy = null, daLui = false, viAnh = '';
   let tuaLuc = ''; // rỗng = xem trực tiếp; có giờ = xem lại đoạn đã lưu trong đầu ghi
+  let quaGhi = false; // hình đang đi qua đầu ghi chứ không gọi thẳng camera
 
   const veGio = () => { const n = new Date(); gio.textContent = hai(n.getHours()) + ':' + hai(n.getMinutes()) + ':' + hai(n.getSeconds()); };
   veGio();
@@ -1577,6 +1592,7 @@ function khungHinh(d) {
         huy = new AbortController();
         const rp = await fetch('/api/devices/video?id=' + encodeURIComponent(d.id) + (tuaLuc ? '&tua=' + encodeURIComponent(tuaLuc) : ''), { credentials: 'same-origin', signal: huy.signal });
         if (!rp.ok) throw new Error((await rp.json().catch(() => ({}))).error || rp.status);
+        quaGhi = rp.headers.get('X-Qua') === 'daughi';
         const ma = 'video/mp4; codecs="' + (rp.headers.get('X-Codec') || 'avc1.42E01E') + '"';
         if (!MediaSource.isTypeSupported(ma)) throw new Error(t('trình duyệt không phát được {0}', ma));
         const sb = ms.addSourceBuffer(ma);
@@ -1601,7 +1617,7 @@ function khungHinh(d) {
         for (;;) {
           const r = await rd.read();
           if (r.done || !chay) break;
-          if (!lan++) { dut = 0; bao.textContent = tuaLuc ? t('Đang xem lại từ {0}', tuaLuc.replace('T', ' ')) : t('Video trực tiếp'); }
+          if (!lan++) { dut = 0; bao.textContent = tuaLuc ? t('Đang xem lại từ {0}', tuaLuc.replace('T', ' ')) : (quaGhi ? t('Video trực tiếp qua đầu ghi') : t('Video trực tiếp')); }
           hang.push(r.value); doi += r.value.length;
           // Khúc dữ liệu không cắt theo ranh giới khung hình nên bỏ bớt là hỏng luồng; dồn quá
           // nhiều thì bỏ hẳn video chứ không ôm tiếp cho tới lúc hết bộ nhớ.
@@ -2252,7 +2268,15 @@ function avatarEl(kind, id, ver, name, size) {
   const w = String(name || '?').trim().split(/\s+/), ini = ((w[0][0] || '') + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase();
   let h = 0; for (const c of String(name || id)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   const ph = el('span', { class: 'av', style: st + 'background:' + AVCOL[h % AVCOL.length] + ';font-size:' + Math.round((size || 32) * .38) + 'px' }, ini);
-  if (!ver) return ph;
+  // Chưa có ảnh thì bấm vào vẫn phải đi đâu đó — mở trang của máy, như bấm ảnh đại diện trên Facebook
+  if (!ver) {
+    if (kind === 'm') {
+      ph.style.cursor = 'pointer';
+      ph.title = t('Mở trang máy này');
+      ph.onclick = e => { e.stopPropagation(); go('detail', id); };
+    }
+    return ph;
+  }
   const u = '/api/avatar/' + kind + '/' + id + '?v=' + ver;
   const img = el('img', { class: 'av', alt: '', style: st + 'cursor:zoom-in', title: t('Bấm để xem ảnh lớn'), src: u });
   img.onerror = () => img.replaceWith(ph);
@@ -2261,9 +2285,9 @@ function avatarEl(kind, id, ver, name, size) {
 }
 // Bấm vào ảnh đại diện là xem ảnh lớn, khỏi phải vào trang riêng của máy/người đó.
 function xemAnh(src, ten) {
-  modal(ten || t('Ảnh đại diện'), el('div', { style: 'display:flex;justify-content:center' },
-    el('img', { src: src, alt: '', style: 'max-width:100%;max-height:70vh;border-radius:14px;display:block' })),
-    [{ label: 'Đóng', cls: 'primary', on: c => c() }]);
+  modal(ten || t('Ảnh đại diện'), el('div', { style: 'display:flex;justify-content:center;background:var(--surface-2);border-radius:14px;padding:16px' },
+    el('img', { src: src, alt: '', style: 'width:min(512px,100%);max-height:70vh;object-fit:contain;border-radius:12px;display:block' })),
+    [{ label: 'Đóng', cls: 'primary', on: c => c() }], true);
 }
 // Chọn ảnh, cắt vuông ở giữa và thu về 256px ngay trên máy (ảnh điện thoại vài MB thành vài chục KB trước khi gửi)
 function pickImage(cb) {
@@ -2272,13 +2296,15 @@ function pickImage(cb) {
     const file = f.files[0]; if (!file) return;
     const im = new Image(), u = URL.createObjectURL(file);
     im.onload = () => {
-      const c = document.createElement('canvas'), g = c.getContext('2d'), W = im.naturalWidth, H = im.naturalHeight; c.width = c.height = 256;
+      // 512 chứ không phải 256: mở ảnh lớn ra xem mà chỉ có 256 thì nhòe. Ảnh vẫn chỉ vài chục KB.
+      const S = 512;
+      const c = document.createElement('canvas'), g = c.getContext('2d'), W = im.naturalWidth, H = im.naturalHeight; c.width = c.height = S;
       // giữ trọn cả bức ảnh (không cắt): ảnh nằm vừa khung, phần thừa phủ bằng chính ảnh đó làm mờ
-      const k = Math.max(256 / W, 256 / H), f = Math.min(256 / W, 256 / H);
-      try { g.filter = 'blur(14px)'; } catch (e) { }
-      g.drawImage(im, (256 - W * k) / 2, (256 - H * k) / 2, W * k, H * k); g.filter = 'none';
-      g.drawImage(im, (256 - W * f) / 2, (256 - H * f) / 2, W * f, H * f);
-      URL.revokeObjectURL(u); c.toBlob(b => cb(b), 'image/jpeg', .85);
+      const k = Math.max(S / W, S / H), f = Math.min(S / W, S / H);
+      try { g.filter = 'blur(28px)'; } catch (e) { }
+      g.drawImage(im, (S - W * k) / 2, (S - H * k) / 2, W * k, H * k); g.filter = 'none';
+      g.drawImage(im, (S - W * f) / 2, (S - H * f) / 2, W * f, H * f);
+      URL.revokeObjectURL(u); c.toBlob(b => cb(b), 'image/jpeg', .88);
     };
     im.onerror = () => { URL.revokeObjectURL(u); toast('Không đọc được ảnh này', 'warn'); };
     im.src = u;

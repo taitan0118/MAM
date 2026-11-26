@@ -122,6 +122,26 @@ const (
 
 func hikGio(t time.Time) string { return t.UTC().Format("20060102T150405Z") }
 
+// moKenh mở luồng TRỰC TIẾP của một kênh đầu ghi. Đây là chỗ làm cho MAM giống iVMS-4200: khai một
+// đầu ghi là xem được cả dàn camera của nó bằng ĐÚNG MỘT tài khoản, khỏi phải khai mật khẩu riêng
+// cho từng dải. Luồng phụ (02) trước vì nó là H.264, luồng chính (01) phần lớn H.265.
+func moKenh(ctx context.Context, ip, user, pass string, ch int) (*luongH264, error) {
+	var dau error
+	for _, tr := range []int{2, 1} {
+		l, err := moLuong(ctx, ip, nvrRtsp, fmt.Sprintf("/Streaming/Channels/%d%02d", ch, tr), user, pass)
+		if err == nil {
+			return l, nil
+		}
+		if errors.Is(err, errSaiMatKhau) || errors.Is(err, errChuaKhai) {
+			return nil, err
+		}
+		if dau == nil {
+			dau = err
+		}
+	}
+	return nil, dau
+}
+
 // moTua mở luồng phát lại của một kênh đầu ghi từ mốc giờ t0.
 func moTua(ctx context.Context, ip, user, pass string, ch int, t0 time.Time) (*luongH264, error) {
 	var dau error

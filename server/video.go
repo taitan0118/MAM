@@ -470,9 +470,21 @@ func (s *Server) hDeviceVideo(w http.ResponseWriter, r *http.Request, me *Accoun
 	defer thoi()
 	var l *luongH264
 	var err error
-	if tua != "" {
+	quaGhi := false
+	switch {
+	case tua != "":
 		l, err = moTua(ctx, ghi.IP, ghi.User, ghi.Pass, ch, t0)
-	} else {
+		quaGhi = err == nil
+	case ch > 0 && ghi.IP != "":
+		// Camera nằm trên đầu ghi thì lấy hình QUA ĐẦU GHI bằng tài khoản đầu ghi: khai một đầu ghi
+		// là xem được cả dàn camera của nó, khỏi khai mật khẩu riêng cho từng dải. Đầu ghi không
+		// cho thì vẫn gọi thẳng camera như cũ — mất đường này còn đường kia, không bỏ trắng.
+		if l, err = moKenh(ctx, ghi.IP, ghi.User, ghi.Pass, ch); err == nil {
+			quaGhi = true
+		} else if l2, e2 := moLuong(ctx, cp.IP, cp.Port, cp.Path, cp.User, cp.Pass); e2 == nil {
+			l, err = l2, nil
+		}
+	default:
 		l, err = moLuong(ctx, cp.IP, cp.Port, cp.Path, cp.User, cp.Pass)
 	}
 	if err != nil {
@@ -498,6 +510,9 @@ func (s *Server) hDeviceVideo(w http.ResponseWriter, r *http.Request, me *Accoun
 			w.Header().Set("Content-Type", "video/mp4")
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("X-Codec", maH264(l.sps))
+			if quaGhi {
+				w.Header().Set("X-Qua", "daughi") // Console nói rõ hình đang đi qua đầu ghi
+			}
 			w.WriteHeader(200)
 			if _, err := w.Write(g.dauGoi(l.sps, l.pps)); err != nil {
 				return

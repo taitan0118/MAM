@@ -169,8 +169,8 @@ var PERSON='<svg viewBox="0 0 44 44"><rect width="44" height="44" fill="#BFDBFE"
 var SUPQ={vi:"Máy gặp sự cố?",en:"Having a problem?",zh:"电脑有问题？"};
 function showSelf(){var b=$("avImg");b.style.backgroundImage="";b.innerHTML=PERSON;var im=new Image();im.onload=function(){b.innerHTML="";b.style.backgroundImage="url("+im.src+")"};im.src="/av/self?v="+selfV}
 $("avBtn").onclick=function(){var f=document.createElement("input");f.type="file";f.accept="image/*";f.onchange=function(){var file=f.files[0];if(!file)return;var T2=AVT[(window.__lang)||"en"]||AVT.en,im=new Image(),u=URL.createObjectURL(file);
-im.onload=function(){var c=document.createElement("canvas"),g=c.getContext("2d"),W=im.naturalWidth,H=im.naturalHeight,k=Math.max(256/W,256/H),f=Math.min(256/W,256/H);c.width=c.height=256;try{g.filter="blur(14px)"}catch(e){}g.drawImage(im,(256-W*k)/2,(256-H*k)/2,W*k,H*k);g.filter="none";g.drawImage(im,(256-W*f)/2,(256-H*f)/2,W*f,H*f);URL.revokeObjectURL(u);
-c.toBlob(function(b){fetch("/api/avatar",{method:"POST",body:b}).then(function(r){if(r.status===403){notify("MAM",T2.off);return}if(r.status===502){notify("MAM",T2.net);return}if(!r.ok)throw 0;selfV=Date.now();showSelf()}).catch(function(){notify("MAM",T2.bad)})},"image/jpeg",.85)};
+im.onload=function(){var c=document.createElement("canvas"),g=c.getContext("2d"),W=im.naturalWidth,H=im.naturalHeight,S=512,k=Math.max(S/W,S/H),f=Math.min(S/W,S/H);c.width=c.height=S;try{g.filter="blur(28px)"}catch(e){}g.drawImage(im,(S-W*k)/2,(S-H*k)/2,W*k,H*k);g.filter="none";g.drawImage(im,(S-W*f)/2,(S-H*f)/2,W*f,H*f);URL.revokeObjectURL(u);
+c.toBlob(function(b){fetch("/api/avatar",{method:"POST",body:b}).then(function(r){if(r.status===403){notify("MAM",T2.off);return}if(r.status===502){notify("MAM",T2.net);return}if(!r.ok)throw 0;selfV=Date.now();showSelf()}).catch(function(){notify("MAM",T2.bad)})},"image/jpeg",.88)};
 im.onerror=function(){URL.revokeObjectURL(u);notify("MAM",T2.bad)};im.src=u};f.click()};
 showSelf();
 // Hiệu ứng logo MAM Agent: mỗi ngày một lần (cửa sổ tự bật khi có tin, không chạy lại mỗi lần), bản nhanh, không đọc giọng

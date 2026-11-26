@@ -1408,6 +1408,9 @@ var EN = {
 "Xóa đầu ghi camera %s (%s)": "Removed camera NVR %s (%s)",
 "Khai đầu ghi camera %s (%s), gắn được %d camera": "Configured camera NVR %s (%s), matched %d cameras",
 "Đã chuyển đầu ghi camera khai từ bản cũ sang danh sách nhiều đầu ghi": "Moved the NVR configured by an older version into the multi-NVR list",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"{0} thiết bị đang lỗi": "{0} devices with a problem",
+"Video trực tiếp qua đầu ghi": "Live video via the NVR",
 };
 var ZH = {
 "Tìm máy, IP, model, serial, bản quyền…": "搜索设备、IP、型号、序列号、授权…",
@@ -2822,6 +2825,9 @@ var ZH = {
 "Xóa đầu ghi camera %s (%s)": "已删除摄像机录像机 %s（%s）",
 "Khai đầu ghi camera %s (%s), gắn được %d camera": "已配置摄像机录像机 %s（%s），匹配 %d 台摄像机",
 "Đã chuyển đầu ghi camera khai từ bản cũ sang danh sách nhiều đầu ghi": "已将旧版本配置的录像机迁移至多录像机列表",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"{0} thiết bị đang lỗi": "{0} 台设备有问题",
+"Video trực tiếp qua đầu ghi": "通过录像机实时查看",
 };
 var PAT = [
 [

@@ -657,3 +657,6 @@ img.av{display:block}
 .tra-bar b{font-size:12px;color:var(--muted)}
 .tra-txt{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (hover:none){.bact{opacity:.75}}
+
+/* Số thiết bị đang lỗi dán lên tab nhóm: nhỏ hơn badge ở thanh điều hướng cho khỏi chiếm chỗ */
+.tab .count.badge-red{min-width:18px;height:18px;font-size:11px;padding:0 5px;vertical-align:1px}

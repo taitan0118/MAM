@@ -200,3 +200,29 @@ func dauGhiGiaKenh(t *testing.T, user, pass string, kenh map[int]string) (string
 	fmt.Sscan(ps, &p)
 	return host, p
 }
+
+// Xem TRỰC TIẾP qua đầu ghi: đúng đường kênh Hikvision, luồng phụ trước (kiểu iVMS-4200 — khai một
+// đầu ghi là coi được cả dàn camera của nó).
+func TestXemTrucTiepQuaDauGhi(t *testing.T) {
+	addr, uris, mu := ghiURI(t)
+	ip, ps, _ := net.SplitHostPort(addr)
+	p := 0
+	fmt.Sscan(ps, &p)
+
+	ctx, thoi := context.WithTimeout(context.Background(), 8*time.Second)
+	defer thoi()
+	for _, tr := range []int{2, 1} {
+		moLuong(ctx, ip, p, fmt.Sprintf("/Streaming/Channels/%d%02d", 7, tr), "admin", "x")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*uris) < 2 {
+		t.Fatalf("đầu ghi giả phải nhận 2 lượt hỏi, mới có %d: %v", len(*uris), *uris)
+	}
+	if !strings.HasSuffix((*uris)[0], "/Streaming/Channels/702") {
+		t.Fatalf("lượt đầu phải hỏi luồng phụ của kênh 7, đang là %q", (*uris)[0])
+	}
+	if !strings.HasSuffix((*uris)[1], "/Streaming/Channels/701") {
+		t.Fatalf("lượt sau mới tới luồng chính, đang là %q", (*uris)[1])
+	}
+}

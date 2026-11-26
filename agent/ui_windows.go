@@ -90,11 +90,37 @@ func hideConsole() {
 
 // runUI: "ui open" mở cửa sổ ngay (từ biểu tượng ngoài màn hình); "ui" chạy nền trong phiên người dùng,
 // hễ có tin chưa đọc mà cửa sổ chưa mở thì mở ra.
+// motUI: chỉ cho MỘT tiến trình ui sống trong mỗi phiên Windows. Không có khóa này thì mỗi lần
+// uiWatchdog bật lại (hoặc tác vụ "MAM Client" chạy thêm lượt) lại đẻ thêm một biểu tượng khay —
+// đại ca thấy khay có mấy cái MAM y hệt nhau. Khóa theo PHIÊN (Local\) chứ không phải toàn máy:
+// hai người cùng đăng nhập thì mỗi người vẫn phải có biểu tượng của mình.
+// Khóa do Windows tự thả khi tiến trình chết, kể cả bị kill, nên không bao giờ kẹt.
+func motUI() bool {
+	ten, err := syscall.UTF16PtrFromString(`Local\MAM-Agent-UI`)
+	if err != nil {
+		return true // không tạo nổi tên khóa thì cứ cho chạy, thà thừa biểu tượng còn hơn mất hẳn
+	}
+	// lỗi lấy từ chính lượt gọi này (Call trả về GetLastError của nó), KHÔNG gọi GetLastError riêng:
+	// gọi riêng là một lượt syscall khác, nó xóa mất lỗi cần đọc.
+	h, _, loi := syscall.NewLazyDLL("kernel32.dll").NewProc("CreateMutexW").Call(0, 1, uintptr(unsafe.Pointer(ten)))
+	if h == 0 {
+		return true
+	}
+	// ERROR_ALREADY_EXISTS: đã có một tiến trình ui giữ khóa, mình là cái thừa
+	if loi == syscall.ERROR_ALREADY_EXISTS {
+		return false
+	}
+	return true // giữ handle tới khi tiến trình chết, cố ý không đóng
+}
+
 func runUI(args []string) {
 	hideConsole()
 	if len(args) > 0 && args[0] == "open" {
 		openWindow()
 		return
+	}
+	if !motUI() {
+		return // đã có cửa sổ/khay MAM trong phiên này rồi, thoát ngay kẻo đẻ thêm biểu tượng
 	}
 	c := &http.Client{Timeout: 3 * time.Second}
 	var curID string
