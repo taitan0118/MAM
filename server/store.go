@@ -70,6 +70,9 @@ type Settings struct {
 	// ở đây một lần là mọi camera chưa có tài khoản riêng đều đo được luồng hình.
 	CamUser string `json:"camUser"`
 	CamPass string `json:"camPass"`
+	// Đã đính chính đám cảnh báo "không ra hình" do lỗi kết luận của bản ≤ 1.1.102 chưa. Một lần là
+	// thôi: để nó chạy lại mỗi lần khởi động thì cảnh báo thật về sau cũng bị đóng oan.
+	DaDonHinhGia bool `json:"daDonHinhGia,omitempty"`
 	// Thông báo ra ngoài khi có cảnh báo mới mở
 	Telegram string `json:"telegram"` // token bot Telegram
 	TgChat   string `json:"tgChat"`   // chat id nhận tin

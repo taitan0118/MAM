@@ -108,6 +108,32 @@ func (s *Server) cond(m *Machine, kind, sev string, on bool, msg string) {
 
 // donCanhBaoTrung đóng bớt cảnh báo trùng đã lỡ sinh ra do lỗi dò 400 dòng: mỗi máy + mỗi loại chỉ
 // giữ lại một cảnh báo đang mở (cái cũ nhất), còn lại đóng hết. Gọi khi đang giữ s.mu.
+// donCanhBaoHinhGia đính chính đám cảnh báo "không ra hình" mà bản ≤ 1.1.102 đẻ ra: hồi đó MAM kết
+// luận camera không ra hình ngay cả khi chưa đo được lần nào, hoặc khi lượt đo bị cắt ngang.
+//
+// Làm đúng kiểu quản lý thiết bị chứ không phải xóa cho sạch mắt:
+//   - chỉ đụng loại "devvideo", KHÔNG đụng cảnh báo mất kết nối (sự cố thật, phải có người xác nhận)
+//   - ghi rõ ai đóng và vì sao, cảnh báo vẫn còn nguyên ở tab "Đã đóng"
+//   - KHÔNG đặt cờ Giu: camera nào không ra hình thật thì lượt đo tới mở lại cảnh báo bình thường
+//   - chạy đúng một lần, có cờ trong Cài đặt
+// Gọi khi đang giữ s.mu.
+func (s *Server) donCanhBaoHinhGia() int {
+	if s.st.Settings.DaDonHinhGia {
+		return 0
+	}
+	s.st.Settings.DaDonHinhGia = true
+	n := 0
+	for _, a := range s.st.Alerts {
+		if a.Status != "open" || a.Kind != "devvideo" {
+			continue
+		}
+		a.Status, a.Closed = "closed", time.Now()
+		a.By = T("hệ thống · kết luận sai của bản ≤ 1.1.102")
+		n++
+	}
+	return n
+}
+
 func (s *Server) donCanhBaoTrung() int {
 	giu, n := map[string]bool{}, 0
 	for _, a := range s.st.Alerts {

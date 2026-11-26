@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.103"
+const Version = "1.1.104"
 
 //go:embed web
 var webFS embed.FS
@@ -171,7 +171,17 @@ func main() {
 		s.save()
 		log.Printf(T("Đã dọn %d mốc treo giả trong lịch sử thiết bị"), n)
 	}
+	// đính chính cảnh báo "không ra hình" do lỗi kết luận của bản cũ — một lần duy nhất
+	nHinh := s.donCanhBaoHinhGia()
+	if nHinh > 0 {
+		s.save()
+	}
 	s.mu.Unlock()
+	if nHinh > 0 {
+		log.Printf(T("Đã đính chính %d cảnh báo \"không ra hình\" của bản cũ"), nHinh)
+		s.audit(AuditEntry{User: "system", Name: T("Hệ thống"), Role: "system", Kind: T("Cảnh báo"),
+			Msg: T("Đóng %d cảnh báo \"không ra hình\" do bản ≤ 1.1.102 kết luận sai khi chưa đo được luồng hình", nHinh)})
+	}
 	go s.watchdog()
 	go s.schedLoop()
 	go s.devLoop()
