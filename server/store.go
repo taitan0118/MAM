@@ -70,6 +70,15 @@ type Settings struct {
 	// ở đây một lần là mọi camera chưa có tài khoản riêng đều đo được luồng hình.
 	CamUser string `json:"camUser"`
 	CamPass string `json:"camPass"`
+	// Đầu ghi camera (NVR). Chỉ đổi qua /api/nvr: đăng nhập thử được mới lưu, nên PUT /api/settings
+	// phải giữ nguyên mấy ô này (Console gửi cả cục Settings lên, trống là mất).
+	NvrIP   string    `json:"nvrIP"`
+	NvrPort int       `json:"nvrPort"`
+	NvrUser string    `json:"nvrUser"`
+	NvrPass string    `json:"nvrPass"`
+	NvrTen  string    `json:"nvrTen"`  // tên + model đầu ghi tự khai lúc đăng nhập được
+	NvrKenh int       `json:"nvrKenh"` // số kênh camera đầu ghi báo; 0 = không đọc được
+	NvrAt   time.Time `json:"nvrAt"`   // lần đăng nhập được gần nhất
 	// Đã đính chính đám cảnh báo "không ra hình" do lỗi kết luận của bản ≤ 1.1.102 chưa. Một lần là
 	// thôi: để nó chạy lại mỗi lần khởi động thì cảnh báo thật về sau cũng bị đóng oan.
 	DaDonHinhGia bool `json:"daDonHinhGia,omitempty"`

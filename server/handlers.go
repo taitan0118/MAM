@@ -737,7 +737,7 @@ func (s *Server) hSettings(w http.ResponseWriter, r *http.Request, me *Account) 
 		if me.Role != "super" {
 			st.EnrollKey, st.Telegram, st.Webhook, st.SmtpUser, st.SmtpTo, st.BackupDir = "", "", "", "", "", ""
 		}
-		st.SmtpPass, st.CamPass = "", "" // không trả mật khẩu SMTP và camera về client
+		st.SmtpPass, st.CamPass, st.NvrPass = "", "", "" // không trả mật khẩu SMTP, camera, đầu ghi về client
 		jok(w, st)
 		return
 	}
@@ -755,6 +755,11 @@ func (s *Server) hSettings(w http.ResponseWriter, r *http.Request, me *Account) 
 	in.NoAutoUpdate = s.st.Settings.NoAutoUpdate
 	in.NoMachineAvatar = s.st.Settings.NoMachineAvatar
 	in.BackupDir = s.st.Settings.BackupDir
+	// đầu ghi chỉ đổi qua /api/nvr (phải đăng nhập thử được mới lưu); Console gửi cả cục Settings
+	// lên nên không giữ lại là mất đầu ghi mỗi lần ai đó bấm Lưu ở chỗ khác
+	o := s.st.Settings
+	in.NvrIP, in.NvrPort, in.NvrUser, in.NvrPass = o.NvrIP, o.NvrPort, o.NvrUser, o.NvrPass
+	in.NvrTen, in.NvrKenh, in.NvrAt = o.NvrTen, o.NvrKenh, o.NvrAt
 	if in.SmtpPass == "" {
 		in.SmtpPass = s.st.Settings.SmtpPass // trống = giữ mật khẩu SMTP cũ
 	}

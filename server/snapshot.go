@@ -118,8 +118,9 @@ func digestHTTP(h, method, uri, user, pass string) string {
 	return out
 }
 
-// layAnhURL gọi một đường ảnh. Gặp 401 thì đăng nhập lại đúng kiểu camera đòi rồi gọi lần nữa.
-func layAnhURL(ctx context.Context, cl *http.Client, u, duong, user, pass string) ([]byte, error) {
+// isapiGET gọi một đường HTTP của camera hoặc đầu ghi. Gặp 401 thì đăng nhập lại đúng kiểu nó đòi
+// (Digest hay Basic) rồi gọi lần nữa. Trả về nguyên bytes: ảnh JPEG hay XML ISAPI đều dùng được.
+func isapiGET(ctx context.Context, cl *http.Client, u, duong, user, pass string) ([]byte, error) {
 	goi := func(auth string) (int, string, []byte, error) {
 		req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 		if err != nil {
@@ -157,6 +158,15 @@ func layAnhURL(ctx context.Context, cl *http.Client, u, duong, user, pass string
 			return nil, errChuaKhai
 		}
 		return nil, errSaiMatKhau
+	}
+	return b, nil
+}
+
+// layAnhURL gọi một đường ảnh và đòi đúng một tấm ảnh: trang web báo lỗi cũng trả 200 nên phải xem bytes.
+func layAnhURL(ctx context.Context, cl *http.Client, u, duong, user, pass string) ([]byte, error) {
+	b, err := isapiGET(ctx, cl, u, duong, user, pass)
+	if err != nil {
+		return nil, err
 	}
 	if !laAnh(b) {
 		return nil, fmt.Errorf("không phải ảnh")

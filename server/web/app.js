@@ -936,12 +936,16 @@ VIEWS.chat = async (v, quiet) => {
   const [cv, ml] = await Promise.all([api('GET', '/api/chat'), api('GET', '/api/machines')]);
   cv.convs = cv.convs.filter(c => hit(CQ.q, c.name, c.last)).sort((p, q) => String(q.lastAt).localeCompare(String(p.lastAt))); // như Messenger: chỉ tin mới (gửi hoặc nhận) mới đẩy cuộc trò chuyện lên đầu, đọc thì không đổi chỗ
   const sel = chatSel; // không tự mở cuộc nào: mở là đánh dấu đã đọc, phải do người dùng chọn
+  // Tên máy Windows na ná nhau (DESKTOP-xxxx), kèm IP mới biết đang nhắn cho máy nào
+  const ipCua = {};
+  ml.forEach(m => { if (m.ip) ipCua[m.id] = m.ip; });
+  const ipEl = (id, css) => ipCua[id] ? el('span', { class: 'mono', style: 'color:var(--faint);font-weight:400;' + (css || '') }, ipCua[id]) : null;
   const side = el('div', { class: 'chat-side' });
   const picker = el('select', { class: 'input', onchange: e => { if (e.target.value) { chatSel = e.target.value; render(); } } }, el('option', { value: '' }, t('+ Nhắn máy khác…')),
-    ...ml.filter(m => m.canControl !== false && m.online).map(m => el('option', { value: m.id }, m.name)));
+    ...ml.filter(m => m.canControl !== false && m.online).map(m => el('option', { value: m.id }, m.name + (m.ip ? ' · ' + m.ip : ''))));
   side.append(picker, searchBox('cq', CQ.q, x => CQ.q = x, t('Tìm cuộc trò chuyện…')));
   cv.convs.forEach(c => side.append(el('button', { class: 'chat-conv' + (c.id === sel ? ' on' : '') + (c.unread ? ' unread' : ''), onclick: () => { chatSel = c.id; render(); } },
-    el('span', { class: 'avwrap' }, avatarEl('m', c.id, c.av, c.name, 34), el('span', { class: 'dot ' + (c.online ? 'on' : '') })), el('div', { style: 'min-width:0;flex:1' }, el('b', {}, c.name), el('div', { class: 'chat-last' }, (c.mine ? t('Bạn: ') : '') + c.last)),
+    el('span', { class: 'avwrap' }, avatarEl('m', c.id, c.av, c.name, 34), el('span', { class: 'dot ' + (c.online ? 'on' : '') })), el('div', { style: 'min-width:0;flex:1' }, el('b', {}, c.name), ipEl(c.id, 'font-size:11.5px;margin-left:6px'), el('div', { class: 'chat-last' }, (c.mine ? t('Bạn: ') : '') + c.last)),
     c.unread ? el('span', { class: 'count badge-red' }, String(c.unread)) : null)));
   const main = el('div', { class: 'chat-main' });
   if (!sel) main.append(el('div', { class: 'empty' }, cv.convs.length ? 'Chọn một cuộc trò chuyện ở bên trái để đọc và trả lời.' : 'Chưa có cuộc trò chuyện nào. Chọn một máy đang online ở ô bên trái để bắt đầu.'));
@@ -951,7 +955,7 @@ VIEWS.chat = async (v, quiet) => {
     const ta = el('textarea', { class: 'input', rows: 2, maxlength: 300, placeholder: t('Nhập tin nhắn… (Enter để gửi)') });
     const send = async () => { const x = ta.value.trim(); if (!x) return; try { await api('POST', '/api/chat/' + sel, { text: x }); ta.value = ''; render(); } catch (e) { fail(e); } };
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
-    main.append(el('div', { class: 'chat-head' }, el('b', {}, d.name), el('span', { style: 'color:var(--faint);font-size:12.5px' }, d.online ? 'Online' : 'Offline, chưa gửi được')), log,
+    main.append(el('div', { class: 'chat-head' }, el('b', {}, d.name), ipEl(sel, 'font-size:12.5px'), el('span', { style: 'color:var(--faint);font-size:12.5px' }, d.online ? 'Online' : 'Offline, chưa gửi được')), log,
       el('div', { class: 'chat-in' }, ta, el('button', { class: 'btn primary', disabled: !d.online, onclick: send }, 'Gửi')));
     // tự kéo xuống cuối khi mở hoặc có tin mới; làm mới định kỳ thì giữ nguyên chỗ đang đọc
     const grew = chatLen[sel] !== d.lines.length; chatLen[sel] = d.lines.length;
@@ -2318,6 +2322,32 @@ VIEWS.settings = async v => {
   v.append(card('Ngưỡng cảnh báo', isSuper() ? null : 'chỉ Super admin được sửa', el('div', { class: 'row2 lbl2' }, fe, fc, fd, fo, fod), isSuper() ? el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: async () => {
     try { await api('PUT', '/api/settings', { temp: +ft.value, cpu: +c.value, disk: +d.value, offline: +o.value, offlineDays: +od.value, enrollKey: key.value }); toast('Đã lưu ngưỡng cảnh báo'); settings = await api('GET', '/api/settings'); } catch (e) { fail(e); } } }, 'Lưu') : null));
   if (isSuper()) {
+    // Đầu ghi camera: khai một lần, server đăng nhập thử thật rồi mới lưu
+    const nip = input('vd 172.20.1.10', 'text', settings.nvrIP || ''), npo = input('80', 'text', settings.nvrPort ? String(settings.nvrPort) : '');
+    const nus = input('admin', 'text', settings.nvrUser || ''), npw = input(settings.nvrIP ? t('(giữ mật khẩu đang lưu)') : '', 'password', '');
+    const nerr = el('div', { style: 'color:var(--crit);font-size:12.5px;min-height:16px' });
+    const nvrLuu = async e => {
+      nerr.textContent = '';
+      e.target.disabled = true;
+      toast(t('Đang kết nối đầu ghi…'));
+      try {
+        await api('POST', '/api/nvr', { ip: nip.value.trim(), port: +npo.value || 80, user: nus.value.trim(), pass: npw.value });
+        toast(t('Đã kết nối đầu ghi'));
+        render();
+      } catch (x) { nerr.textContent = trErr(x.message); e.target.disabled = false; }
+    };
+    v.append(card('Đầu ghi camera', settings.nvrIP ? settings.nvrIP + (settings.nvrKenh ? ' · ' + t('{0} kênh', settings.nvrKenh) : '') : 'chưa khai',
+      el('div', {}, el('div', { class: 'row2 lbl2' }, field('IP đầu ghi', nip), field('Cổng web', npo, 'Thường là 80. Đầu ghi Hikvision để cổng khác thì sửa lại.'),
+        field('Tài khoản', nus), field('Mật khẩu', npw)),
+        settings.nvrTen ? el('div', { style: 'font-size:13px;color:var(--muted);margin-top:4px' }, t('Đang khai: {0} · đăng nhập được lúc {1}', settings.nvrTen, fmtDT(settings.nvrAt))) : null,
+        infoNote('Server gọi thật vào đầu ghi để đọc tên máy và số kênh: đăng nhập được mới lưu, sai thì không ghi gì. Khai được đầu ghi là sau này chỉ cần một tài khoản cho cả dàn camera thay vì mỗi dải một mật khẩu.'),
+        infoNote('Bản này mới làm phần kết nối và đăng nhập. Xem hình và tua lại qua đầu ghi là việc sau — camera vẫn đang xem trực tiếp từng con như cũ. Hiện chỉ nói chuyện được với đầu ghi Hikvision.'),
+        nerr,
+        el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+          el('button', { class: 'btn primary', style: 'padding:6px 12px;font-size:12.5px', onclick: nvrLuu }, 'Kết nối và lưu'),
+          settings.nvrIP ? el('button', { class: 'btn danger', style: 'padding:6px 12px;font-size:12.5px;margin-left:auto', onclick: () => confirmBox(t('Xóa đầu ghi'), t('Xóa IP và tài khoản đầu ghi khỏi cài đặt? Không đụng gì tới đầu ghi thật.'), t('Xóa'), true, async () => {
+            try { await api('DELETE', '/api/nvr'); toast(t('Đã xóa')); render(); } catch (x) { fail(x); }
+          }) }, 'Xóa đầu ghi') : null))));
     const rp = (await api('GET', '/api/remote-password')).set, pwi = input(rp ? 'Nhập mật khẩu mới để đổi' : 'Ít nhất 8 ký tự', 'password');
     const sv = async v => { try { await api('PUT', '/api/remote-password', { password: v }); toast(v ? 'Đã lưu mật khẩu điều khiển từ xa' : 'Đã tắt mật khẩu điều khiển từ xa'); render(); } catch (e) { fail(e); } };
     v.append(card('Mật khẩu điều khiển từ xa', rp ? 'đang bật' : 'đang tắt: máy phải bấm Đồng ý', field('Mật khẩu', pwi, 'Admin nhập đúng mật khẩu này khi mở điều khiển màn hình là vào thẳng, không cần người ngồi máy đồng ý. Máy vẫn hiện thanh báo và nút Dừng. Để tắt thì bấm Tắt.'),
