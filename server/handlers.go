@@ -619,6 +619,43 @@ func (s *Server) hOverview(w http.ResponseWriter, r *http.Request, me *Account) 
 	jok(w, map[string]interface{}{"total": total, "online": online, "openAlerts": open, "hot": hot, "groups": g, "recent": recent})
 }
 
+// hAlertsDongNhieu đóng một lúc nhiều cảnh báo. Có lúc vài trăm cảnh báo cùng một sự cố mạng,
+// bấm từng cái thì không ai bấm nổi. Cảnh báo ngoài phạm vi nhóm thì bỏ qua chứ không chặn cả lượt.
+func (s *Server) hAlertsDongNhieu(w http.ResponseWriter, r *http.Request, me *Account) {
+	var in struct {
+		IDs []string `json:"ids"`
+	}
+	if err := readJSON(r, &in); err != nil || len(in.IDs) == 0 {
+		jerr(w, 400, "Chưa chọn cảnh báo nào")
+		return
+	}
+	chon := make(map[string]bool, len(in.IDs))
+	for _, id := range in.IDs {
+		chon[id] = true
+	}
+	s.mu.Lock()
+	n := 0
+	for _, a := range s.st.Alerts {
+		if !chon[a.ID] || a.Status != "open" || !s.alertVisible(me, a) {
+			continue
+		}
+		if m := s.machineByID(a.Machine); m != nil && !canControl(me, m) {
+			continue
+		}
+		a.Status, a.Closed, a.By = "closed", time.Now(), me.User
+		a.Giu = true // đóng tay: lỗi còn nguyên thì đừng mở lại cảnh báo y hệt
+		n++
+	}
+	if n > 0 {
+		s.save()
+	}
+	s.mu.Unlock()
+	if n > 0 {
+		s.auditBy(me, r, "Cảnh báo", T("Đóng %d cảnh báo một lượt", n), "", false)
+	}
+	jok(w, map[string]int{"n": n})
+}
+
 func (s *Server) hAlerts(w http.ResponseWriter, r *http.Request, me *Account) {
 	if r.Method == "POST" {
 		if me.Role == "view" {
@@ -627,6 +664,10 @@ func (s *Server) hAlerts(w http.ResponseWriter, r *http.Request, me *Account) {
 		}
 		id := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
 		id = strings.TrimSuffix(id, "/close")
+		if id == "nhieu" {
+			s.hAlertsDongNhieu(w, r, me)
+			return
+		}
 		s.mu.Lock()
 		for _, a := range s.st.Alerts {
 			if a.ID == id && a.Status == "open" {

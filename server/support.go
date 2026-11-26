@@ -389,6 +389,8 @@ func (s *Server) exportRows(what, group string, me *Account) ([][]string, bool) 
 				switch {
 				case !d.Up:
 					tt = "Mất kết nối"
+				case d.SaiTK:
+					tt, ct = "Camera không nhận tài khoản", congMo(d.Ports)
 				case s.doHinh(d) && !d.Video:
 					tt, ct = "Sống nhưng không ra hình", congMo(d.Ports)
 				case s.doHinh(d):

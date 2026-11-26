@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"os/exec"
@@ -51,6 +52,7 @@ type NetDev struct {
 	VidAt   time.Time `json:"-"` // lượt đo hình gần nhất
 	Miss    int       `json:"-"` // số lượt liên tiếp không gọi được
 	VidMiss int       `json:"-"` // số lượt đo hình liên tiếp không có hình
+	SaiTK   bool      `json:"-"` // camera từ chối tài khoản: chưa biết có hình hay không
 }
 
 // devAlertID: cảnh báo của thiết bị mạng gắn vào một "máy" giả, giống cách cảnh báo máy chủ dùng __server.
@@ -236,12 +238,18 @@ func checkDev(ctx context.Context, d NetDev, wantVid bool) NetDev {
 	// xóa đi là suốt 4 phút kế mọi camera đều thành "sống nhưng không ra hình", và tệ hơn nữa là
 	// ghi một mốc "treo không ra hình" giả vào lịch sử hoạt động sau mỗi lượt đo.
 	if wantVid {
-		out.Video, out.Kbps = false, 0
+		out.Video, out.Kbps, out.SaiTK = false, 0, false
 		out.VidAt = out.Checked
-		if kb, err := rtspKbps(ctx, d.IP, d.Port, d.Path, d.User, d.Pass); err == nil && kb > 0 {
+		kb, err := rtspKbps(ctx, d.IP, d.Port, d.Path, d.User, d.Pass)
+		switch {
+		case err == nil && kb > 0:
 			out.Up, out.Video, out.Kbps, out.Way = true, true, kb, "rtsp"
 			out.VidMiss = 0
-		} else {
+		case errors.Is(err, errSaiMatKhau) || errors.Is(err, errChuaKhai):
+			// Camera không cho vào thì KHÔNG biết nó có ra hình hay không. Tính là "mất hình" ở đây
+			// là vu oan: báo động giả, ghi mốc treo giả, mà lỗi thật (sai tài khoản) thì không ai thấy.
+			out.SaiTK = true
+		default:
 			out.VidMiss = d.VidMiss + 1
 		}
 	}
@@ -505,7 +513,7 @@ func (s *Server) devView(d *NetDev) map[string]interface{} {
 		"id": d.ID, "name": d.Name, "nameZh": d.NameZH, "ip": d.IP, "kind": d.Kind, "groups": nhomCua(d), "port": d.Port,
 		"vid":  vid,
 		"path": d.Path, "user": d.User, "hasPass": d.Pass != "", "mac": d.MAC, "macNow": d.MACNow,
-		"up": d.Up, "video": d.Video, "kbps": d.Kbps, "ports": p, "way": d.Way, "canhBao": s.soCanhBao(d),
+		"up": d.Up, "video": d.Video, "kbps": d.Kbps, "saiTK": d.SaiTK, "ports": p, "way": d.Way, "canhBao": s.soCanhBao(d),
 		"rot": rot, "lai": lai,
 		"checked": d.Checked, "since": d.Since, "vidAt": d.VidAt, "done": !d.Checked.IsZero(),
 	}

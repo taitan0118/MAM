@@ -797,7 +797,7 @@ async function schedCard(g) {
 const segBar = (opts, cur, on) => el('div', { class: 'seg' }, opts.map(([k, l]) => el('button', { class: cur === k ? 'on' : '', onclick: () => on(k) }, l)));
 const searchBox = (id, val, on, ph) => el('input', { id, class: 'input', value: val, placeholder: ph, style: 'max-width:240px', oninput: e => { on(e.target.value); render(true); } });
 const hit = (q, ...f) => !q || f.some(x => String(x || '').toLowerCase().includes(q.trim().toLowerCase()));
-const AF = { st: 'open', sev: 'all', q: '' };
+const AF = { st: 'open', sev: 'all', q: '', chon: new Set() };
 VIEWS.alerts = async v => {
   // hỏi riêng hai loại: server chỉ trả 300 dòng mỗi lượt, gộp chung thì một tab có thể trống trơn
   let [it, mang] = await Promise.all([api('GET', '/api/alerts?loai=it&status=' + AF.st), api('GET', '/api/alerts?loai=mang&status=' + AF.st)]);
@@ -810,22 +810,43 @@ VIEWS.alerts = async v => {
   v.append(el('div', { class: 'filters', style: 'margin-top:10px' }, segBar([['all', 'Mọi mức'], ['crit', 'Nghiêm trọng'], ['warn', 'Cảnh báo']], AF.sev, k => { AF.sev = k; render(); }), searchBox('afq', AF.q, x => AF.q = x, t('Tìm máy hoặc nội dung…'))));
   // hai bảng riêng: cảnh báo máy chủ (__server) tính là thiết bị IT
   const laMang = x => x.machine.startsWith('__dev-');
+  const chonDuoc = AF.st === 'open' && canWrite();
   const dong = x => el('tr', { onclick: () => x.machine === '__server' ? go('settings') : laMang(x) ? go('devices') : go('detail', x.machine) },
+    chonDuoc ? el('td', { onclick: e => e.stopPropagation() }, el('input', { type: 'checkbox', class: 'sel', checked: AF.chon.has(x.id), onclick: e => { e.stopPropagation(); e.target.checked ? AF.chon.add(x.id) : AF.chon.delete(x.id); render(true); } })) : null,
     el('td', {}, pill(x.sev === 'crit' ? 'crit' : 'warn', x.sev === 'crit' ? 'Nghiêm trọng' : 'Cảnh báo')),
     el('td', {}, el('div', { style: 'font-weight:600' }, x.name),
       x.ip ? el('div', { class: 'mono', style: 'font-size:11.5px;color:var(--muted)' }, x.ip) : null,
       x.loai ? el('div', { style: 'margin-top:3px' }, el('span', { class: 'kchip', style: 'background:' + mauLoai(x.loaiMa) }, t(x.loai))) : null),
     el('td', {}, x.msg), el('td', {}, fmtDT(x.opened)), el('td', {}, AF.st === 'closed' ? (x.by || '—') + ' · ' + fmtDT(x.closed) : ''),
     el('td', { style: 'text-align:right' }, AF.st === 'open' && canWrite() ? el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', onclick: async e => { e.stopPropagation(); try { await api('POST', '/api/alerts/' + x.id + '/close', {}); render(); } catch (er) { fail(er); } } }, 'Đóng') : ''));
-  const bang = (ds, trong) => el('div', { style: 'padding:0 16px 8px' }, table(['Mức', 'Máy', 'Nội dung', 'Mở lúc', AF.st === 'closed' ? 'Đóng bởi' : '', ''], ds.map(dong), trong));
+  const bang = (ds, trong) => {
+    // "chọn tất cả" chỉ tick những dòng ĐANG hiện (đã lọc), không phải mọi cảnh báo trong hệ thống
+    const het = ds.length > 0 && ds.every(x => AF.chon.has(x.id));
+    const cbHet = chonDuoc ? el('input', { type: 'checkbox', class: 'sel', title: t('Chọn tất cả'), checked: het, onclick: e => { ds.forEach(x => e.target.checked ? AF.chon.add(x.id) : AF.chon.delete(x.id)); render(true); } }) : null;
+    const dau = [...(chonDuoc ? [{ t: cbHet }] : []), 'Mức', 'Máy', 'Nội dung', 'Mở lúc', AF.st === 'closed' ? 'Đóng bởi' : '', ''];
+    return el('div', { style: 'padding:0 16px 8px' }, table(dau, ds.map(dong), trong));
+  };
   const trong = AF.st === 'open' ? 'Không có cảnh báo đang mở' : 'Chưa có cảnh báo nào đã đóng';
   if (!AF.tab) AF.tab = 'it';
   v.append(el('div', { class: 'tabs', style: 'margin-top:12px' },
     [['it', t('Cảnh báo thiết bị IT'), it.length], ['mang', t('Cảnh báo thiết bị mạng'), mang.length]]
       .map(([k, nhan, n]) => el('button', { class: 'tab' + (AF.tab === k ? ' on' : ''), onclick: () => { AF.tab = k; render(); } }, nhan + ' (' + n + ')'))));
   const dsTab = AF.tab === 'mang' ? mang : it;
+  const daChon = dsTab.filter(x => AF.chon.has(x.id));
+  const thanh = chonDuoc && daChon.length ? el('div', { class: 'filters', style: 'margin-top:12px' },
+    el('span', { style: 'font-size:12.5px' }, t('Đã chọn {0} cảnh báo', daChon.length)),
+    el('button', { class: 'btn primary', onclick: async e => {
+      e.target.disabled = true;
+      try {
+        const kq = await api('POST', '/api/alerts/nhieu', { ids: daChon.map(x => x.id) });
+        daChon.forEach(x => AF.chon.delete(x.id));
+        toast(t('Đã đóng {0} cảnh báo', kq.n));
+        render();
+      } catch (er) { e.target.disabled = false; fail(er); }
+    } }, t('Đóng {0} cảnh báo đã chọn', daChon.length)),
+    el('button', { class: 'btn', onclick: () => { AF.chon.clear(); render(true); } }, 'Bỏ chọn')) : null;
   v.append(el('div', { style: 'margin-top:12px' }, card(AF.tab === 'mang' ? t('Cảnh báo thiết bị mạng') : t('Cảnh báo thiết bị IT'),
-    AF.tab === 'mang' ? 'camera, máy chấm công, switch' : 'máy tính, máy chủ', bang(dsTab, trong))));
+    AF.tab === 'mang' ? 'camera, máy chấm công, switch' : 'máy tính, máy chủ', el('div', {}, thanh, bang(dsTab, trong)))));
   v.append(el('div', { style: 'margin-top:12px' }, infoNote('Cảnh báo tự mở khi máy vượt ngưỡng (chỉnh ở mục Cài đặt) và tự đóng khi hết vượt ngưỡng. Mất kết nối quá số phút đã đặt cũng tạo cảnh báo.')));
   v.append(el('div', { style: 'margin-top:8px' }, infoNote('Thiết bị mạng bị báo khi không trả lời 2 lượt kiểm liên tiếp (khoảng 2 phút), khi camera còn sống mà không kéo được hình, và khi IP đó đổi sang thiết bị khác (MAC đổi). Thiết bị sống lại thì cảnh báo chỉ ghi thêm giờ có lại chứ KHÔNG tự đóng — bấm "Đã xử lý" ở trang Thiết bị mạng mới đóng.')));
 };
@@ -1196,6 +1217,8 @@ function devState(d) {
   const tung = !d.canhBao ? '' : (d.rot
     ? t('ngắt {0}, có lại {1}', gioNgan(d.rot), d.lai ? gioNgan(d.lai) : gioNgan(d.since))
     : t('đã từng mất kết nối')) + ' · ';
+  // camera từ chối tài khoản: nói thẳng ra, đừng để đại ca tưởng camera hỏng
+  if (d.saiTK) return ['warn', 'Camera không nhận tài khoản', tung + openPorts];
   if (d.vid) return d.video ? ['ok', 'Có hình', tung + t('{0} kbps', d.kbps)] : ['warn', 'Sống nhưng không ra hình', tung + openPorts];
   return ['ok', 'Hoạt động', tung + openPorts];
 }

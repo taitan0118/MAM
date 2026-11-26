@@ -77,6 +77,12 @@ func rtspKbps(ctx context.Context, ip string, port int, path, user, pass string)
 	if err != nil {
 		return 0, err
 	}
+	if code == 401 { // camera từ chối: KHÔNG kết luận được nó có hình hay không
+		if user == "" {
+			return 0, errChuaKhai
+		}
+		return 0, errSaiMatKhau
+	}
 	if code != 200 {
 		return 0, fmt.Errorf("DESCRIBE %d", code)
 	}
