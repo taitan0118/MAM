@@ -905,6 +905,7 @@ const CQ = { q: '' };
 // Thả cảm xúc / thu hồi / sửa tin nhắn — giống Messenger. Chỉ thu hồi và sửa được tin của chính
 // Console gửi; tin của người ngồi máy là lời của họ, admin không sửa miệng người khác.
 const CAMS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
+let chatTra = null; // đang soạn lời trả lời cho tin nào: {id, by, text}
 async function chatTin(mid, body) {
   try { await api('POST', '/api/chat/' + encodeURIComponent(mid) + '/tin', body); render(); } catch (e) { fail(e); }
 }
@@ -922,9 +923,12 @@ function chatRows(d) {
     const last = !(i < L.length - 1 && key(L[i + 1]) === k && Date.parse(L[i + 1].at) - t0 < 5 * 60e3);
     const inc = l.client, who = inc ? d.name : l.by;
     const av = inc ? (last ? avatarEl('m', d.id, d.av, d.name, 32) : el('span', { class: 'av-sp' })) : null;
-    const than = l.thu ? el('i', { style: 'opacity:.7' }, t('Tin nhắn đã được thu hồi'))
-      : el('div', {}, l.text, l.sua ? el('span', { class: 'bub-ed' }, ' · ' + t('đã sửa')) : null);
+    const than = l.thu ? el('i', { style: 'opacity:.7' }, t('Tin nhắn đã được thu hồi')) : el('div', {}, l.text);
     const bub = el('div', { class: 'bub ' + (inc ? 'in' : 'out') + (first ? ' gfirst' : '') }, (first && (inc || l.by !== me.name)) ? el('div', { class: 'bub-w' }, who) : null, than);
+    // Dòng dưới bong bóng cho người xem biết tin này đã bị động vào, khỏi phải đoán. Tin đã thu hồi
+    // thì chính bong bóng đã ghi rõ rồi nên không ghi thêm lần nữa.
+    const ghi = l.sua && !l.thu ? t('Đã chỉnh sửa') : '';
+    const tra = (l.traBy || l.traText) ? el('div', { class: 'btra' }, el('b', {}, l.traBy || ''), l.traText || '') : null;
     // gộp cảm xúc trùng nhau lại thành một cái kèm số lượng
     const dem = {};
     [l.cam, l.camMay].forEach(c => { if (c) dem[c] = (dem[c] || 0) + 1; });
@@ -932,11 +936,13 @@ function chatRows(d) {
     const nut = (nhan, title, on) => el('button', { title: t(title), onclick: on }, nhan);
     const act = l.id && !l.thu ? el('div', { class: 'bact' },
       ...CAMS.map(c => nut(c, 'Thả cảm xúc', () => chatTin(d.id, { id: l.id, lam: 'cam', cam: l.cam === c ? '' : c }))),
+      nut('↩️', 'Trả lời tin nhắn', () => { chatTra = { id: l.id, by: who, text: l.text }; render(); }),
       !inc ? nut('✏️', 'Sửa tin nhắn', () => suaTin(d.id, l)) : null,
-      !inc ? nut('↩︎', 'Thu hồi tin nhắn', () => confirmBox(t('Thu hồi tin nhắn'), t('Thu hồi tin này? Người ngồi máy sẽ không đọc được nội dung nữa.'), t('Thu hồi'), true, () => chatTin(d.id, { id: l.id, lam: 'thu' }))) : null) : null;
+      !inc ? nut('🗑️', 'Thu hồi tin nhắn', () => confirmBox(t('Thu hồi tin nhắn'), t('Thu hồi tin này? Người ngồi máy sẽ không đọc được nội dung nữa.'), t('Thu hồi'), true, () => chatTin(d.id, { id: l.id, lam: 'thu' }))) : null) : null;
     out.push(el('div', { class: 'brow ' + (inc ? 'in' : 'out') + (first ? ' gfirst' : '') }, av,
-      el('div', { class: 'bcol' }, bub,
+      el('div', { class: 'bcol' }, tra, bub,
         cams.length ? el('div', { class: 'cams' }, cams.map(c => el('span', { class: 'cam' }, c + (dem[c] > 1 ? ' ' + dem[c] : '')))) : null,
+        ghi ? el('div', { class: 'bub-st' }, ghi) : null,
         last ? el('div', { class: 'bub-t' }, fmtDT(l.at)) : null), act));
   });
   return out;
@@ -968,10 +974,10 @@ VIEWS.chat = async (v, quiet) => {
   ml.forEach(m => { if (m.ip) ipCua[m.id] = m.ip; });
   const ipEl = (id, css) => ipCua[id] ? el('span', { class: 'mono', style: 'color:var(--faint);font-weight:400;' + (css || '') }, ipCua[id]) : null;
   const side = el('div', { class: 'chat-side' });
-  const picker = el('select', { class: 'input', onchange: e => { if (e.target.value) { chatSel = e.target.value; render(); } } }, el('option', { value: '' }, t('+ Nhắn máy khác…')),
+  const picker = el('select', { class: 'input', onchange: e => { if (e.target.value) { chatSel = e.target.value; chatTra = null; render(); } } }, el('option', { value: '' }, t('+ Nhắn máy khác…')),
     ...ml.filter(m => m.canControl !== false && m.online).map(m => el('option', { value: m.id }, m.name + (m.ip ? ' · ' + m.ip : ''))));
   side.append(picker, searchBox('cq', CQ.q, x => CQ.q = x, t('Tìm cuộc trò chuyện…')));
-  cv.convs.forEach(c => side.append(el('button', { class: 'chat-conv' + (c.id === sel ? ' on' : '') + (c.unread ? ' unread' : ''), onclick: () => { chatSel = c.id; render(); } },
+  cv.convs.forEach(c => side.append(el('button', { class: 'chat-conv' + (c.id === sel ? ' on' : '') + (c.unread ? ' unread' : ''), onclick: () => { chatSel = c.id; chatTra = null; render(); } },
     el('span', { class: 'avwrap' }, avatarEl('m', c.id, c.av, c.name, 34), el('span', { class: 'dot ' + (c.online ? 'on' : '') })), el('div', { style: 'min-width:0;flex:1' }, el('b', {}, c.name), ipEl(c.id, 'font-size:11.5px;margin-left:6px'), el('div', { class: 'chat-last' }, (c.mine ? t('Bạn: ') : '') + c.last)),
     c.unread ? el('span', { class: 'count badge-red' }, String(c.unread)) : null)));
   const main = el('div', { class: 'chat-main' });
@@ -980,12 +986,16 @@ VIEWS.chat = async (v, quiet) => {
     const d = await api('GET', '/api/chat/' + sel);
     const log = el('div', { class: 'chat-log' }, d.lines.length ? chatRows(d) : el('div', { class: 'empty' }, 'Chưa có tin nhắn.'));
     const ta = el('textarea', { class: 'input', rows: 2, maxlength: 300, placeholder: t('Nhập tin nhắn… (Enter để gửi)') });
-    const send = async () => { const x = ta.value.trim(); if (!x) return; try { await api('POST', '/api/chat/' + sel, { text: x }); ta.value = ''; render(); } catch (e) { fail(e); } };
+    const send = async () => { const x = ta.value.trim(); if (!x) return; try { await api('POST', '/api/chat/' + sel, { text: x, traId: chatTra ? chatTra.id : '' }); ta.value = ''; chatTra = null; render(); } catch (e) { fail(e); } };
+    // đang trả lời tin nào thì hiện ngay trên ô nhập, bấm × là thôi
+    const thanhTra = chatTra ? el('div', { class: 'tra-bar' }, el('div', { style: 'flex:1;min-width:0' },
+      el('b', {}, t('Trả lời {0}', chatTra.by || '')), el('div', { class: 'tra-txt' }, chatTra.text || '')),
+      el('button', { class: 'btn', style: 'padding:2px 9px;font-size:14px;line-height:1.3', title: t('Bỏ trả lời'), onclick: () => { chatTra = null; render(); } }, '×')) : null;
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
     // bấm vào tên máy là sang thẳng trang máy đó (xem thông tin, điều khiển màn hình)
     const tenMay = el('b', { style: 'cursor:pointer', title: t('Mở trang máy này'), onclick: () => go('detail', sel) }, d.name);
     main.append(el('div', { class: 'chat-head' }, tenMay, ipEl(sel, 'font-size:12.5px'), el('span', { style: 'color:var(--faint);font-size:12.5px' }, d.online ? 'Online' : 'Offline, chưa gửi được')), log,
-      el('div', { class: 'chat-in' }, ta, el('button', { class: 'btn primary', disabled: !d.online, onclick: send }, 'Gửi')));
+      el('div', { class: 'chat-foot' }, thanhTra, el('div', { class: 'chat-in' }, ta, el('button', { class: 'btn primary', disabled: !d.online, onclick: send }, 'Gửi'))));
     // tự kéo xuống cuối khi mở hoặc có tin mới; làm mới định kỳ thì giữ nguyên chỗ đang đọc
     const grew = chatLen[sel] !== d.lines.length; chatLen[sel] = d.lines.length;
     if (!quiet || grew) setTimeout(() => { log.scrollTop = log.scrollHeight; }, 0); else chatKeep = log;

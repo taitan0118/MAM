@@ -168,3 +168,50 @@ func TestVaIDChoTinNhanCu(t *testing.T) {
 		t.Fatal("vá xong mà vẫn còn dòng không có id")
 	}
 }
+
+// Trả lời tin nhắn: phần trích dẫn được chép sẵn, cả hai chiều.
+func TestTraLoiTinNhan(t *testing.T) {
+	f := setup(t)
+	report(t, f.url, f.tok1, 10, 50)
+	h := map[string]string{"Authorization": "Bearer " + f.tok1}
+
+	// máy nói trước, admin trả lời lại
+	code, r, _ := client(t, f.url).do("POST", "/api/agent/reply", map[string]string{"text": "Máy em bị chậm"}, h)
+	expect(t, code, 200, "máy nhắn")
+	idMay, _ := r["id"].(string)
+	code, _, _ = f.super.do("POST", "/api/chat/"+f.m1, map[string]string{"text": "Để anh xem", "traId": idMay}, nil)
+	expect(t, code, 200, "admin trả lời")
+	l := tinCuoi(t, f, f.m1)
+	if l["traId"] != idMay || l["traText"] != "Máy em bị chậm" {
+		t.Fatalf("phải chép sẵn tin được trả lời, đang là %v / %v", l["traId"], l["traText"])
+	}
+	idAdmin, _ := l["id"].(string)
+	// lệnh xuống máy phải mang theo phần trích dẫn, vì cửa sổ MAM chỉ giữ 100 tin gần nhất
+	f.s.mu.RLock()
+	thay := false
+	for _, c := range f.s.st.Commands {
+		if c.Type == "message" && c.Args["mid"] == idAdmin && c.Args["traText"] == "Máy em bị chậm" {
+			thay = true
+		}
+	}
+	f.s.mu.RUnlock()
+	if !thay {
+		t.Fatal("lệnh gửi tin xuống máy phải kèm phần trích dẫn")
+	}
+
+	// máy trả lời lại tin của admin
+	code, _, _ = client(t, f.url).do("POST", "/api/agent/reply", map[string]string{"text": "Dạ", "traId": idAdmin}, h)
+	expect(t, code, 200, "máy trả lời")
+	if l = tinCuoi(t, f, f.m1); l["traText"] != "Để anh xem" {
+		t.Fatalf("máy trả lời cũng phải có trích dẫn, đang là %v", l["traText"])
+	}
+
+	// trả lời một tin đã thu hồi thì không trích dẫn gì cả
+	code, _, _ = f.super.do("POST", "/api/chat/"+f.m1+"/tin", map[string]string{"id": idAdmin, "lam": "thu"}, nil)
+	expect(t, code, 200, "thu hồi")
+	code, _, _ = client(t, f.url).do("POST", "/api/agent/reply", map[string]string{"text": "Alo", "traId": idAdmin}, h)
+	expect(t, code, 200, "trả lời tin đã thu hồi")
+	if l = tinCuoi(t, f, f.m1); l["traText"] != nil || l["traId"] != nil {
+		t.Fatalf("tin đã thu hồi thì không trích dẫn lại được, đang là %v / %v", l["traId"], l["traText"])
+	}
+}

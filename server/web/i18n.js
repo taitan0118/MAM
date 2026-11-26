@@ -1371,6 +1371,11 @@ var EN = {
 "Không có tin nhắn này": "No such message",
 "Không hiểu muốn làm gì với tin này": "Unclear what to do with this message",
 "Đã đánh số %d tin nhắn cũ để thả cảm xúc và thu hồi được": "Numbered %d older messages so they can be reacted to and unsent",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"Đã chỉnh sửa": "Edited",
+"Trả lời tin nhắn": "Reply to message",
+"Trả lời {0}": "Replying to {0}",
+"Bỏ trả lời": "Cancel reply",
 };
 var ZH = {
 "Tìm máy, IP, model, serial, bản quyền…": "搜索设备、IP、型号、序列号、授权…",
@@ -2748,6 +2753,11 @@ var ZH = {
 "Không có tin nhắn này": "没有该消息",
 "Không hiểu muốn làm gì với tin này": "无法识别对该消息的操作",
 "Đã đánh số %d tin nhắn cũ để thả cảm xúc và thu hồi được": "已为 %d 条旧消息编号，使其可添加表情和撤回",
+/* tha cam xuc / thu hoi / sua tin nhan */
+"Đã chỉnh sửa": "已编辑",
+"Trả lời tin nhắn": "回复消息",
+"Trả lời {0}": "正在回复 {0}",
+"Bỏ trả lời": "取消回复",
 };
 var PAT = [
 [

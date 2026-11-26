@@ -28,7 +28,7 @@ func fail(msg string) Result { return Result{Out: msg} }
 func handleCommand(typ string, a map[string]string) Result {
 	switch typ {
 	case "message":
-		addMsgFrom(a["fromId"], a["from"], a["text"], a["mid"])
+		addMsgFrom(a["fromId"], a["from"], a["text"], a["mid"], a["traBy"], a["traText"])
 		return Result{OK: true, Out: "Đã chuyển tới máy"}
 	case "chatact": // admin thả cảm xúc / thu hồi / sửa một tin đã gửi
 		chatAct(a["mid"], a["lam"], a["cam"], a["text"])

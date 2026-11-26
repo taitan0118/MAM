@@ -22,6 +22,12 @@ type ChatLine struct {
 	CamMay  string    `json:"camMay,omitempty"`
 	Thu     bool      `json:"thu,omitempty"` // đã thu hồi: xóa hẳn nội dung, chỉ còn dòng "đã thu hồi"
 	Sua     bool      `json:"sua,omitempty"` // đã sửa ít nhất một lần
+	// Trả lời một tin cũ. Chép sẵn tên và nội dung tin được trả lời thay vì tra ngược theo TraID:
+	// cửa sổ MAM chỉ giữ 100 tin gần nhất, tra ngược là trả lời tin cũ sẽ hiện trống trơn.
+	// shortcut: tin gốc sửa sau đó thì phần trích dẫn vẫn là chữ cũ; nâng cấp khi nào thấy vướng.
+	TraID   string `json:"traId,omitempty"`
+	TraBy   string `json:"traBy,omitempty"`
+	TraText string `json:"traText,omitempty"`
 }
 
 // camCho: chỉ nhận đúng mấy biểu tượng này. Cảm xúc đi thẳng xuống máy rồi hiện lên màn hình người
@@ -184,13 +190,23 @@ func (s *Server) hChat(w http.ResponseWriter, r *http.Request, me *Account) {
 		s.mu.Unlock()
 		jok(w, map[string]interface{}{"id": id, "name": name, "online": online, "lines": out, "av": avatarVer("m", id)})
 	case "POST":
-		var in struct{ Text string }
+		var in struct{ Text, TraID string }
 		if readJSON(r, &in) != nil {
 			jerr(w, 400, "Dữ liệu không hợp lệ")
 			return
 		}
 		t := strings.TrimSpace(in.Text)
-		if _, code, msg := s.issue(me, r, []string{id}, "message", map[string]string{"text": t}); code != 0 {
+		args := map[string]string{"text": t}
+		if in.TraID != "" {
+			s.mu.RLock()
+			for _, c := range s.st.Chat {
+				if c.Machine == id && c.ID == in.TraID && !c.Thu {
+					args["traId"], args["traBy"], args["traText"] = c.ID, c.By, clip(c.Text, 120)
+				}
+			}
+			s.mu.RUnlock()
+		}
+		if _, code, msg := s.issue(me, r, []string{id}, "message", args); code != 0 {
 			jerr(w, code, msg)
 			return
 		}

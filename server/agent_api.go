@@ -256,7 +256,7 @@ func (s *Server) uninstCodeOK(w http.ResponseWriter, r *http.Request, m *Machine
 
 // Người ngồi máy trả lời tin nhắn của admin: ghi vào nhật ký để admin xem ở Console.
 func (s *Server) hReply(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Text string }
+	var in struct{ Text, TraID string }
 	if r.Method != "POST" || readJSON(r, &in) != nil {
 		jerr(w, 400, "Dữ liệu không hợp lệ")
 		return
@@ -274,6 +274,13 @@ func (s *Server) hReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l := s.addChat(m.ID, m.Name, t, true)
+	if in.TraID != "" { // trả lời một tin cũ: chép sẵn tên và nội dung tin gốc
+		for _, c := range s.st.Chat {
+			if c.Machine == m.ID && c.ID == in.TraID && !c.Thu {
+				l.TraID, l.TraBy, l.TraText = c.ID, c.By, clip(c.Text, 120)
+			}
+		}
+	}
 	s.save()
 	s.audit(AuditEntry{User: "system", Name: "Hệ thống", Role: "sys", IP: clientIP(r), Kind: "Tin nhắn", Msg: "Máy " + m.Name + " trả lời: " + t, Target: m.Name})
 	for _, sc := range s.screens {

@@ -349,7 +349,9 @@ func (s *Server) issue(me *Account, r *http.Request, ids []string, typ string, a
 		if t == "" || len([]rune(t)) > 300 {
 			return nil, 400, "Nội dung tin nhắn 1 đến 300 ký tự"
 		}
-		args = map[string]string{"text": t, "from": me.Name, "fromId": me.ID}
+		// dựng lại cho sạch, nhưng GIỮ phần trả lời tin cũ do hChat tra sẵn
+		args = map[string]string{"text": t, "from": me.Name, "fromId": me.ID,
+			"traId": args["traId"], "traBy": args["traBy"], "traText": args["traText"]}
 	} else if infoCmd[typ] {
 		var msg string
 		if args, msg = cleanArgs(typ, args); msg != "" {
@@ -398,6 +400,7 @@ func (s *Server) issue(me *Account, r *http.Request, ids []string, typ string, a
 			// máy phải biết ID dòng chat thì sau này mới thu hồi/sửa đúng tin được; mỗi máy một ID
 			// nên phải chép riêng map args, dùng chung là máy nào cũng nhận ID của máy cuối
 			l := s.addChat(m.ID, me.Name, args["text"], false, me.ID)
+			l.TraID, l.TraBy, l.TraText = args["traId"], args["traBy"], args["traText"]
 			ar := map[string]string{"mid": l.ID}
 			for k, v := range args {
 				ar[k] = v

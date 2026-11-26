@@ -40,6 +40,9 @@ type inMsg struct {
 	CamMay string `json:"camMay,omitempty"` // cảm xúc người ngồi máy thả
 	Thu    bool   `json:"thu,omitempty"`    // đã thu hồi
 	Sua    bool   `json:"sua,omitempty"`    // đã sửa
+	// Trả lời một tin cũ: chép sẵn tên + nội dung tin gốc, khỏi tra ngược (hộp thư chỉ giữ 100 tin)
+	TraBy   string `json:"traBy,omitempty"`
+	TraText string `json:"traText,omitempty"`
 }
 
 var inbox struct {
@@ -55,11 +58,11 @@ func addMsg(from, text string, mine bool) { addNotice("", from, text, mine) }
 
 // addMsgFrom: như addMsg nhưng gắn id người gửi để cửa sổ hiện ảnh đại diện của họ, và id dòng chat
 // bên server để sau còn thả cảm xúc hay thấy admin thu hồi.
-func addMsgFrom(fromID, from, text, sid string) {
+func addMsgFrom(fromID, from, text, sid, traBy, traText string) {
 	addNotice("", from, text, false)
 	inbox.Lock()
-	inbox.msgs[len(inbox.msgs)-1].FromID = fromID
-	inbox.msgs[len(inbox.msgs)-1].SID = sid
+	m := &inbox.msgs[len(inbox.msgs)-1]
+	m.FromID, m.SID, m.TraBy, m.TraText = fromID, sid, traBy, traText
 	inbox.Unlock()
 }
 
@@ -191,7 +194,7 @@ func startLocal() {
 		w.Write(resp)
 	})
 	mux.HandleFunc("/api/reply", func(w http.ResponseWriter, r *http.Request) {
-		var in struct{ Text string }
+		var in struct{ Text, TraID string }
 		if r.Method != "POST" || json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in) != nil {
 			http.Error(w, "bad", 400)
 			return
@@ -201,7 +204,18 @@ func startLocal() {
 			http.Error(w, "1-300", 400)
 			return
 		}
-		resp, err := post("/api/agent/reply", map[string]string{"text": in.Text}, cfg.Token)
+		// trả lời tin nào thì lấy luôn tên + nội dung tin đó trong hộp thư để hiện phần trích dẫn
+		traBy, traText := "", ""
+		if in.TraID != "" {
+			inbox.Lock()
+			for _, m := range inbox.msgs {
+				if m.SID == in.TraID && !m.Thu {
+					traBy, traText = m.From, m.Text
+				}
+			}
+			inbox.Unlock()
+		}
+		resp, err := post("/api/agent/reply", map[string]string{"text": in.Text, "traId": in.TraID}, cfg.Token)
 		if err != nil || resp.code != 200 {
 			http.Error(w, "server", 502)
 			return
@@ -209,11 +223,10 @@ func startLocal() {
 		var ra struct{ ID string }
 		json.Unmarshal(resp.body, &ra) // server trả id dòng chat; không có thì tin này không thu hồi được
 		addMsg("", in.Text, true)
-		if ra.ID != "" {
-			inbox.Lock()
-			inbox.msgs[len(inbox.msgs)-1].SID = ra.ID
-			inbox.Unlock()
-		}
+		inbox.Lock()
+		m := &inbox.msgs[len(inbox.msgs)-1]
+		m.SID, m.TraBy, m.TraText = ra.ID, traBy, traText
+		inbox.Unlock()
 		w.Write([]byte("{}"))
 	})
 	// Người ngồi máy thả cảm xúc / thu hồi / sửa tin: báo server trước, server gật đầu mới đổi tại chỗ.
