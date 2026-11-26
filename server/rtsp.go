@@ -56,6 +56,10 @@ func rtspAlive(ctx context.Context, ip string, port int) (bool, string) {
 }
 
 // rtspKbps trả tốc độ bit của luồng hình (kbps). 0 kèm lỗi = không lấy được hình.
+// errKhongDo: không hỏi được camera (gọi không tới, bắt tay hỏng). KHÁC HẲN "đo được mà không có
+// hình" — chỗ này mình chưa biết gì về camera cả nên không được kết luận nó hỏng.
+var errKhongDo = errors.New("không đo được luồng hình")
+
 func rtspKbps(ctx context.Context, ip string, port int, path, user, pass string) (int, error) {
 	if port <= 0 {
 		port = 554
@@ -63,7 +67,7 @@ func rtspKbps(ctx context.Context, ip string, port int, path, user, pass string)
 	addr := net.JoinHostPort(ip, itoa(port))
 	c, err := (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: %v", errKhongDo, err)
 	}
 	defer c.Close()
 	c.SetDeadline(time.Now().Add(rtspBudget))
@@ -75,7 +79,7 @@ func rtspKbps(ctx context.Context, ip string, port int, path, user, pass string)
 
 	code, _, sdp, err := r.do("DESCRIBE", base, "Accept: application/sdp")
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: %v", errKhongDo, err)
 	}
 	if code == 401 { // camera từ chối: KHÔNG kết luận được nó có hình hay không
 		if user == "" {
@@ -84,30 +88,33 @@ func rtspKbps(ctx context.Context, ip string, port int, path, user, pass string)
 		return 0, errSaiMatKhau
 	}
 	if code != 200 {
-		return 0, fmt.Errorf("DESCRIBE %d", code)
+		return 0, fmt.Errorf("%w: DESCRIBE %d", errKhongDo, code)
 	}
 	code, hdr, _, err := r.do("SETUP", videoURI(base, string(sdp)), "Transport: RTP/AVP/TCP;unicast;interleaved=0-1")
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: %v", errKhongDo, err)
 	}
 	if code != 200 {
-		return 0, fmt.Errorf("SETUP %d", code)
+		return 0, fmt.Errorf("%w: SETUP %d", errKhongDo, code)
 	}
 	r.session = strings.TrimSpace(strings.SplitN(hdr["session"], ";", 2)[0])
 	if code, _, _, err = r.do("PLAY", base); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: %v", errKhongDo, err)
 	}
 	if code != 200 {
-		return 0, fmt.Errorf("PLAY %d", code)
+		return 0, fmt.Errorf("%w: PLAY %d", errKhongDo, code)
 	}
 
+	// Tới đây camera đã NHẬN lệnh phát hình. Không có byte nào nữa mới thật sự là không ra hình.
 	n, err := r.countRTP(rtspMeasure)
 	r.do("TEARDOWN", base) // dọn phiên cho camera, lỗi cũng không sao
+	// Camera đã nhận lệnh phát mà không có byte nào: đây mới thật sự là không ra hình. Lỗi đọc ở
+	// đây (hết giờ chờ, bên kia đóng) là HỆ QUẢ của việc không có gì để đọc, không phải lỗi kết nối.
 	if n == 0 {
-		if err == nil {
-			err = errors.New("không có dữ liệu hình")
+		if err != nil {
+			return 0, fmt.Errorf("camera nhận lệnh phát nhưng không gửi byte hình nào (%v)", err)
 		}
-		return 0, err
+		return 0, errors.New("camera nhận lệnh phát nhưng không gửi byte hình nào")
 	}
 	return int(float64(n) * 8 / rtspMeasure.Seconds() / 1000), nil
 }

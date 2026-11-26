@@ -1219,6 +1219,8 @@ function devState(d) {
     : t('đã từng mất kết nối')) + ' · ';
   // camera từ chối tài khoản: nói thẳng ra, đừng để đại ca tưởng camera hỏng
   if (d.saiTK) return ['warn', 'Camera không nhận tài khoản', tung + openPorts];
+  // hỏi không tới camera thì CHƯA BIẾT nó có hình hay không — đừng nói như thể đã biết
+  if (d.khongDo) return ['off', 'Chưa đo được luồng hình', tung + (d.vidLoi ? trErr(d.vidLoi) : openPorts)];
   // nói rõ ĐO ĐƯỢC GÌ chứ không chỉ kết luận: "không ra hình" mà không nói vì sao thì không ai tin
   if (d.vid) return d.video ? ['ok', 'Có hình', tung + t('{0} kbps', d.kbps)] : ['warn', 'Sống nhưng không ra hình', tung + (d.vidLoi ? trErr(d.vidLoi) : openPorts)];
   return ['ok', 'Hoạt động', tung + openPorts];
