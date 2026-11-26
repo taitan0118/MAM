@@ -391,8 +391,8 @@ func (s *Server) exportRows(what, group string, me *Account) ([][]string, bool) 
 					tt = "Mất kết nối"
 				case d.SaiTK:
 					tt, ct = "Camera không nhận tài khoản", congMo(d.Ports)
-				case s.doHinh(d) && !d.Video:
-					tt, ct = "Sống nhưng không ra hình", congMo(d.Ports)
+				case s.doHinh(d) && !d.Video && !d.VidAt.IsZero():
+					tt, ct = "Sống nhưng không ra hình", d.VidLoi
 				case s.doHinh(d):
 					tt, ct = "Có hình", itoa(d.Kbps)+" kbps"
 				default:

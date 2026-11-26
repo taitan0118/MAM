@@ -53,6 +53,7 @@ type NetDev struct {
 	Miss    int       `json:"-"` // số lượt liên tiếp không gọi được
 	VidMiss int       `json:"-"` // số lượt đo hình liên tiếp không có hình
 	SaiTK   bool      `json:"-"` // camera từ chối tài khoản: chưa biết có hình hay không
+	VidLoi  string    `json:"-"` // lý do thật của lượt đo hình gần nhất, để Console khỏi phải đoán
 }
 
 // devAlertID: cảnh báo của thiết bị mạng gắn vào một "máy" giả, giống cách cảnh báo máy chủ dùng __server.
@@ -238,7 +239,7 @@ func checkDev(ctx context.Context, d NetDev, wantVid bool) NetDev {
 	// xóa đi là suốt 4 phút kế mọi camera đều thành "sống nhưng không ra hình", và tệ hơn nữa là
 	// ghi một mốc "treo không ra hình" giả vào lịch sử hoạt động sau mỗi lượt đo.
 	if wantVid {
-		out.Video, out.Kbps, out.SaiTK = false, 0, false
+		out.Video, out.Kbps, out.SaiTK, out.VidLoi = false, 0, false, ""
 		out.VidAt = out.Checked
 		kb, err := rtspKbps(ctx, d.IP, d.Port, d.Path, d.User, d.Pass)
 		switch {
@@ -248,9 +249,18 @@ func checkDev(ctx context.Context, d NetDev, wantVid bool) NetDev {
 		case errors.Is(err, errSaiMatKhau) || errors.Is(err, errChuaKhai):
 			// Camera không cho vào thì KHÔNG biết nó có ra hình hay không. Tính là "mất hình" ở đây
 			// là vu oan: báo động giả, ghi mốc treo giả, mà lỗi thật (sai tài khoản) thì không ai thấy.
-			out.SaiTK = true
+			out.SaiTK, out.VidLoi = true, err.Error()
+		case ctx.Err() != nil:
+			// Lượt kiểm hàng loạt hết giờ, cắt ngang giữa chừng: coi như CHƯA ĐO và giữ nguyên kết quả
+			// đo gần nhất. Tính là mất hình thì sau mỗi lần khởi động lại server, cả mấy trăm camera
+			// đang chạy ngon đều bị gắn nhãn "không ra hình".
+			out.Video, out.Kbps = d.Video, d.Kbps
+			out.VidAt, out.VidMiss, out.VidLoi, out.SaiTK = d.VidAt, d.VidMiss, d.VidLoi, d.SaiTK
 		default:
 			out.VidMiss = d.VidMiss + 1
+			if err != nil {
+				out.VidLoi = err.Error()
+			}
 		}
 	}
 	for _, p := range devPortList(d) {
@@ -386,6 +396,7 @@ func (s *Server) checkDevices(ctx context.Context, ids map[string]bool) {
 		d.Up, d.Video, d.Kbps, d.Ports, d.Way = x.Up, x.Video, x.Kbps, x.Ports, x.Way
 		d.MACNow, d.Checked, d.Since, d.VidAt = x.MACNow, x.Checked, x.Since, x.VidAt
 		d.Miss, d.VidMiss = x.Miss, x.VidMiss
+		d.SaiTK, d.VidLoi = x.SaiTK, x.VidLoi
 		if d.MAC == "" && x.MACNow != "" { // lần đầu kiểm được: ghi nhớ để sau biết IP có bị chiếm
 			d.MAC = x.MACNow
 			luu = true
@@ -488,7 +499,9 @@ func (s *Server) devAlertsClose(d *NetDev) {
 
 // devView: dữ liệu trả cho Console. Không trả mật khẩu camera. vid = có đang đo luồng hình không.
 func (s *Server) devView(d *NetDev) map[string]interface{} {
-	vid := s.doHinh(d)
+	// Chưa đo lần nào (server vừa khởi động chẳng hạn) thì KHÔNG được nói "không ra hình" —
+	// lúc đó mình chưa biết gì cả, nói vậy là vu oan cho camera đang chạy ngon.
+	vid := s.doHinh(d) && !d.VidAt.IsZero()
 	p := d.Ports
 	if p == nil {
 		p = []int{}
@@ -513,7 +526,7 @@ func (s *Server) devView(d *NetDev) map[string]interface{} {
 		"id": d.ID, "name": d.Name, "nameZh": d.NameZH, "ip": d.IP, "kind": d.Kind, "groups": nhomCua(d), "port": d.Port,
 		"vid":  vid,
 		"path": d.Path, "user": d.User, "hasPass": d.Pass != "", "mac": d.MAC, "macNow": d.MACNow,
-		"up": d.Up, "video": d.Video, "kbps": d.Kbps, "saiTK": d.SaiTK, "ports": p, "way": d.Way, "canhBao": s.soCanhBao(d),
+		"up": d.Up, "video": d.Video, "kbps": d.Kbps, "saiTK": d.SaiTK, "vidLoi": d.VidLoi, "ports": p, "way": d.Way, "canhBao": s.soCanhBao(d),
 		"rot": rot, "lai": lai,
 		"checked": d.Checked, "since": d.Since, "vidAt": d.VidAt, "done": !d.Checked.IsZero(),
 	}
