@@ -8,3 +8,8 @@ agent-ps/MAM-Agent.ps1
 docs-out/
 __pycache__/
 installer/*/payload/
+
+# File chạy do "go build ./..." đẻ ra ngay trong thư mục mã nguồn. Lọt vào git từ 1.1.101
+# (server.exe) và 1.1.108 (agent.exe), làm gói giao khách phình thêm ~30 MB và vượt
+# giới hạn 100 MB của GitHub. Chặn hẳn cho khỏi lặp lại.
+*.exe
