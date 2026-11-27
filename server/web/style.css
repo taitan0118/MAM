@@ -685,3 +685,25 @@ img.av{display:block}
 .bub.out .tep-co{color:rgba(255,255,255,.75)}
 /* kéo file thả vào khung chat */
 .chat-main.tha{outline:2px dashed var(--accent);outline-offset:-6px}
+
+/* Khay file chờ gửi: xem trước rồi mới bấm Gửi, bấm × để bỏ tấm không ưng */
+.tep-khay{display:flex;flex-wrap:wrap;gap:10px;padding:12px 20px 2px}
+.tep-cho{position:relative;display:flex;align-items:center;max-width:210px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px}
+.tep-cho.anh{width:68px;height:68px;border:0;background:none}
+.tep-cho.anh img{width:100%;height:100%;object-fit:cover;display:block;border-radius:12px}
+.tep-chot{min-width:0;padding:9px 11px}
+.tep-chot b{display:block;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tep-chot i{font-style:normal;font-size:11.5px;color:var(--muted)}
+.tep-x{position:absolute;top:-7px;right:-7px;width:21px;height:21px;padding:0;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:14px;line-height:1;cursor:pointer;display:grid;place-items:center;box-shadow:var(--shadow)}
+.tep-x:hover{background:#EF4444;color:#fff;border-color:transparent}
+/* Nút kẹp giấy: vẽ bằng SVG, emoji 📎 của Windows ra một cục đen hẹp nhìn như cục pin */
+.kep-btn{height:38px;width:38px;padding:0;display:grid;place-items:center;color:var(--muted)}
+.kep-btn:hover{color:var(--fg)}
+/* Bong bóng bo góc theo nhóm như Messenger: góc ngoài tròn, góc trong của chuỗi tin bị vát */
+.bub{border-radius:18px}
+.bub.out{border-top-right-radius:5px;border-bottom-right-radius:5px}
+.bub.out.gfirst{border-top-right-radius:18px}
+.bub.out.glast{border-bottom-right-radius:18px}
+.bub.in{border-top-left-radius:5px;border-bottom-left-radius:5px}
+.bub.in.gfirst{border-top-left-radius:18px}
+.bub.in.glast{border-bottom-left-radius:18px}

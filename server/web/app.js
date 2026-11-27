@@ -906,6 +906,7 @@ const CQ = { q: '' };
 // Console gửi; tin của người ngồi máy là lời của họ, admin không sửa miệng người khác.
 const CAMS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 let chatTra = null; // đang soạn lời trả lời cho tin nào: {id, by, text}
+let chatTep = []; // file đang chờ gửi: xem trước trong khay, bấm × để bỏ, bấm Gửi mới gửi thật
 let chatRong = false; // true: giấu danh sách cuộc trò chuyện, khung chat chiếm hết trang
 async function chatTin(mid, body) {
   try { await api('POST', '/api/chat/' + encodeURIComponent(mid) + '/tin', body); render(); } catch (e) { fail(e); }
@@ -965,7 +966,7 @@ function chatRows(d) {
     // Tin đã thu hồi KHÔNG tô màu như tin thật: viền nét đứt, chữ mờ — nhìn phát biết là đã gỡ
     const bub = l.thu
       ? el('div', { class: 'bub thu ' + (inc ? 'in' : 'out') }, t('Tin nhắn đã được thu hồi'))
-      : el('div', { class: 'bub ' + (inc ? 'in' : 'out') + (first ? ' gfirst' : '') + (l.tep && !l.text ? ' chitep' : '') },
+      : el('div', { class: 'bub ' + (inc ? 'in' : 'out') + (first ? ' gfirst' : '') + (last ? ' glast' : '') + (l.tep && !l.text ? ' chitep' : '') },
           (first && (inc || l.by !== me.name)) ? el('div', { class: 'bub-w' }, who) : null,
           l.tep ? tepEl(d.id, l) : null,
           l.text ? el('div', {}, l.text) : null);
@@ -1018,10 +1019,10 @@ VIEWS.chat = async (v, quiet) => {
   ml.forEach(m => { if (m.ip) ipCua[m.id] = m.ip; });
   const ipEl = (id, css) => ipCua[id] ? el('span', { class: 'mono', style: 'color:var(--faint);font-weight:400;' + (css || '') }, ipCua[id]) : null;
   const side = el('div', { class: 'chat-side' });
-  const picker = el('select', { class: 'input', onchange: e => { if (e.target.value) { chatSel = e.target.value; chatTra = null; render(); } } }, el('option', { value: '' }, t('+ Nhắn máy khác…')),
+  const picker = el('select', { class: 'input', onchange: e => { if (e.target.value) { chatSel = e.target.value; chatTra = null; chatTep = []; render(); } } }, el('option', { value: '' }, t('+ Nhắn máy khác…')),
     ...ml.filter(m => m.canControl !== false && m.online).map(m => el('option', { value: m.id }, m.name + (m.ip ? ' · ' + m.ip : ''))));
   side.append(picker, searchBox('cq', CQ.q, x => CQ.q = x, t('Tìm cuộc trò chuyện…')));
-  cv.convs.forEach(c => side.append(el('button', { class: 'chat-conv' + (c.id === sel ? ' on' : '') + (c.unread ? ' unread' : ''), onclick: () => { chatSel = c.id; chatTra = null; render(); } },
+  cv.convs.forEach(c => side.append(el('button', { class: 'chat-conv' + (c.id === sel ? ' on' : '') + (c.unread ? ' unread' : ''), onclick: () => { chatSel = c.id; chatTra = null; chatTep = []; render(); } },
     el('span', { class: 'avwrap' }, avatarEl('m', c.id, c.av, c.name, 34), el('span', { class: 'dot ' + (c.online ? 'on' : '') })), el('div', { style: 'min-width:0;flex:1' }, el('b', {}, c.name), ipEl(c.id, 'font-size:11.5px;margin-left:6px'), el('div', { class: 'chat-last' }, (c.mine ? t('Bạn: ') : '') + c.last)),
     c.unread ? el('span', { class: 'count badge-red' }, String(c.unread)) : null)));
   const main = el('div', { class: 'chat-main' });
@@ -1030,34 +1031,59 @@ VIEWS.chat = async (v, quiet) => {
     const d = await api('GET', '/api/chat/' + sel);
     const log = el('div', { class: 'chat-log' }, d.lines.length ? chatRows(d) : el('div', { class: 'empty' }, 'Chưa có tin nhắn.'));
     const ta = el('textarea', { class: 'input', rows: 2, maxlength: 300, placeholder: t('Nhập tin nhắn… (Enter để gửi)') });
-    const send = async () => { const x = ta.value.trim(); if (!x) return; try { await api('POST', '/api/chat/' + sel, { text: x, traId: chatTra ? chatTra.id : '' }); ta.value = ''; chatTra = null; render(); } catch (e) { fail(e); } };
+    const send = async () => { if (chatTep.length) return guiHet(); const x = ta.value.trim(); if (!x) return; try { await api('POST', '/api/chat/' + sel, { text: x, traId: chatTra ? chatTra.id : '' }); ta.value = ''; chatTra = null; render(); } catch (e) { fail(e); } };
     // Gửi file: bấm kẹp giấy, dán thẳng ảnh vào ô nhập, hoặc kéo file thả vào khung chat
     const tienBar = el('i', { style: 'display:block;height:100%;width:0;background:var(--accent);border-radius:999px;transition:width .15s' });
     const tienBox = el('div', { style: 'display:none;height:4px;background:var(--surface-3);border-radius:999px;margin:8px 20px 0' }, tienBar);
-    const kep = el('input', { type: 'file', style: 'display:none' });
+    const kep = el('input', { type: 'file', multiple: true, style: 'display:none' });
     let dangGui = false;
-    const doTep = async file => {
-      if (!file || dangGui) return;
-      if (file.size > TEP_MAX) { toast(t('File quá lớn, tối đa {0}', coTep(TEP_MAX)), 'warn'); return; }
+    // Khay file chờ gửi: chọn bao nhiêu cũng được, xem trước rồi bấm Gửi một lần. Gửi lần lượt
+    // từng file (server nhận mỗi lần một file); xong cái nào bỏ cái đó khỏi khay, hỏng giữa chừng
+    // thì mấy cái còn lại vẫn nằm trong khay, bấm Gửi lần nữa là đi tiếp.
+    const themTep = raw => {
+      const ds = [...(raw || [])].filter(Boolean);
+      const vua = ds.filter(f => f.size <= TEP_MAX);
+      if (vua.length < ds.length) toast(t('File quá lớn, tối đa {0}', coTep(TEP_MAX)), 'warn');
+      if (!vua.length) return;
+      chatTep = chatTep.concat(vua).slice(0, 20); // trần 20 file một lượt cho khỏi loạn khay
+      render();
+    };
+    const guiHet = async () => {
+      if (dangGui || !chatTep.length) return;
       dangGui = true;
       tienBox.style.display = ''; tienBar.style.width = '0';
+      const tong = chatTep.length;
+      let text = ta.value.trim();
       try {
-        await guiTep(sel, file, ta.value.trim(), p => { tienBar.style.width = Math.round(p * 100) + '%'; });
-        ta.value = ''; chatTra = null; render();
-      } catch (e) { fail(e); } finally { dangGui = false; tienBox.style.display = 'none'; }
+        while (chatTep.length) {
+          const i = tong - chatTep.length;
+          await guiTep(sel, chatTep[0], text, p => { tienBar.style.width = Math.round((i + p) / tong * 100) + '%'; });
+          text = ''; ta.value = ''; chatTep.shift();
+        }
+        chatTra = null;
+      } catch (e) { fail(e); } finally { dangGui = false; tienBox.style.display = 'none'; render(); }
     };
-    kep.onchange = () => { doTep(kep.files[0]); kep.value = ''; };
+    kep.onchange = () => { themTep(kep.files); kep.value = ''; };
     ta.onpaste = e => { // chỉ cướp phím dán khi trong bộ nhớ tạm có FILE, dán chữ vẫn bình thường
-      const it = [...((e.clipboardData || {}).items || [])].find(x => x.kind === 'file');
-      if (it) { e.preventDefault(); doTep(it.getAsFile()); }
+      const its = [...((e.clipboardData || {}).items || [])].filter(x => x.kind === 'file');
+      if (its.length) { e.preventDefault(); themTep(its.map(x => x.getAsFile())); }
     };
     main.ondragover = e => { e.preventDefault(); main.classList.add('tha'); };
     main.ondragleave = () => main.classList.remove('tha');
-    main.ondrop = e => { e.preventDefault(); main.classList.remove('tha'); doTep((e.dataTransfer.files || [])[0]); };
+    main.ondrop = e => { e.preventDefault(); main.classList.remove('tha'); themTep(e.dataTransfer.files); };
     // đang trả lời tin nào thì hiện ngay trên ô nhập, bấm × là thôi
     const thanhTra = chatTra ? el('div', { class: 'tra-bar' }, el('div', { style: 'flex:1;min-width:0' },
       el('b', {}, t('Trả lời {0}', chatTra.by || '')), el('div', { class: 'tra-txt' }, chatTra.text || '')),
       el('button', { class: 'btn', style: 'padding:2px 9px;font-size:14px;line-height:1.3', title: t('Bỏ trả lời'), onclick: () => { chatTra = null; render(); } }, '×')) : null;
+    // Xem trước từng file trong khay; ảnh thì hiện thu nhỏ, còn lại là thẻ tên + dung lượng.
+    const khay = chatTep.length ? el('div', { class: 'tep-khay' }, chatTep.map((f, i) => {
+      const anh = /^image\//.test(f.type);
+      if (anh && !f.__u) f.__u = URL.createObjectURL(f);
+      return el('div', { class: 'tep-cho' + (anh ? ' anh' : ''), title: (f.name || 'file') + ' · ' + coTep(f.size) },
+        anh ? el('img', { src: f.__u, alt: '' })
+          : el('span', { class: 'tep-chot' }, el('b', {}, f.name || 'file'), el('i', {}, coTep(f.size))),
+        el('button', { class: 'tep-x', title: t('Bỏ file này'), onclick: () => { if (f.__u) URL.revokeObjectURL(f.__u); chatTep.splice(i, 1); render(); } }, '×'));
+    })) : null;
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
     // bấm vào tên máy là sang thẳng trang máy đó (xem thông tin, điều khiển màn hình)
     const tenMay = el('b', { style: 'cursor:pointer', title: t('Mở trang máy này'), onclick: () => go('detail', sel) }, d.name);
@@ -1065,9 +1091,9 @@ VIEWS.chat = async (v, quiet) => {
       el('div', { style: 'flex:1' }),
       el('button', { class: 'btn', style: 'padding:4px 10px;font-size:12px', title: t(chatRong ? 'Hiện lại danh sách cuộc trò chuyện' : 'Ẩn danh sách, cho khung chat rộng hết trang'), onclick: () => { chatRong = !chatRong; render(); } },
         chatRong ? '⟨ ' + t('Thu nhỏ') : t('Mở rộng') + ' ⟩')), log,
-      el('div', { class: 'chat-foot' }, thanhTra, tienBox,
+      el('div', { class: 'chat-foot' }, thanhTra, khay, tienBox,
         el('div', { class: 'chat-in' }, kep,
-          el('button', { class: 'btn', title: t('Gửi file hoặc ảnh (tối đa {0})', coTep(TEP_MAX)), style: 'height:38px;padding:0 12px;font-size:15px', onclick: () => kep.click() }, '📎'),
+          el('button', { class: 'btn kep-btn', title: t('Gửi file hoặc ảnh (tối đa {0})', coTep(TEP_MAX)), onclick: () => kep.click(), html: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5 12.3 19.2a4.6 4.6 0 0 1-6.5-6.5l7.9-7.9a3.1 3.1 0 0 1 4.3 4.3l-7.9 7.9a1.5 1.5 0 0 1-2.2-2.2l7.3-7.3"/></svg>' }),
           ta, el('button', { class: 'btn primary', disabled: !d.online, onclick: send }, 'Gửi'))));
     // tự kéo xuống cuối khi mở hoặc có tin mới; làm mới định kỳ thì giữ nguyên chỗ đang đọc
     const grew = chatLen[sel] !== d.lines.length; chatLen[sel] = d.lines.length;
