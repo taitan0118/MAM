@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -213,4 +214,42 @@ func TestDonFileMoCoi(t *testing.T) {
 	if _, err := os.Stat(tepChatPath(l.ID)); err != nil {
 		t.Fatal("file đang có tin nhắn dùng thì KHÔNG được đụng tới")
 	}
+}
+
+// File LỚN phải qua được nguyên vẹn và không ôm hết vào RAM. 20 MB đủ để lòi ra lỗi đọc theo khối
+// (file thật tới 200 MB); giữ nhỏ hơn để bộ test còn chạy nhanh.
+func TestFileLonQuaNguyenVen(t *testing.T) {
+	f := setup(t)
+	report(t, f.url, f.tok1, 10, 50)
+	to := make([]byte, 20<<20)
+	for i := range to { // dữ liệu có hình thù, không phải toàn số 0: lệch một byte là thấy ngay
+		to[i] = byte(i*7 + i/251)
+	}
+	truoc := memDangDung()
+
+	code, _, _ := f.super.raw("POST", "/api/chat/"+f.m1+"/tep?ten=to.bin", to)
+	expect(t, code, 200, "gửi file lớn")
+	l := tinCuoi(t, f, f.m1)
+	if l["tepCo"] != float64(len(to)) {
+		t.Fatalf("cỡ file phải đúng, đang là %v cần %d", l["tepCo"], len(to))
+	}
+	id, _ := l["id"].(string)
+	code, _, got := f.super.raw("GET", "/api/chat/"+f.m1+"/tep?tin="+id, nil)
+	expect(t, code, 200, "tải file lớn")
+	if !bytes.Equal(got, to) {
+		t.Fatalf("file tải về phải y nguyên: nhận %d byte, cần %d", len(got), len(to))
+	}
+
+	// Server đọc thẳng xuống đĩa nên bộ nhớ không được phình theo cỡ file. Nới rộng tay (một nửa cỡ
+	// file) vì còn bản sao của chính bộ test cầm trên tay; cốt để bắt lỗi ai đó đổi sang io.ReadAll.
+	if sau := memDangDung(); sau > truoc+int64(len(to))/2 {
+		t.Fatalf("bộ nhớ phình %d byte cho file %d byte — chắc đang đọc cả file vào RAM", sau-truoc, len(to))
+	}
+}
+
+func memDangDung() int64 {
+	runtime.GC()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return int64(m.HeapAlloc)
 }
