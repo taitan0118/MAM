@@ -1033,8 +1033,8 @@ func TestAvatar(t *testing.T) {
 	code, _, raw := f.super.do("GET", "/api/avatar/u/"+id, nil, nil)
 	expect(t, code, 200, "xem ảnh")
 	cfg, err := jpeg.DecodeConfig(bytes.NewReader(raw))
-	if err != nil || cfg.Width != 128 || cfg.Height != 128 {
-		t.Fatal("ảnh phải được thu về 128x128 JPEG:", err, cfg)
+	if err != nil || cfg.Width != avSize || cfg.Height != avSize {
+		t.Fatalf("ảnh phải được thu về %dx%d JPEG: %v %v", avSize, avSize, err, cfg)
 	}
 	if post(f.super, "/api/avatar/u/"+id, []byte("<html>không phải ảnh</html>")) != 400 {
 		t.Fatal("file không phải ảnh vẫn được nhận")

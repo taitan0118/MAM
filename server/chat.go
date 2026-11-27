@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -28,6 +29,12 @@ type ChatLine struct {
 	TraID   string `json:"traId,omitempty"`
 	TraBy   string `json:"traBy,omitempty"`
 	TraText string `json:"traText,omitempty"`
+	// File gửi kèm. Chính file nằm riêng trong <dữ liệu>/chat-files/<ID>.bin, đây chỉ giữ tên người
+	// gửi đặt và cỡ. TepAnh = ảnh xem thẳng được (đã soi byte thật, không tin đuôi tên).
+	Tep    string `json:"tep,omitempty"`
+	TepCo  int64  `json:"tepCo,omitempty"`
+	TepAnh bool   `json:"tepAnh,omitempty"`
+	TepDon bool   `json:"tepDon,omitempty"` // file đã dọn vì thư mục đầy; tên vẫn giữ để người xem biết
 }
 
 // camCho: chỉ nhận đúng mấy biểu tượng này. Cảm xúc đi thẳng xuống máy rồi hiện lên màn hình người
@@ -43,7 +50,13 @@ func (s *Server) addChat(machine, by, text string, client bool, byID ...string) 
 	s.st.Chat = append(s.st.Chat, l)
 	chatBump()
 	if len(s.st.Chat) > 3000 {
+		bo := s.st.Chat[:len(s.st.Chat)-2000]
 		s.st.Chat = s.st.Chat[len(s.st.Chat)-2000:]
+		for _, c := range bo { // cắt bớt tin cũ thì xóa luôn file của nó, không thì rác nằm lại mãi
+			if c.Tep != "" {
+				xoaTepChat(c.ID)
+			}
+		}
 	}
 	return l
 }
@@ -113,6 +126,10 @@ func (s *Server) chatTin(w http.ResponseWriter, r *http.Request, me *Account, ma
 		}
 		if in.Lam == "thu" {
 			l.Thu, l.Text, l.Sua = true, "", false
+			if l.Tep != "" { // thu hồi là xóa thật, kể cả file đã gửi
+				xoaTepChat(l.ID)
+				l.Tep, l.TepCo, l.TepAnh = "", 0, false
+			}
 		} else {
 			l.Text, l.Sua, args["text"] = text, true, text
 		}
@@ -158,6 +175,10 @@ func (s *Server) hChat(w http.ResponseWriter, r *http.Request, me *Account) {
 			return
 		}
 		s.chatTin(w, r, me, id)
+		return
+	}
+	if lam == "tep" { // POST = gửi file kèm, GET ?tin=<id dòng> = tải file về
+		s.chatTep(w, r, me, id)
 		return
 	}
 	switch r.Method {
@@ -257,4 +278,85 @@ func (s *Server) chatList(w http.ResponseWriter, r *http.Request, me *Account) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].LastAt.After(out[j].LastAt) })
 	jok(w, map[string]interface{}{"convs": out, "unread": total})
+}
+
+// chatTep: Console gửi file kèm (POST, thân là nội dung file thô, ?ten= là tên file, ?text= là lời
+// nhắn đi kèm), hoặc tải file của một dòng chat về (GET ?tin=<id dòng>).
+func (s *Server) chatTep(w http.ResponseWriter, r *http.Request, me *Account, machine string) {
+	s.mu.RLock()
+	m := s.machineByID(machine)
+	ok := m != nil && canControl(me, m)
+	s.mu.RUnlock()
+	if !ok {
+		jerr(w, 404, "Không có máy này")
+		return
+	}
+
+	if r.Method == "GET" {
+		tin := r.URL.Query().Get("tin")
+		s.mu.RLock()
+		var l *ChatLine
+		for _, c := range s.st.Chat {
+			if c.Machine == machine && c.ID == tin && c.Tep != "" && !c.Thu {
+				cp := *c
+				l = &cp
+			}
+		}
+		s.mu.RUnlock()
+		if l == nil {
+			http.NotFound(w, r)
+			return
+		}
+		traTep(w, r, l)
+		return
+	}
+	if r.Method != "POST" {
+		jerr(w, 405, "Phương thức không hợp lệ")
+		return
+	}
+
+	ten := tenTepSach(r.URL.Query().Get("ten"))
+	text := strings.TrimSpace(r.URL.Query().Get("text"))
+	if len([]rune(text)) > 300 {
+		jerr(w, 400, "Nội dung 1 đến 300 ký tự")
+		return
+	}
+	// đọc thẳng xuống đĩa trước, chưa đụng tới trạng thái: gửi hỏng thì không để lại tin nhắn cụt
+	tmp, co, anh, err := nhanTep(w, r)
+	if err != nil {
+		jerr(w, 400, TErr(err.Error()))
+		return
+	}
+
+	s.mu.Lock()
+	l, err := s.themTep(machine, me.Name, text, me.ID, tmp, ten, co, anh, false)
+	if err != nil {
+		s.mu.Unlock()
+		jerr(w, 500, "Không lưu được file: "+err.Error())
+		return
+	}
+	// Lệnh xuống máy đi thẳng vào hàng lệnh, KHÔNG qua issue: issue bỏ qua máy đang offline và đòi
+	// nội dung 1–300 ký tự, mà gửi file thì lời nhắn được phép để trống.
+	s.st.Commands = append(s.st.Commands, &Command{ID: rid(6), Machine: machine, Type: "chattep",
+		Args: map[string]string{"mid": l.ID, "ten": ten, "co": itoa64(co), "anh": btoa(anh), "text": text, "from": me.Name, "fromId": me.ID},
+		By:   me.User, Created: time.Now(), Status: "pending"})
+	if len(s.st.Commands) > 3000 {
+		s.st.Commands = s.st.Commands[len(s.st.Commands)-2000:]
+	}
+	if nDon, thu := s.gonTepCu(); nDon > 0 {
+		log.Printf(T("Thư mục file chat đầy, đã dọn %d file cũ nhất, thu lại %s"), nDon, coTep(thu))
+	}
+	chatBump()
+	s.save()
+	s.mu.Unlock()
+	wake(machine)
+	s.auditBy(me, r, "Tin nhắn", T("Gửi file %s (%s) cho máy", ten, coTep(co)), "—", false)
+	jok(w, map[string]interface{}{"id": l.ID, "ten": ten, "co": co, "anh": anh})
+}
+
+func btoa(b bool) string {
+	if b {
+		return "1"
+	}
+	return ""
 }

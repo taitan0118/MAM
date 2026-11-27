@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -30,6 +31,10 @@ func handleCommand(typ string, a map[string]string) Result {
 	case "message":
 		addMsgFrom(a["fromId"], a["from"], a["text"], a["mid"], a["traBy"], a["traText"])
 		return Result{OK: true, Out: "Đã chuyển tới máy"}
+	case "chattep": // admin gửi file hoặc ảnh xuống máy
+		co, _ := strconv.ParseInt(a["co"], 10, 64)
+		addTep(a["fromId"], a["from"], a["text"], a["mid"], a["ten"], co, a["anh"] != "")
+		return Result{OK: true, Out: "Đã chuyển file tới máy"}
 	case "chatact": // admin thả cảm xúc / thu hồi / sửa một tin đã gửi
 		chatAct(a["mid"], a["lam"], a["cam"], a["text"])
 		return Result{OK: true, Out: "Đã cập nhật tin nhắn"}

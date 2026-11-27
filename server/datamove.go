@@ -127,6 +127,15 @@ func (s *Server) moveData(newDir string) (string, error) {
 			}
 		}
 	}
+	// file gửi kèm trong chat: không chép theo là mọi tin nhắn có file đều trỏ vào chỗ trống
+	if files, _ := filepath.Glob(filepath.Join(old, "chat-files", "*.bin")); len(files) > 0 {
+		os.MkdirAll(filepath.Join(newDir, "chat-files"), 0o700)
+		for _, f := range files {
+			if err := copyFile(f, filepath.Join(newDir, "chat-files", filepath.Base(f))); err != nil {
+				return fail(err)
+			}
+		}
+	}
 	evMu.Lock()
 	defer evMu.Unlock()
 	if files, _ := filepath.Glob(filepath.Join(old, "events", "*.jsonl")); len(files) > 0 {
@@ -148,6 +157,7 @@ func (s *Server) moveData(newDir string) (string, error) {
 	s.db = ndb
 	s.dir = newDir
 	avatarDir = filepath.Join(newDir, "avatars")
+	chatDir = filepath.Join(newDir, "chat-files")
 	return old, nil
 }
 

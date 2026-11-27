@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -343,6 +344,10 @@ func (s *Server) hAgentChatAct(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.Lam == "thu" {
 			l.Thu, l.Text, l.Sua = true, "", false
+			if l.Tep != "" { // thu hồi là xóa thật, kể cả file đã gửi
+				xoaTepChat(l.ID)
+				l.Tep, l.TepCo, l.TepAnh = "", 0, false
+			}
 		} else {
 			l.Text, l.Sua = text, true
 		}
@@ -383,4 +388,71 @@ func (s *Server) hAgentRename(w http.ResponseWriter, r *http.Request) {
 		s.audit(AuditEntry{User: "system", Name: "Hệ thống", Role: "sys", IP: clientIP(r), Kind: "Máy", Msg: "Người dùng đổi tên máy " + old + " thành " + in.Name, Target: in.Name})
 	}
 	jok(w, map[string]bool{"ok": true})
+}
+
+// hAgentChatTep: người ngồi máy gửi file lên (POST, thân là nội dung file, ?ten= tên, ?text= lời
+// nhắn), hoặc cửa sổ MAM tải file của một dòng chat về (GET ?tin=<id dòng>) — cửa sổ không có
+// phiên đăng nhập Console nên phải đi vòng qua agent bằng token máy.
+func (s *Server) hAgentChatTep(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	m := s.agentMachine(r)
+	var mid, name string
+	if m != nil {
+		mid, name = m.ID, m.Name
+	}
+	s.mu.RUnlock()
+	if m == nil {
+		jerr(w, 401, "Token không hợp lệ")
+		return
+	}
+
+	if r.Method == "GET" {
+		tin := r.URL.Query().Get("tin")
+		s.mu.RLock()
+		var l *ChatLine
+		for _, c := range s.st.Chat {
+			if c.Machine == mid && c.ID == tin && c.Tep != "" && !c.Thu {
+				cp := *c
+				l = &cp
+			}
+		}
+		s.mu.RUnlock()
+		if l == nil {
+			http.NotFound(w, r)
+			return
+		}
+		traTep(w, r, l)
+		return
+	}
+	if r.Method != "POST" {
+		jerr(w, 405, "Phương thức không hợp lệ")
+		return
+	}
+
+	ten := tenTepSach(r.URL.Query().Get("ten"))
+	text := strings.TrimSpace(r.URL.Query().Get("text"))
+	if len([]rune(text)) > 300 {
+		jerr(w, 400, "Nội dung 1 đến 300 ký tự")
+		return
+	}
+	tmp, co, anh, err := nhanTep(w, r)
+	if err != nil {
+		jerr(w, 400, TErr(err.Error()))
+		return
+	}
+	s.mu.Lock()
+	l, err := s.themTep(mid, name, text, "", tmp, ten, co, anh, true)
+	if err != nil {
+		s.mu.Unlock()
+		jerr(w, 500, "Không lưu được file: "+err.Error())
+		return
+	}
+	if nDon, thu := s.gonTepCu(); nDon > 0 {
+		log.Printf(T("Thư mục file chat đầy, đã dọn %d file cũ nhất, thu lại %s"), nDon, coTep(thu))
+	}
+	s.save()
+	s.mu.Unlock()
+	s.audit(AuditEntry{User: "system", Name: T("Hệ thống"), Role: "sys", IP: clientIP(r), Kind: T("Tin nhắn"),
+		Msg: T("Máy %s gửi file %s (%s)", name, ten, coTep(co)), Target: name})
+	jok(w, map[string]interface{}{"id": l.ID, "ten": ten, "co": co, "anh": anh})
 }

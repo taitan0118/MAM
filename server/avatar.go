@@ -19,7 +19,10 @@ import (
 
 // Ảnh đại diện: mỗi tài khoản (kind "u") hoặc máy (kind "m") một file JPEG 128x128 trong <dir>/avatars.
 // Ảnh luôn được giải mã rồi mã hóa lại ở server, nên file lạ giả dạng ảnh và dữ liệu ẩn (EXIF) đều bị loại.
-const avSize = 128
+// 512 chứ không phải 128: Console cho bấm vào ảnh để xem lớn, mà server chỉ giữ 128 thì phóng ra
+// nhòe nhoẹt — đúng cái đại ca kêu "to lên và rõ nét". 512 JPEG vẫn chỉ vài chục KB.
+// Ảnh cũ đã lưu 128 thì vẫn 128 cho tới khi ai đó tải lại ảnh mới.
+const avSize = 512
 
 var (
 	avatarDir string // đặt khi server khởi động

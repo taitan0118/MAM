@@ -660,3 +660,28 @@ img.av{display:block}
 
 /* Số thiết bị đang lỗi dán lên tab nhóm: nhỏ hơn badge ở thanh điều hướng cho khỏi chiếm chỗ */
 .tab .count.badge-red{min-width:18px;height:18px;font-size:11px;padding:0 5px;vertical-align:1px}
+
+/* Thu nhỏ / mở rộng khung chat: giấu danh sách cuộc trò chuyện cho khung chat chiếm hết trang */
+.chat-wrap.rong{grid-template-columns:1fr}
+.chat-wrap.rong .chat-side{display:none}
+/* Khung chat cao theo màn hình chứ không để trống một mảng dưới */
+.chat-log{max-height:min(68vh,760px)}
+/* Tin đã thu hồi: viền nét đứt, chữ mờ, không tô màu như tin thật */
+.bub.thu{background:transparent;color:var(--muted);border:1px dashed var(--border);font-style:italic;font-size:13px}
+.bub.thu.out{color:var(--muted)}
+
+/* File gửi kèm trong chat */
+.tep-anh{display:block;max-width:260px;max-height:260px;border-radius:12px;cursor:zoom-in;object-fit:cover}
+.bub.chitep{padding:4px;background:transparent;border:0;box-shadow:none}
+.bub.chitep .tep-anh{max-width:280px;max-height:300px}
+.tep-the{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;min-width:180px;max-width:280px}
+.tep-the:hover{background:var(--surface-3)}
+.tep-the b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tep-icon{font-size:17px;flex:none}
+.tep-co{font-size:11.5px;color:var(--muted)}
+.tep-don{font-size:12.5px;color:var(--muted);font-style:italic}
+.bub.out .tep-the{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.25)}
+.bub.out .tep-the:hover{background:rgba(255,255,255,.22)}
+.bub.out .tep-co{color:rgba(255,255,255,.75)}
+/* kéo file thả vào khung chat */
+.chat-main.tha{outline:2px dashed var(--accent);outline-offset:-6px}

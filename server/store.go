@@ -302,6 +302,7 @@ func NewServer(dir string) (*Server, error) {
 	s := &Server{dir: dir, boot: dir, live: map[string]*Live{}, sess: map[string]*Session{}, fails: map[string]*failRec{}, tok: map[string]*Machine{}, blobs: map[string]*Blob{}, screens: map[string]*ScreenSession{}}
 	s.st.Settings = defaultSettings()
 	avatarDir = filepath.Join(dir, "avatars")
+	chatDir = filepath.Join(dir, "chat-files")
 	db, err := openDB(dir)
 	if err != nil {
 		return nil, err

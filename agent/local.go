@@ -35,7 +35,11 @@ type inMsg struct {
 	FromID string `json:"fromId,omitempty"` // id tài khoản quản trị gửi (để lấy ảnh đại diện)
 	// SID: id dòng chat bên server. Có nó mới thả cảm xúc / thu hồi / sửa đúng tin được. Thông báo
 	// máy tự sinh (cảnh báo, yêu cầu hỗ trợ) không có SID nên không thao tác được — đúng vậy.
-	SID    string `json:"sid,omitempty"`
+	SID string `json:"sid,omitempty"`
+	// File gửi kèm: chính file nằm trên server, đây chỉ giữ tên và cỡ để vẽ ra cửa sổ
+	Tep    string `json:"tep,omitempty"`
+	TepCo  int64  `json:"tepCo,omitempty"`
+	TepAnh bool   `json:"tepAnh,omitempty"`
 	Cam    string `json:"cam,omitempty"`    // cảm xúc quản trị viên thả
 	CamMay string `json:"camMay,omitempty"` // cảm xúc người ngồi máy thả
 	Thu    bool   `json:"thu,omitempty"`    // đã thu hồi
@@ -264,6 +268,55 @@ func startLocal() {
 		inbox.Unlock()
 		w.Write([]byte("{}"))
 	})
+	// File trong chat: cửa sổ MAM không có phiên đăng nhập Console nên phải đi vòng qua agent.
+	// GET ?sid=<id dòng chat> tải file về xem; POST ?ten=&text= gửi file của người ngồi máy lên.
+	mux.HandleFunc("/api/chat-tep", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			resp, err := tepStream("GET", "/api/agent/chat-tep?tin="+url.QueryEscape(r.URL.Query().Get("sid")), nil, 0)
+			if err != nil {
+				http.Error(w, "server", 502)
+				return
+			}
+			defer resp.Body.Close()
+			for _, h := range []string{"Content-Type", "Content-Disposition", "Content-Length"} {
+				if v := resp.Header.Get(h); v != "" {
+					w.Header().Set(h, v)
+				}
+			}
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.WriteHeader(resp.StatusCode)
+			io.Copy(w, resp.Body)
+			return
+		}
+		if r.Method != "POST" {
+			http.Error(w, "bad", 400)
+			return
+		}
+		q := "?ten=" + url.QueryEscape(r.URL.Query().Get("ten")) + "&text=" + url.QueryEscape(r.URL.Query().Get("text"))
+		resp, err := tepStream("POST", "/api/agent/chat-tep"+q, r.Body, r.ContentLength)
+		if err != nil {
+			http.Error(w, "server", 502)
+			return
+		}
+		defer resp.Body.Close()
+		var ra struct {
+			ID, Ten string
+			Co      int64
+			Anh     bool
+		}
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if resp.StatusCode != 200 || json.Unmarshal(b, &ra) != nil || ra.ID == "" {
+			w.WriteHeader(resp.StatusCode)
+			w.Write(b)
+			return
+		}
+		addMsg("", r.URL.Query().Get("text"), true)
+		inbox.Lock()
+		m := &inbox.msgs[len(inbox.msgs)-1]
+		m.SID, m.Tep, m.TepCo, m.TepAnh = ra.ID, ra.Ten, ra.Co, ra.Anh
+		inbox.Unlock()
+		w.Write([]byte("{}"))
+	})
 	mux.HandleFunc("/api/rename", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Name, Code string }
 		if r.Method != "POST" || json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&in) != nil {
@@ -355,4 +408,31 @@ func startLocal() {
 		}
 		mux.ServeHTTP(w, r)
 	}))
+}
+
+// tepClient: riêng cho chuyển file. httpc đặt Timeout 20 giây cho cả yêu cầu — file vài trăm MB
+// không bao giờ xong trong 20 giây, dùng chung là lần nào cũng đứt giữa chừng.
+var tepClient = &http.Client{Timeout: 45 * time.Minute}
+
+// tepStream gọi server với token máy, thân là một LUỒNG: không ôm cả file vào RAM, máy người dùng
+// có khi chỉ 4 GB. Người gọi phải đóng resp.Body.
+func tepStream(method, path string, body io.Reader, clen int64) (*http.Response, error) {
+	req, err := http.NewRequest(method, strings.TrimRight(cfg.Server, "/")+path, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+	if clen > 0 {
+		req.ContentLength = clen
+	}
+	return tepClient.Do(req)
+}
+
+// addTep: tin nhắn kèm file do admin gửi xuống.
+func addTep(fromID, from, text, sid, ten string, co int64, anh bool) {
+	addNotice("", from, text, false)
+	inbox.Lock()
+	m := &inbox.msgs[len(inbox.msgs)-1]
+	m.FromID, m.SID, m.Tep, m.TepCo, m.TepAnh = fromID, sid, ten, co, anh
+	inbox.Unlock()
 }
