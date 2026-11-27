@@ -280,9 +280,19 @@ VIEWS.overview = async v => {
   const noChat = me.role === 'view';
   const [o, ml, rq, ch, dv] = await Promise.all([api('GET', '/api/overview'), api('GET', '/api/machines'), api('GET', '/api/requests?status='), noChat ? { convs: [], unread: 0 } : api('GET', '/api/chat'), api('GET', '/api/devices')]);
   const lim = { t: settings ? settings.temp : 85, d: settings ? settings.disk : 10 };
-  const level = m => { const hot = m.online && m.temp != null && m.temp >= lim.t, low = m.diskFree != null && m.diskFree <= lim.d;
-    return !m.online ? 'off' : (hot && m.temp >= lim.t + 5) || low ? 'crit' : hot || (m.cpu != null && m.cpu >= 90) ? 'warn' : 'ok'; };
-  const items = ml.map(m => ({ m, lvl: level(m) })).sort((a, b) => ({ crit: 0, warn: 1, ok: 2, off: 3 }[a.lvl] - { crit: 0, warn: 1, ok: 2, off: 3 }[b.lvl]));
+  // Vì sao máy này đỏ thì PHẢI NÓI RA. Thẻ chỉ vẽ CPU/RAM/nhiệt, nên máy đỏ vì ổ đĩa sắp đầy
+  // trông như chẳng có lý do gì — đại ca nhìn vào chỉ thấy "Nghiêm trọng" rồi tự đoán.
+  const level = m => {
+    if (!m.online) return { lvl: 'off', vi: '' };
+    const hot = m.temp != null && m.temp >= lim.t, rat = hot && m.temp >= lim.t + 5;
+    const low = m.diskFree != null && m.diskFree <= lim.d, cpu = m.cpu != null && m.cpu >= 90;
+    const vi = [];
+    if (low) vi.push(t('ổ đĩa chỉ còn trống {0}%', num(m.diskFree)));
+    if (hot) vi.push(t('nhiệt {0}°C, ngưỡng {1}°C', num(m.temp), lim.t));
+    if (cpu) vi.push(t('CPU {0}%', num(m.cpu)));
+    return { lvl: rat || low ? 'crit' : hot || cpu ? 'warn' : 'ok', vi: vi.join(' · ') };
+  };
+  const items = ml.map(m => ({ m, ...level(m) })).sort((a, b) => ({ crit: 0, warn: 1, ok: 2, off: 3 }[a.lvl] - { crit: 0, warn: 1, ok: 2, off: 3 }[b.lvl]));
   const n = k => items.filter(x => x.lvl === k).length;
   const ovk = [['Tổng máy', 'var(--accent)', o.total, 'đã cài agent'], ['Đang online', 'var(--good)', o.online, o.total ? t('{0}% số máy', Math.round(o.online / o.total * 100)) : '—'],
     ['Cảnh báo mở', 'var(--warn)', o.openAlerts, 'cần xử lý'], ['Máy quá nhiệt', 'var(--crit)', o.hot, t('vượt ngưỡng {0}°C', lim.t)]]
@@ -292,9 +302,10 @@ VIEWS.overview = async v => {
   const mb = (m, l, val, c) => el('div', {}, el('span', {}, l, el('b', {}, m.online && val != null ? num(val) + (l === 'Nhiệt' ? '°C' : '%') : '--')), el('div', { class: 'bar', style: 'max-width:none;height:5px' }, el('i', { style: 'width:' + Math.min(100, m.online && val != null ? val : 0) + '%;background:' + c })));
   const L = { ok: 'Ổn', warn: 'Cần chú ý', crit: 'Nghiêm trọng', off: 'Offline' }, DOT = { ok: 'var(--good)', warn: 'var(--warn)', crit: 'var(--crit)', off: 'var(--faint)' };
   const shown = items.filter(x => OVF.f === 'all' || x.lvl === OVF.f);
-  const tiles = shown.map(({ m, lvl }) => el('div', { class: 'tile ' + lvl, onclick: () => go('detail', m.id) },
+  const tiles = shown.map(({ m, lvl, vi }) => el('div', { class: 'tile ' + lvl, onclick: () => go('detail', m.id) },
     el('div', { class: 'th' }, el('span', { class: 'dot', style: 'background:' + DOT[lvl] }), el('div', { style: 'min-width:0;flex:1' }, el('b', {}, m.name), el('small', {}, m.group || 'Chưa phân nhóm')), pill(lvl === 'crit' ? 'crit' : lvl === 'ok' ? 'ok' : lvl === 'off' ? 'off' : 'warn', L[lvl])),
-    el('div', { class: 'ms' }, mb(m, 'CPU', m.cpu, 'var(--accent)'), mb(m, 'RAM', m.ram, '#6a5ae0'), mb(m, 'Nhiệt', m.temp, col(m.temp, 70, lim.t)))));
+    el('div', { class: 'ms' }, mb(m, 'CPU', m.cpu, 'var(--accent)'), mb(m, 'RAM', m.ram, '#6a5ae0'), mb(m, 'Nhiệt', m.temp, col(m.temp, 70, lim.t))),
+    vi ? el('div', { class: 'tile-vi' }, vi) : null));
   const chip = (k, l, c, cnt) => el('button', { class: 'ovchip' + (OVF.f === k ? ' on' : ''), onclick: () => { OVF.f = k; render(); } }, c ? el('i', { style: 'background:' + c }) : null, l, el('b', {}, String(cnt)));
   const health = el('div', { class: 'card' }, el('div', { class: 'card-h', style: 'flex-wrap:wrap' }, el('h3', {}, 'Sức khỏe từng máy'), el('div', { style: 'flex:1' }),
     el('div', { class: 'ovchips' }, chip('all', 'Tất cả', null, items.length), chip('crit', 'Nghiêm trọng', 'var(--crit)', n('crit')), chip('warn', 'Cần chú ý', 'var(--warn)', n('warn')), chip('off', 'Offline', 'var(--faint)', n('off')))),
@@ -905,11 +916,21 @@ const CQ = { q: '' };
 // Thả cảm xúc / thu hồi / sửa tin nhắn — giống Messenger. Chỉ thu hồi và sửa được tin của chính
 // Console gửi; tin của người ngồi máy là lời của họ, admin không sửa miệng người khác.
 const CAMS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
+// Icon trả lời / sửa / thu hồi vẽ bằng SVG: emoji ↩️ ✏️ 🗑️ của Windows mỗi cái một kiểu, có cái
+// còn nằm trong ô xanh. Dùng chung bộ với cửa sổ MAM (agent/ui.html) cho hai bên giống nhau.
+const SVG1 = d => '<svg viewBox="0 0 20 20">' + d + '</svg>';
+const IC = {
+  tra: SVG1('<path d="M8.5 14 3.5 9l5-5"/><path d="M3.5 9H11a5.5 5.5 0 0 1 5.5 5.5V16"/>'),
+  sua: SVG1('<path d="M4 16v-3.2l8.6-8.6 3.2 3.2L7.2 16H4z"/><path d="M11.4 5.4l3.2 3.2"/>'),
+  thu: SVG1('<path d="M3.8 6h12.4"/><path d="M8 6V4h4v2"/><path d="M5.6 6l.9 10h7l.9-10"/>'),
+};
 let chatTra = null; // đang soạn lời trả lời cho tin nào: {id, by, text}
 let chatTep = []; // file đang chờ gửi: xem trước trong khay, bấm × để bỏ, bấm Gửi mới gửi thật
 let chatRong = false; // true: giấu danh sách cuộc trò chuyện, khung chat chiếm hết trang
 async function chatTin(mid, body) {
-  try { await api('POST', '/api/chat/' + encodeURIComponent(mid) + '/tin', body); render(); } catch (e) { fail(e); }
+  // render(true) = vẽ lại IM LẶNG: giữ nguyên chỗ đang đọc. Gọi render() thường thì khung chat
+  // nhảy xuống đáy, thả một cảm xúc mà như tải lại cả trang.
+  try { await api('POST', '/api/chat/' + encodeURIComponent(mid) + '/tin', body); render(true); } catch (e) { fail(e); }
 }
 function suaTin(mid, l) {
   // textarea ngoài .field thì không có width, trình duyệt cho đúng 20 cột — phải tự đặt 100%
@@ -978,12 +999,16 @@ function chatRows(d) {
     const dem = {};
     [l.cam, l.camMay].forEach(c => { if (c) dem[c] = (dem[c] || 0) + 1; });
     const cams = Object.keys(dem);
-    const nut = (nhan, title, on) => el('button', { title: t(title), onclick: on }, nhan);
+    // Viên hành động nổi như cửa sổ MAM: cảm xúc đang thả được tô sáng, bấm lại là bỏ, bấm cái
+    // khác là ĐỔI — một người chỉ có một cảm xúc trên một tin, không bao giờ cộng thêm cái nữa.
+    const nut = (nhan, title, on, cls) => el('button', { class: cls || null, title: t(title), onclick: on }, nhan);
+    const nutIC = (d2, title, on) => el('button', { title: t(title), onclick: on, html: d2 });
     const act = l.id && !l.thu ? el('div', { class: 'bact' },
-      ...CAMS.map(c => nut(c, 'Thả cảm xúc', () => chatTin(d.id, { id: l.id, lam: 'cam', cam: l.cam === c ? '' : c }))),
-      nut('↩️', 'Trả lời tin nhắn', () => { chatTra = { id: l.id, by: who, text: l.text }; render(); }),
-      !inc ? nut('✏️', 'Sửa tin nhắn', () => suaTin(d.id, l)) : null,
-      !inc ? nut('🗑️', 'Thu hồi tin nhắn', () => confirmBox(t('Thu hồi tin nhắn'), t('Thu hồi tin này? Người ngồi máy sẽ không đọc được nội dung nữa.'), t('Thu hồi'), true, () => chatTin(d.id, { id: l.id, lam: 'thu' }))) : null) : null;
+      CAMS.map(c => nut(c, l.cam === c ? 'Bỏ cảm xúc' : 'Thả cảm xúc', () => chatTin(d.id, { id: l.id, lam: 'cam', cam: l.cam === c ? '' : c }), l.cam === c ? 'on' : null)),
+      el('i', { class: 'sep' }),
+      nutIC(IC.tra, 'Trả lời tin nhắn', () => { chatTra = { id: l.id, by: who, text: l.text }; render(true); }),
+      !inc ? nutIC(IC.sua, 'Sửa tin nhắn', () => suaTin(d.id, l)) : null,
+      !inc ? nutIC(IC.thu, 'Thu hồi tin nhắn', () => confirmBox(t('Thu hồi tin nhắn'), t('Thu hồi tin này? Người ngồi máy sẽ không đọc được nội dung nữa.'), t('Thu hồi'), true, () => chatTin(d.id, { id: l.id, lam: 'thu' }))) : null) : null;
     out.push(el('div', { class: 'brow ' + (inc ? 'in' : 'out') + (first ? ' gfirst' : '') }, av,
       el('div', { class: 'bcol' }, tra, bub,
         cams.length ? el('div', { class: 'cams' }, cams.map(c => el('span', { class: 'cam' }, c + (dem[c] > 1 ? ' ' + dem[c] : '')))) : null,

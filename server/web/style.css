@@ -707,3 +707,29 @@ img.av{display:block}
 .bub.in{border-top-left-radius:5px;border-bottom-left-radius:5px}
 .bub.in.gfirst{border-top-left-radius:18px}
 .bub.in.glast{border-bottom-left-radius:18px}
+
+/* ---- Khung chat vẽ giống hệt cửa sổ MAM trên máy (kiểu Messenger) ---- */
+:root{--cin:#E9EBEF;--cinfg:#0F172A;--cout:#0084FF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--cin:#303A4A;--cinfg:#E7ECF3}}
+:root[data-theme="dark"]{--cin:#303A4A;--cinfg:#E7ECF3}
+.chat-log{background:var(--surface)}
+.bub{font-size:14.5px;line-height:1.4;padding:8px 12px;border:1px solid transparent;box-shadow:none}
+.bub.in{background:var(--cin);color:var(--cinfg)}
+.bub.out{background:var(--cout);color:#fff}
+/* ảnh gửi kèm không mang khung bong bóng: luật này phải đứng SAU .bub.out, cùng độ ưu tiên thì cái sau thắng */
+.bub.chitep{background:transparent;border:0;padding:4px;box-shadow:none}
+.bub.thu{background:transparent;color:var(--muted)}
+/* viên hành động: nền + bo tròn + bóng, không còn là mấy cái emoji trôi lơ lửng */
+.bact{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px 4px;box-shadow:var(--shadow);margin-bottom:3px;gap:1px}
+.bact button{width:26px;height:26px;padding:0;border-radius:50%;display:grid;place-items:center;font-size:15px;transition:transform .1s,background .1s}
+.bact button:hover{background:var(--surface-3);transform:scale(1.15)}
+.bact button.on{background:var(--accent-soft)}
+.bact i.sep{width:1px;height:16px;background:var(--border);margin:0 3px;flex:none}
+.bact svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+/* chip cảm xúc đè lên đáy bong bóng */
+.cams{margin:-7px 4px 2px;position:relative;z-index:1}
+.cams .cam{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:0 7px;font-size:12px;line-height:19px;box-shadow:0 2px 6px rgba(15,23,42,.14)}
+/* lý do máy bị chấm đỏ/vàng, ngay trong thẻ sức khỏe */
+.tile-vi{margin-top:9px;font-size:12px;line-height:1.35;color:var(--muted)}
+.tile.crit .tile-vi{color:var(--crit)}
+.tile.warn .tile-vi{color:var(--warn)}

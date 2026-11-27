@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.118"
+const Version = "1.1.119"
 
 //go:embed web
 var webFS embed.FS
@@ -117,7 +117,23 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/local/reset-admin", s.hLocalReset)
 	sub, _ := fs.Sub(webFS, "web")
 	static := http.FileServer(http.FS(sub))
-	mux.Handle("/", static)
+	// Trang chủ gắn số phiên bản vào app.js/style.css/i18n.js. Không có nó thì nâng server xong,
+	// trình duyệt đang mở vẫn chạy app.js cũ — đại ca tưởng bản mới không có gì thay đổi.
+	index, _ := fs.ReadFile(sub, "index.html")
+	index = []byte(strings.NewReplacer(
+		`"/app.js"`, `"/app.js?v=`+Version+`"`,
+		`"/style.css"`, `"/style.css?v=`+Version+`"`,
+		`"/i18n.js"`, `"/i18n.js?v=`+Version+`"`,
+		`"/missing-intro.js"`, `"/missing-intro.js?v=`+Version+`"`,
+	).Replace(string(index)))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && r.URL.Path != "/index.html" {
+			static.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(index)
+	})
 	return secure(mux)
 }
 

@@ -1417,6 +1417,10 @@ var EN = {
 "Hiện lại danh sách cuộc trò chuyện": "Show the conversation list again",
 /* tha cam xuc / thu hoi / sua tin nhan */
 "Không gửi được file": "Could not send the file",
+"ổ đĩa chỉ còn trống {0}%": "only {0}% disk space left",
+"nhiệt {0}°C, ngưỡng {1}°C": "{0}°C, threshold {1}°C",
+"Bỏ cảm xúc": "Remove reaction",
+"Bỏ file này": "Remove this file",
 "đã dọn vì hết chỗ": "removed, out of space",
 "File quá lớn, tối đa {0}": "File too large, {0} at most",
 "Gửi file hoặc ảnh (tối đa {0})": "Send a file or picture ({0} at most)",
@@ -2850,6 +2854,10 @@ var ZH = {
 "Hiện lại danh sách cuộc trò chuyện": "重新显示会话列表",
 /* tha cam xuc / thu hoi / sua tin nhan */
 "Không gửi được file": "无法发送文件",
+"ổ đĩa chỉ còn trống {0}%": "磁盘仅剩 {0}%",
+"nhiệt {0}°C, ngưỡng {1}°C": "{0}°C，阈值 {1}°C",
+"Bỏ cảm xúc": "移除表情",
+"Bỏ file này": "移除此文件",
 "đã dọn vì hết chỗ": "因空间不足已清理",
 "File quá lớn, tối đa {0}": "文件过大，最多 {0}",
 "Gửi file hoặc ảnh (tối đa {0})": "发送文件或图片（最多 {0}）",
