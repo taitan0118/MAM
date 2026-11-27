@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,11 +20,15 @@ import (
 
 func installDir() string { return filepath.Join(os.Getenv("ProgramFiles"), "MAM Agent") }
 
+// taskDefVer: phiên bản của taskXML. Sửa taskXML thì TĂNG số này, máy cài từ bản cũ mới đăng ký lại (fixTaskTriggers).
+const taskDefVer = 2
+
 const taskXML = `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>MAM Agent - giám sát máy trong mạng LAN</Description></RegistrationInfo>
   <Triggers>
     <BootTrigger><Enabled>true</Enabled></BootTrigger>
+    <LogonTrigger><Enabled>true</Enabled></LogonTrigger>
     <TimeTrigger><Repetition><Interval>PT1M</Interval><StopAtDurationEnd>false</StopAtDurationEnd></Repetition><StartBoundary>2020-01-01T00:00:00</StartBoundary><Enabled>true</Enabled></TimeTrigger>
   </Triggers>
   <Principals><Principal id="Author"><UserId>S-1-5-18</UserId><RunLevel>HighestAvailable</RunLevel></Principal></Principals>
@@ -121,7 +126,7 @@ func doInstall(args []string) {
 	if nm == "" {
 		nm = old.Name
 	}
-	newCfg := Config{Server: *server, Key: *key, Name: nm, Lang: uiLang}
+	newCfg := Config{Server: *server, Key: *key, Name: nm, Lang: uiLang, TaskVer: taskDefVer}
 	if old.Server == *server { // cài lại trên cùng server: chỉ giữ danh sách admin tin cậy.
 		// Không giữ token cũ: nếu máy đã bị thu hồi, token cũ bị từ chối mãi; đăng ký lại thì server
 		// tự nhận ra máy theo MAC (giữ nhóm và tên), còn máy đã thu hồi sẽ hiện lại như máy mới.
@@ -131,13 +136,11 @@ func doInstall(args []string) {
 	os.WriteFile(filepath.Join(dir, "config.json"), b, 0o600)
 	// chỉ SYSTEM và Administrators được sửa; người dùng thường không xóa hay sửa được
 	hidden("icacls", dir, "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F").Run()
-	u := utf16.Encode([]rune("\uFEFF" + fmt.Sprintf(taskXML, dst)))
-	buf := make([]byte, 0, len(u)*2)
-	for _, c := range u {
-		buf = append(buf, byte(c), byte(c>>8))
+	xml, err := writeTaskXML(dst)
+	if err != nil {
+		fmt.Println(T("Không ghi được tệp tác vụ:"), err)
+		die(1)
 	}
-	xml := filepath.Join(os.TempDir(), "mam-task.xml")
-	os.WriteFile(xml, buf, 0o600)
 	defer os.Remove(xml)
 	if out, err := hidden("schtasks", "/create", "/tn", "MAM Agent", "/xml", xml, "/f").CombinedOutput(); err != nil {
 		fmt.Println(T("Không tạo được tác vụ khởi động:"), err, string(out))
@@ -146,6 +149,50 @@ func doInstall(args []string) {
 	hidden("schtasks", "/run", "/tn", "MAM Agent").Run()
 	installClientUI(dir, dst)
 	fmt.Println(T("Đã cài MAM Agent vào"), dir, T("và đăng ký chạy cùng Windows. Máy sẽ hiện trên Console sau vài giây."))
+}
+
+// writeTaskXML ghi định nghĩa tác vụ ra tệp UTF-16 (schtasks chỉ đọc được UTF-16).
+func writeTaskXML(exe string) (string, error) {
+	u := utf16.Encode([]rune("\uFEFF" + fmt.Sprintf(taskXML, exe)))
+	buf := make([]byte, 0, len(u)*2)
+	for _, c := range u {
+		buf = append(buf, byte(c), byte(c>>8))
+	}
+	p := filepath.Join(os.TempDir(), "mam-task.xml")
+	return p, os.WriteFile(p, buf, 0o600)
+}
+
+// taskNeedsFix: máy này có cần đăng ký lại tác vụ khởi động không. Chỉ đăng ký lại cho bản đã
+// cài thật (nằm trong installDir): bản chạy tay hay bản thử không được kéo tác vụ sang chỗ khác.
+func taskNeedsFix(exe string, ver int) bool {
+	return ver < taskDefVer && strings.EqualFold(filepath.Dir(exe), installDir())
+}
+
+// fixTaskTriggers đăng ký lại tác vụ khởi động khi định nghĩa cũ đã lỗi thời.
+// Vì sao cần: tự cập nhật chỉ THAY FILE EXE, không bao giờ sửa định nghĩa tác vụ — máy cài từ
+// bản cũ vì thế mãi không có lượt chạy lúc đăng nhập, nên máy đã vào tới màn hình mà Windows
+// chưa kịp chạy tác vụ khởi động thì server phải đợi vài phút mới thấy máy.
+// Làm bằng script rời: schtasks /create có thể kết thúc luôn tiến trình đang chạy (chính mình),
+// script chạy tiếp và bật agent lên lại.
+func fixTaskTriggers() {
+	exe, err := os.Executable()
+	if err != nil || !taskNeedsFix(exe, cfg.TaskVer) {
+		return
+	}
+	xml, err := writeTaskXML(exe)
+	if err != nil {
+		return
+	}
+	// Đánh dấu TRƯỚC khi chạy script: script có thể kết thúc tiến trình này, mà lần chạy sau lại
+	// thấy tác vụ cũ thì sẽ đăng ký lại nữa — thành vòng tự giết mình mỗi vài giây.
+	cfg.TaskVer = taskDefVer
+	saveConfig()
+	cmd := fmt.Sprintf(`ping 127.0.0.1 -n 2 >nul & schtasks /create /tn "MAM Agent" /xml "%s" /f >nul & schtasks /run /tn "MAM Agent" >nul & del "%s"`, xml, xml)
+	if err := hidden("cmd", "/c", cmd).Start(); err != nil {
+		log.Printf(T("Không đăng ký lại được tác vụ khởi động: %v"), err)
+		return
+	}
+	log.Print(T("Đã đăng ký lại tác vụ khởi động (thêm lượt chạy lúc đăng nhập)"))
 }
 
 // copyOver chép file cài mới đè lên đích; thử lại vài lần vì Windows có thể còn khóa file một lúc

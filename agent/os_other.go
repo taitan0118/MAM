@@ -79,3 +79,7 @@ func writeHosts(sites []string) error {
 }
 
 func enableWOL() {}
+
+// fixTaskTriggers: chuyện riêng của Windows (tác vụ Task Scheduler). Trên Linux/macOS agent chạy
+// bằng dịch vụ systemd/launchd nên không có gì phải sửa.
+func fixTaskTriggers() {}

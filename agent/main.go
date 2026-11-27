@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.115"
+const Version = "1.1.116"
 
 //go:embed lib.ps1
 var libPS string
@@ -36,6 +36,7 @@ type Config struct {
 	Name          string   `json:"name"`
 	Lang          string   `json:"lang"`
 	TrustedAdmins []string `json:"trustedAdmins,omitempty"` // tài khoản admin được người ngồi máy chọn "luôn đồng ý", khỏi hỏi lại
+	TaskVer       int      `json:"taskVer,omitempty"`       // phiên bản định nghĩa tác vụ khởi động đã đăng ký, xem fixTaskTriggers
 }
 
 var (
@@ -272,6 +273,7 @@ func main() {
 	}
 	setLang(cfg.Lang)
 	log.Printf(T("MAM Agent %s khởi động, server %s"), Version, cfg.Server)
+	fixTaskTriggers()
 	time.Sleep(time.Duration(rand.Intn(1500)) * time.Millisecond)
 	runLoop()
 }
