@@ -21,7 +21,7 @@ import (
 func installDir() string { return filepath.Join(os.Getenv("ProgramFiles"), "MAM Agent") }
 
 // taskDefVer: phiên bản của taskXML. Sửa taskXML thì TĂNG số này, máy cài từ bản cũ mới đăng ký lại (fixTaskTriggers).
-const taskDefVer = 2
+const taskDefVer = 3
 
 const taskXML = `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -183,12 +183,22 @@ func fixTaskTriggers() {
 	if err != nil {
 		return
 	}
+	// Phải ghi ra TỆP .cmd, đừng truyền chuỗi lệnh cho `cmd /c`: Go bọc cả chuỗi trong ngoặc kép và
+	// đổi dấu " bên trong thành \", cmd.exe không hiểu dấu đó nên `/tn "MAM Agent"` vỡ làm hai —
+	// đúng cái làm bản 1.1.116 đăng ký lại không được mà vẫn ghi vào log là xong.
+	// Giữ output của schtasks lại trong task-fix.log để biết vì sao nếu máy nào vẫn không nhận.
+	script := filepath.Join(exeDir(), "task-fix.cmd")
+	logf := filepath.Join(exeDir(), "task-fix.log")
+	body := fmt.Sprintf("@echo off\r\nping 127.0.0.1 -n 2 >nul\r\nschtasks /create /tn \"MAM Agent\" /xml \"%s\" /f >\"%s\" 2>&1\r\nschtasks /run /tn \"MAM Agent\" >>\"%s\" 2>&1\r\ndel \"%s\"\r\ndel \"%%~f0\"\r\n", xml, logf, logf, xml)
+	if err := os.WriteFile(script, []byte(body), 0o600); err != nil {
+		log.Printf(T("Không ghi được script đăng ký lại tác vụ: %v"), err)
+		return
+	}
 	// Đánh dấu TRƯỚC khi chạy script: script có thể kết thúc tiến trình này, mà lần chạy sau lại
 	// thấy tác vụ cũ thì sẽ đăng ký lại nữa — thành vòng tự giết mình mỗi vài giây.
 	cfg.TaskVer = taskDefVer
 	saveConfig()
-	cmd := fmt.Sprintf(`ping 127.0.0.1 -n 2 >nul & schtasks /create /tn "MAM Agent" /xml "%s" /f >nul & schtasks /run /tn "MAM Agent" >nul & del "%s"`, xml, xml)
-	if err := hidden("cmd", "/c", cmd).Start(); err != nil {
+	if err := hidden("cmd", "/c", script).Start(); err != nil {
 		log.Printf(T("Không đăng ký lại được tác vụ khởi động: %v"), err)
 		return
 	}
