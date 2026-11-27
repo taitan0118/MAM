@@ -1319,10 +1319,13 @@ const DEVST = [['all', 'Mọi tình trạng'], ['up', 'Đang hoạt động'], [
 const DEVSX = [['loi', 'Đang hỏng lên đầu'], ['name', 'Tên A→Z'], ['ip', 'Địa chỉ IP'], ['group', 'Nhóm'], ['kind', 'Loại'], ['checked', 'Kiểm gần nhất']];
 // "tung" = đang chạy nhưng còn cảnh báo chưa ai bấm Đã xử lý, tức là đã từng rớt
 const devTung = d => d.done && d.up && d.canhBao > 0;
+// "treo" = đo được luồng hình và không có hình. Camera không cho vào hoặc gọi không tới là CHƯA ĐO ĐƯỢC,
+// đếm nó vào đám "không ra hình" là vũ oan — đại ca chỉ cần biết hoạt động hay hoạt động mà bị treo.
+const devTreo = d => d.vid && !d.video && !d.saiTK && !d.khongDo;
 const devHop = (d, st) => st === 'all' || (st === 'up' ? d.done && d.up : st === 'down' ? d.done && !d.up
-  : st === 'tung' ? devTung(d) : st === 'new' ? !d.done : d.done && d.up && d.vid && !d.video);
+  : st === 'tung' ? devTung(d) : st === 'new' ? !d.done : d.done && d.up && devTreo(d));
 // điểm xấu: càng hỏng càng nhỏ, để xếp lên đầu. Cái đã từng rớt nằm trên cái vẫn chạy ngon.
-const devXau = d => !d.done ? 4 : !d.up ? 0 : (d.vid && !d.video) ? 1 : devTung(d) ? 2 : 3;
+const devXau = d => !d.done ? 4 : !d.up ? 0 : devTreo(d) ? 1 : devTung(d) ? 2 : 3;
 const devSoIP = d => String(d.ip).split('.').reduce((a, b) => a * 256 + (+b || 0), 0);
 // Trạng thái một thiết bị: [màu, chữ, chi tiết]
 function devState(d) {
@@ -1333,8 +1336,9 @@ function devState(d) {
   const tung = !d.canhBao ? '' : (d.rot
     ? t('ngắt {0}, có lại {1}', gioNgan(d.rot), d.lai ? gioNgan(d.lai) : gioNgan(d.since))
     : t('đã từng mất kết nối')) + ' · ';
-  // camera từ chối tài khoản: nói thẳng ra, đừng để đại ca tưởng camera hỏng
-  if (d.saiTK) return ['warn', 'Camera không nhận tài khoản', tung + openPorts];
+  // Camera không cho vào: nó vẫn trả lời trên mạng nên là ĐANG HOẠT ĐỘNG. Đại ca không muốn
+  // thấy chuyện tài khoản ở đây; ô điền tài khoản vẫn nằm trong hộp chi tiết thiết bị.
+  if (d.saiTK) return ['ok', 'Hoạt động', tung + openPorts];
   // hỏi không tới camera thì CHƯA BIẾT nó có hình hay không — đừng nói như thể đã biết
   if (d.khongDo) return ['off', 'Chưa đo được luồng hình', tung + (d.vidLoi ? trErr(d.vidLoi) : openPorts)];
   // nói rõ ĐO ĐƯỢC GÌ chứ không chỉ kết luận: "không ra hình" mà không nói vì sao thì không ai tin
@@ -1356,7 +1360,7 @@ VIEWS.devices = async v => {
   const shown = list.filter(d => (DEVF.g === 'all' || (DEVF.g === '__none' ? !nhomCua(d).length : coNhom(d, DEVF.g)))
     && (DEVF.k === 'all' || d.kind === DEVF.k) && devHop(d, DEVF.st) && hit(DEVF.q, d.name, d.nameZh, d.ip, nhomCua(d).join(' ')))
     .sort((a, b) => (xep[DEVF.sx] || xep.loi)(a, b) * (DEVF.nguoc ? -1 : 1));
-  const noVid = list.filter(d => d.done && d.up && d.vid && !d.video).length;
+  const noVid = list.filter(d => d.done && d.up && devTreo(d)).length;
   v.append(el('div', { class: 'kpis' },
     kpi(t('Tổng thiết bị'), 'var(--accent)', String(list.length), t('{0} nhóm', grps.length)),
     kpi(t('Đang hoạt động'), 'var(--good)', String(list.filter(d => d.done && d.up).length), ''),

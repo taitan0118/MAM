@@ -38,9 +38,11 @@ const (
 	wmLDblClk    = 0x0203
 	wmRButtonUp  = 0x0205
 	nimAdd       = 0
+	nimDelete    = 2
 	nifMessage   = 1
 	nifIcon      = 2
 	nifTip       = 4
+	nifGuid      = 0x20
 	menuOpenID   = 1
 	trayMenuText = "Mở MAM"
 )
@@ -78,6 +80,11 @@ type notifyIcon struct {
 	BalloonIcon     uintptr
 }
 
+// GUID cố định của biểu tượng MAM. Nhờ nó, lần chạy sau XÓA ĐƯỢC biểu tượng mà lần chạy
+// trước để lại: Windows chỉ cho một tiến trình gỡ biểu tượng của tiến trình khác khi hai
+// bên dùng chung một GUID. Đổi dãy số này là mọi máy đang chạy lại mọc thêm một icon ma.
+var trayGUID = [16]byte{0x8d, 0x41, 0x6b, 0x2e, 0x77, 0xc3, 0x4a, 0x19, 0x9f, 0x52, 0xb0, 0x1d, 0x6e, 0xa4, 0x33, 0x07}
+
 var trayWnd, trayIcon, trayCreatedMsg uintptr
 
 func trayText() (tip, open string) {
@@ -90,12 +97,40 @@ func trayText() (tip, open string) {
 	return "MAM · Missing App Monitor", trayMenuText
 }
 
-func addTrayIcon() {
-	nd := notifyIcon{Wnd: trayWnd, ID: 1, Flags: nifMessage | nifIcon | nifTip, CallbackMessage: wmTray, Icon: trayIcon}
+func trayNd(flags uint32) notifyIcon {
+	nd := notifyIcon{Wnd: trayWnd, ID: 1, Flags: flags, CallbackMessage: wmTray, Icon: trayIcon, Guid: trayGUID}
 	nd.Size = uint32(unsafe.Sizeof(nd))
+	return nd
+}
+
+// addTrayIcon: XÓA TRƯỚC rồi mới thêm. Mỗi lần cập nhật agent, tiến trình ui cũ bị
+// "taskkill /f" nên không kịp gỡ biểu tượng của nó; Windows để cái biểu tượng chết đó nằm
+// lại trong khay tới khi có người rê chuột lên — đại ca thấy khay có mấy cái MAM y hệt
+// nhau dù chỉ có MỘT tiến trình đang chạy. Khóa một-bản-chạy ở motUI không cứu được
+// chuyện này: nó chặn tiến trình thừa, còn đây là xác của tiến trình đã chết.
+func addTrayIcon() {
+	del := trayNd(nifGuid)
+	pNotify.Call(nimDelete, uintptr(unsafe.Pointer(&del)))
+	nd := trayNd(nifMessage | nifIcon | nifTip | nifGuid)
 	tip, _ := trayText()
 	copy(nd.Tip[:127], syscall.StringToUTF16(tip))
+	if r, _, _ := pNotify.Call(nimAdd, uintptr(unsafe.Pointer(&nd))); r != 0 {
+		return
+	}
+	// Windows gắn GUID với ĐƯỜNG DẪN file exe: chạy từ chỗ khác (bản thử, bản chép tay) thì
+	// nó từ chối. Thà có biểu tượng mà không dọn được xác còn hơn không có biểu tượng nào.
+	nd.Flags, nd.Guid = nifMessage|nifIcon|nifTip, [16]byte{}
 	pNotify.Call(nimAdd, uintptr(unsafe.Pointer(&nd)))
+}
+
+// delTrayIcon: gỡ biểu tượng khi tiến trình ui tự thoát (đăng xuất, bị bảo dừng). Lúc bị
+// taskkill /f thì không chạy được — nên vẫn phải có nước xóa-trước ở addTrayIcon.
+func delTrayIcon() {
+	if trayWnd == 0 {
+		return
+	}
+	nd := trayNd(nifGuid)
+	pNotify.Call(nimDelete, uintptr(unsafe.Pointer(&nd)))
 }
 
 func trayProc(hwnd, msg, wp, lp uintptr) uintptr {
@@ -146,6 +181,7 @@ func runTray() {
 	if trayWnd == 0 {
 		return
 	}
+	defer delTrayIcon() // thoát tử tế thì dọn biểu tượng, khỏi để lại xác
 	tb, _ := syscall.UTF16PtrFromString("TaskbarCreated")
 	trayCreatedMsg, _, _ = pRegWinMsg.Call(uintptr(unsafe.Pointer(tb)))
 	addTrayIcon()
