@@ -733,3 +733,9 @@ img.av{display:block}
 .tile-vi{margin-top:9px;font-size:12px;line-height:1.35;color:var(--muted)}
 .tile.crit .tile-vi{color:var(--crit)}
 .tile.warn .tile-vi{color:var(--warn)}
+
+/* Đồng hồ "máy đã bật liên tục" trong tab Thời gian hoạt động */
+.up-dem{font-family:var(--ff-mono);font-size:26px;font-weight:700;color:var(--good);line-height:1.2;font-variant-numeric:tabular-nums}
+.up-dem.tat{color:var(--muted);font-size:20px}
+.up-dem-s{margin-top:4px;font-size:12.5px;color:var(--muted)}
+@media (max-width:560px){.up-dem{font-size:21px}}

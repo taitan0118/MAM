@@ -2226,10 +2226,45 @@ function upBars(items, n) {
   });
   return el('div', { class: 'up-chart', html: `<svg viewBox="0 0 ${W} ${H}">${o}</svg>` });
 }
+// upDHMS: 192845 giây -> "2 ngày 5 giờ 34 phút 5 giây". Bỏ phần đầu bằng 0 cho đỡ rườm rà,
+// nhưng giây thì luôn hiện — đại ca muốn thấy nó chạy.
+function upDHMS(gi) {
+  const d = Math.floor(gi / 86400), h = Math.floor(gi % 86400 / 3600), p = Math.floor(gi % 3600 / 60), g = gi % 60, o = [];
+  if (d) o.push(t('{0} ngày', d));
+  if (d || h) o.push(t('{0} giờ', h));
+  if (d || h || p) o.push(t('{0} phút', p));
+  o.push(t('{0} giây', g));
+  return o.join(' ');
+}
+// Thẻ đồng hồ: máy đã bật liên tục bao lâu kể từ lúc mở máy. Agent gửi kèm uptime (giây kể từ
+// lúc Windows khởi động) trong mỗi lượt báo, nên chỉ cần lấy mốc bật rồi tự chạy tiếp ở trình duyệt.
+// Không dùng setInterval: cứ 4 giây trang tự vẽ lại một lần, chồng nhịp là chạy loạn. Nhịp tự dừng
+// khi ô bị gỡ khỏi trang (isConnected).
+function upDongHo(m, nowMs) {
+  const lech = Date.now() - nowMs; // đồng hồ máy đại ca lệch với đồng hồ server bao nhiêu
+  const mocMs = m.online && m.uptime ? Date.parse(m.lastSeen) - m.uptime * 1000 : 0;
+  const dem = el('div', { class: 'up-dem' }, '—');
+  const phu = el('div', { class: 'up-dem-s' }, '');
+  const nhip = () => {
+    if (!dem.isConnected) return;
+    dem.textContent = upDHMS(Math.max(0, Math.floor((Date.now() - lech - mocMs) / 1000)));
+    setTimeout(nhip, 1000);
+  };
+  if (!mocMs) {
+    dem.textContent = m.online ? t('Chưa đo được') : t('Máy đang tắt');
+    dem.classList.add('tat');
+    phu.textContent = m.online ? t('Agent chưa gửi thời gian bật; cần agent 1.1.47 trở lên') : (m.lastSeen ? t('Lần cuối thấy máy: {0}', fmtDT(m.lastSeen)) : '');
+  } else {
+    nhip();
+    phu.textContent = t('Mở máy lúc {0}', fmtDT(new Date(mocMs)));
+  }
+  return card('Máy đã bật liên tục', 'tính từ lúc mở máy, chạy theo từng giây', el('div', {}, dem, phu));
+}
 // Tab "Thời gian hoạt động" trong chi tiết máy
 async function upDetail(id) {
   const r = await upFetch('&id=' + encodeURIComponent(id)), S = r.machines[0].s, st = upStats(S, r.nowMs), one = UP.per === 'day';
-  const wrap = el('div', { style: 'display:flex;flex-direction:column;gap:12px' }, upBar());
+  const may = await api('GET', '/api/machines/' + encodeURIComponent(id));
+  const wrap = el('div', { style: 'display:flex;flex-direction:column;gap:12px' }, upBar(), upDongHo(may, r.nowMs));
   const ss = one ? st.ds[0].ss : [], last = ss[ss.length - 1];
   const offs = ss.slice(1).reduce((a, s, i) => a + s[0] - ss[i][1], 0);
   wrap.append(el('div', { class: 'kpis up-kpis' }, one ? [
