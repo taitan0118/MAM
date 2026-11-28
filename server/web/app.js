@@ -2236,29 +2236,33 @@ function upDHMS(gi) {
   o.push(t('{0} giây', g));
   return o.join(' ');
 }
+// upChay: một con số giây tự chạy tiếp từ mốc server gửi về. Dùng cho "Tổng thời gian bật" hôm nay
+// và cho đồng hồ bên dưới. Nhịp tự chết khi ô bị gỡ khỏi trang, khỏi phải dọn timer.
+function upChay(giay0, nowMs) {
+  const lech = Date.now() - nowMs, o = el("b", { class: "up-chay" }, upDHMS(Math.floor(giay0)));
+  const nhip = () => {
+    if (!o.isConnected) return;
+    o.textContent = upDHMS(Math.max(0, Math.floor(giay0 + (Date.now() - lech - nowMs) / 1000)));
+    setTimeout(nhip, 1000);
+  };
+  nhip();
+  return o;
+}
 // Thẻ đồng hồ: máy đã bật liên tục bao lâu kể từ lúc mở máy. Agent gửi kèm uptime (giây kể từ
 // lúc Windows khởi động) trong mỗi lượt báo, nên chỉ cần lấy mốc bật rồi tự chạy tiếp ở trình duyệt.
 // Không dùng setInterval: cứ 4 giây trang tự vẽ lại một lần, chồng nhịp là chạy loạn. Nhịp tự dừng
 // khi ô bị gỡ khỏi trang (isConnected).
 function upDongHo(m, nowMs) {
-  const lech = Date.now() - nowMs; // đồng hồ máy đại ca lệch với đồng hồ server bao nhiêu
+  // uptime agent gửi là tính tới lúc máy báo về lần cuối, nên cộng thêm quãng từ đó tới nowMs.
   const mocMs = m.online && m.uptime ? Date.parse(m.lastSeen) - m.uptime * 1000 : 0;
-  const dem = el('div', { class: 'up-dem' }, '—');
-  const phu = el('div', { class: 'up-dem-s' }, '');
-  const nhip = () => {
-    if (!dem.isConnected) return;
-    dem.textContent = upDHMS(Math.max(0, Math.floor((Date.now() - lech - mocMs) / 1000)));
-    setTimeout(nhip, 1000);
-  };
   if (!mocMs) {
-    dem.textContent = m.online ? t('Chưa đo được') : t('Máy đang tắt');
-    dem.classList.add('tat');
-    phu.textContent = m.online ? t('Agent chưa gửi thời gian bật; cần agent 1.1.47 trở lên') : (m.lastSeen ? t('Lần cuối thấy máy: {0}', fmtDT(m.lastSeen)) : '');
-  } else {
-    nhip();
-    phu.textContent = t('Mở máy lúc {0}', fmtDT(new Date(mocMs)));
+    const tat = el('div', { class: 'up-dem tat' }, m.online ? t('Chưa đo được') : t('Máy đang tắt'));
+    const vi = m.online ? t('Agent chưa gửi thời gian bật; cần agent 1.1.47 trở lên') : (m.lastSeen ? t('Lần cuối thấy máy: {0}', fmtDT(m.lastSeen)) : '');
+    return card('Máy đã bật liên tục', 'tính từ lúc mở máy, chạy theo từng giây', el('div', {}, tat, el('div', { class: 'up-dem-s' }, vi)));
   }
-  return card('Máy đã bật liên tục', 'tính từ lúc mở máy, chạy theo từng giây', el('div', {}, dem, phu));
+  return card('Máy đã bật liên tục', 'tính từ lúc mở máy, chạy theo từng giây', el('div', {},
+    el('div', { class: 'up-dem' }, upChay((nowMs - mocMs) / 1000, nowMs)),
+    el('div', { class: 'up-dem-s' }, t('Mở máy lúc {0}', fmtDT(new Date(mocMs))))));
 }
 // Tab "Thời gian hoạt động" trong chi tiết máy
 async function upDetail(id) {
@@ -2268,7 +2272,8 @@ async function upDetail(id) {
   const ss = one ? st.ds[0].ss : [], last = ss[ss.length - 1];
   const offs = ss.slice(1).reduce((a, s, i) => a + s[0] - ss[i][1], 0);
   wrap.append(el('div', { class: 'kpis up-kpis' }, one ? [
-    kpi('Tổng thời gian bật', 'var(--accent)', upDur(st.tot), last && last[2] ? t('đang bật') : ''),
+    // Máy đang bật thì ô này cũng chạy luôn, có cả phút lẫn giây — đại ca nhìn một chỗ là thấy hết.
+    kpi('Tổng thời gian bật', 'var(--accent)', last && last[2] ? upChay(st.tot, r.nowMs) : upDur(st.tot), last && last[2] ? t('đang bật') : ''),
     kpi('Bật lúc', 'var(--good)', ss.length ? upClock(ss[0][0]) : '—', 'Lần bật đầu tiên trong ngày'),
     kpi('Tắt lúc', 'var(--muted)', !last ? '—' : last[2] ? t('Chưa tắt') : upClock(last[1]), 'Lần tắt cuối cùng'),
     kpi('Số lần bật', 'var(--warn)', ss.length, ss.length > 1 ? t('Tắt giữa chừng {0} lần, tổng {1}', ss.length - 1, upDur(offs)) : ss.length ? 'Bật liên tục' : '')] : [
