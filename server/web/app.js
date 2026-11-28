@@ -2245,7 +2245,9 @@ function upChay(giay0, nowMs) {
     o.textContent = upDHMS(Math.max(0, Math.floor(giay0 + (Date.now() - lech - nowMs) / 1000)));
     setTimeout(nhip, 1000);
   };
-  nhip();
+  // Đừng gọi nhip() thẳng ở đây: ô vừa tạo xong, chưa gắn vào trang nên isConnected còn false,
+  // nhịp thoát ngay lượt đầu và con số đứng im. Hẹn lượt đầu sau 1 giây, lúc đó ô đã nằm trong trang.
+  setTimeout(nhip, 1000);
   return o;
 }
 // Thẻ đồng hồ: máy đã bật liên tục bao lâu kể từ lúc mở máy. Agent gửi kèm uptime (giây kể từ

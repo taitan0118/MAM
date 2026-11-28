@@ -32,3 +32,19 @@ func TestTabThoiGianHoatDongCoDongHoChay(t *testing.T) {
 		t.Fatal("đừng dùng setInterval cho đồng hồ: trang tự vẽ lại mỗi 4 giây là chồng nhịp")
 	}
 }
+
+// Nhịp đếm phải được HẸN GIỜ, đừng gọi thẳng: lúc tạo xong ô chưa nằm trong trang nên
+// isConnected còn false, gọi thẳng là nhịp thoát ngay lượt đầu và con số đứng im (bản 1.1.121 bị vậy).
+func TestDongHoThucSuChayChuKhongDungIm(t *testing.T) {
+	b, err := os.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(b)
+	if strings.Contains(js, "\n  nhip();") {
+		t.Fatal("gọi thẳng nhip() lúc ô chưa gắn vào trang: nhịp chết ngay, số không chạy")
+	}
+	if n := strings.Count(js, "setTimeout(nhip, 1000);"); n != 2 {
+		t.Fatalf("cần đúng 2 chỗ hẹn nhịp (lượt đầu + lượt tiếp), đang có %d", n)
+	}
+}
